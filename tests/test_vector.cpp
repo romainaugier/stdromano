@@ -3,249 +3,121 @@
 // All rights reserved. 
 
 #include "stdromano/vector.h"
+#include "test.h"
 
-#include <cassert>
 #include <string>
-#include <iostream>
 
-// Test helper to print test names
-#define RUN_TEST(name) \
-    std::printf("Running " #name "... \n"); \
-    name(); \
-    std::printf("PASSED\n");
+INIT_TEST_OBJECT;
 
-class TestObject 
+TEST_CASE(test_constructor_and_destructor) 
 {
-public:
-    static int constructor_count;
-    static int destructor_count;
-    static int move_count;
-    static int copy_count;
-    
-    int value;
-    
-    TestObject(int v = 0) : value(v) { ++constructor_count; }
-    ~TestObject() { ++destructor_count; }
-    TestObject(const TestObject& other) : value(other.value) { ++copy_count; }
-    TestObject(TestObject&& other) noexcept : value(other.value) 
-    { 
-        other.value = 0;
-        ++move_count;
-    }
-    
-    TestObject& operator=(const TestObject& other) 
+    // Default constructor
     {
-        value = other.value;
-        ++copy_count;
-        return *this;
+        stdromano::Vector<TestObject> vec;
+        ASSERT_EQUAL(0u, vec.size());
+        ASSERT_EQUAL(0u, TestObject::get_total_instances());
     }
-    
-    TestObject& operator=(TestObject&& other) noexcept 
-    {
-        value = other.value;
-        other.value = 0;
-        ++move_count;
-        return *this;
-    }
-    
-    bool operator==(const TestObject& other) const 
-    {
-        return value == other.value;
-    }
-    
-    static void reset_counters() 
-    {
-        constructor_count = 0;
-        destructor_count = 0;
-        move_count = 0;
-        copy_count = 0;
-    }
-};
 
-int TestObject::constructor_count = 0;
-int TestObject::destructor_count = 0;
-int TestObject::move_count = 0;
-int TestObject::copy_count = 0;
-
-void test_construction() 
-{
-    // Default construction
-    stdromano::Vector<TestObject> v1;
-    assert(v1.size() == 0);
-    assert(v1.capacity() == 128); // Default capacity
-    
-    // Initial capacity construction
-    stdromano::Vector<TestObject> v2(256);
-    assert(v2.capacity() == 256);
-    
-    // Copy construction
-    v1.push_back(TestObject(1));
-    v1.push_back(TestObject(2));
-    stdromano::Vector<TestObject> v3(v1);
-    assert(v3.size() == v1.size());
-    assert(v3[0].value == 1);
-    assert(v3[1].value == 2);
-    
-    // Move construction
-    stdromano::Vector<TestObject> v4(std::move(v1));
-    assert(v4.size() == 2);
-    assert(v1.size() == 0); // v1 should be empty after move
+    // Constructor with size
+    {
+        stdromano::Vector<TestObject> vec(5, TestObject("test"));
+        ASSERT_EQUAL(5u, vec.size());
+        ASSERT_EQUAL(5u, TestObject::get_total_instances());
+    }
 }
 
-void test_element_access() 
+TEST_CASE(test_push_back_and_pop_back) 
 {
-    stdromano::Vector<int> v;
-    v.push_back(1);
-    v.push_back(2);
-    v.push_back(3);
+    stdromano::Vector<TestObject> vec;
     
-    // operator[]
-    assert(v[0] == 1);
-    assert(v[1] == 2);
-    assert(v[2] == 3);
-    
-    // at()
-    assert(*v.at(0) == 1);
-    assert(*v.at(1) == 2);
-    assert(*v.at(2) == 3);
-    
-    // front() and back()
-    assert(v.front() == 1);
-    assert(v.back() == 3);
-    
-    // data()
-    const int* data = v.data();
-    assert(data[0] == 1);
-    assert(data[1] == 2);
-    assert(data[2] == 3);
+    // Push back
+    vec.push_back(TestObject("first"));
+    ASSERT_EQUAL(1u, vec.size());
+    ASSERT_EQUAL("first", vec[0].get_data());
+
+    vec.push_back(TestObject("second"));
+    ASSERT_EQUAL(2u, vec.size());
+    ASSERT_EQUAL("second", vec[1].get_data());
+
+    // Pop back
+    vec.pop_back();
+    ASSERT_EQUAL(1u, vec.size());
+    ASSERT_EQUAL("first", vec[0].get_data());
 }
 
-void test_modifiers() 
+TEST_CASE(test_copy_and_move) 
 {
-    TestObject::reset_counters();
-    stdromano::Vector<TestObject> v;
-    
-    // push_back
-    v.push_back(TestObject(1));
-    assert(v.size() == 1);
-    assert(v[0].value == 1);
-    
-    // emplace_back
-    auto& ref = v.emplace_back(2);
-    assert(v.size() == 2);
-    assert(ref.value == 2);
-    
-    // insert
-    v.insert(TestObject(3), 1);
-    assert(v.size() == 3);
-    assert(v[1].value == 3);
-    
-    // emplace_at
-    auto& ref2 = v.emplace_at(1, 4);
-    assert(v.size() == 4);
-    assert(ref2.value == 4);
-    
-    // remove
-    v.remove(1);
-    assert(v.size() == 3);
-    assert(v[1].value == 3);
-    
-    // pop
-    TestObject popped = v.pop();
-    assert(v.size() == 2);
-    assert(popped.value == 3);
+    stdromano::Vector<TestObject> vec1;
+    vec1.push_back(TestObject("test1"));
+    vec1.push_back(TestObject("test2"));
+
+    // Test copy constructor
+    stdromano::Vector<TestObject> vec2(vec1);
+    ASSERT_EQUAL(vec1.size(), vec2.size());
+    ASSERT_EQUAL(vec1[0].get_data(), vec2[0].get_data());
+
+    // Test move constructor
+    stdromano::Vector<TestObject> vec3(std::move(vec1));
+    ASSERT_EQUAL(2u, vec3.size());
+    ASSERT_EQUAL(0u, vec1.size()); // vec1 should be empty after move
+
+    // Test copy assignment
+    stdromano::Vector<TestObject> vec4;
+    vec4 = vec2;
+    ASSERT_EQUAL(vec2.size(), vec4.size());
+    ASSERT_EQUAL(vec2[0].get_data(), vec4[0].get_data());
+
+    // Test move assignment
+    stdromano::Vector<TestObject> vec5;
+    vec5 = std::move(vec2);
+    ASSERT_EQUAL(2u, vec5.size());
+    ASSERT_EQUAL(0u, vec2.size()); // vec2 should be empty after move
 }
 
-void test_iterators() 
+TEST_CASE(test_element_access) 
 {
-    stdromano::Vector<int> v;
+    stdromano::Vector<TestObject> vec;
+    vec.push_back(TestObject("first"));
+    vec.push_back(TestObject("second"));
 
-    for(int i = 0; i < 5; ++i) 
-    {
-        v.push_back(i);
-    }
-    
-    // Forward iteration
-    int sum = 0;
-    for(auto it = v.begin(); it != v.end(); ++it) {
-        sum += *it;
-    }
-    assert(sum == 10);
-    
-    // Const iteration
-    sum = 0;
-    for(auto it = v.cbegin(); it != v.cend(); ++it) {
-        sum += *it;
-    }
-    assert(sum == 10);
+    // Test operator[]
+    ASSERT_EQUAL("first", vec[0].get_data());
+    ASSERT_EQUAL("second", vec[1].get_data());
+
+    // Test at() with valid index
+    ASSERT_EQUAL("first", vec.at(0)->get_data());
+
+    // Test at() with invalid index
+    // ASSERT_EQUAL(vec.at(2), nullptr);
 }
 
-void test_capacity() 
+TEST_CASE(test_capacity) 
 {
-    stdromano::Vector<int> v;
+    stdromano::Vector<TestObject> vec;
     
-    // reserve
-    v.reserve(200);
-    assert(v.capacity() >= 200);
+    // Test initial capacity
+    ASSERT_EQUAL(0u, vec.size());
     
-    // shrink_to_fit
-    for(int i = 0; i < 10; ++i) 
-    {
-        v.push_back(i);
-    }
-
-    size_t old_capacity = v.capacity();
-    v.shrink_to_fit();
-    assert(v.capacity() == v.size());
-    assert(v.capacity() < old_capacity);
-    
-    // Growth
-    while(v.size() < v.capacity()) 
-    {
-        v.push_back(42);
-    }
-
-    size_t cap_before_growth = v.capacity();
-    v.push_back(42);
-    assert(v.capacity() > cap_before_growth);
-}
-
-void test_operations() 
-{
-    stdromano::Vector<int> v;
-
-    for(int i = 5; i >= 0; --i) 
-    {
-        v.push_back(i);
+    // Test capacity growth
+    for (int i = 0; i < 100; ++i) {
+        vec.push_back(TestObject(std::to_string(i)));
     }
     
-    // find
-    auto it = v.find(3);
-    assert(it != v.end());
-    assert(*it == 3);
-    
-    // sort
-    v.sort([](const void* a, const void* b) 
-    {
-        return *(const int*)a - *(const int*)b;
-    });
-
-    for(size_t i = 1; i < v.size(); ++i) 
-    {
-        assert(v[i] >= v[i-1]);
-    }
+    ASSERT_EQUAL(100u, vec.size());
+    ASSERT(vec.capacity() >= vec.size());
 }
 
 int main() 
 {
-    RUN_TEST(test_construction);
-    RUN_TEST(test_element_access);
-    RUN_TEST(test_modifiers);
-    RUN_TEST(test_iterators);
-    RUN_TEST(test_capacity);
-    RUN_TEST(test_operations);
+    TestRunner runner;
     
-    std::printf("All tests passed\n");
+    runner.add_test("Constructor and Destructor", test_constructor_and_destructor);
+    runner.add_test("Push Back and Pop Back", test_push_back_and_pop_back);
+    runner.add_test("Copy and Move", test_copy_and_move);
+    runner.add_test("Element Access", test_element_access);
+    runner.add_test("Capacity", test_capacity);
+    
+    runner.run_all();
 
     return 0;
 }

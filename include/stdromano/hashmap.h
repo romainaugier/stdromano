@@ -7,15 +7,15 @@
 #if !defined(__STDROMANO_HASHMAP)
 #define __STDROMANO_HASHMAP
 
+#include "stdromano/bits.h"
+#include "stdromano/vector.h"
+#include "stdromano/optional.h"
+
 #include <memory>
-#include <vector>
-#include <optional>
 #include <functional>
 #include <stdexcept>
 #include <cmath>
 #include <random>
-
-#include "stdromano/bits.h"
 
 STDROMANO_NAMESPACE_BEGIN
 
@@ -28,8 +28,8 @@ private:
 
     struct Bucket 
     {
-        std::optional<Key> key;
-        std::optional<Value> value;
+        Optional<Key> key;
+        Optional<Value> value;
         uint32_t hash = 0;
         uint16_t probe_length = 0;
         
@@ -229,19 +229,14 @@ public:
             return { this->map->buckets[index].key.value(), this->map->buckets[index].value.value() };
         }
 
-        const Key& key() const 
-        { 
-            return this->map->buckets[index].key.value(); 
-        }
-
-        const Value& value() const 
-        { 
-            return this->map->buckets[index].value.value(); 
-        }
+        const Key& key() const { return this->map->buckets[index].key.value(); }
+        const Value& value() const { return this->map->buckets[index].value.value(); }
     };
 
     iterator begin() { return iterator(this, 0); }
     iterator end() { return iterator(this, this->buckets.size()); }
+    const_iterator begin() const { return const_iterator(this, 0); }
+    const_iterator end() const { return const_iterator(this, this->buckets.size()); }
     const_iterator cbegin() const { return const_iterator(this, 0); }
     const_iterator cend() const { return const_iterator(this, this->buckets.size()); }
 
@@ -362,6 +357,11 @@ public:
         }
     }
 
+    const_iterator cfind(const Key& key) const
+    {
+        return this->find(key);
+    }
+
     void erase(const Key& key) 
     {
         const uint32_t hash = this->get_hash(key);
@@ -444,12 +444,12 @@ public:
 
     Value& operator[](const Key& key) 
     {
-        auto it = this->get(key);
+        auto it = this->find(key);
 
         if(it == this->end()) 
         {
             this->insert(key, Value{});
-            it = this->get(key);
+            it = this->find(key);
         }
 
         return it.value();

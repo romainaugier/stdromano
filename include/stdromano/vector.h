@@ -16,7 +16,8 @@ STDROMANO_NAMESPACE_BEGIN
 template<typename T, typename Alignment = std::alignment_of<T>>
 class Vector 
 {
-    static constexpr float GROW_RATE = 1.61f;
+    static constexpr float GROW_RATE = 1.61803398875f;
+    static constexpr size_t MIN_SIZE = 128;
 
     struct Header 
     {
@@ -54,8 +55,9 @@ private:
     static Header* allocate(const size_t capacity) 
     {
         constexpr size_t header_size = sizeof(Header);
+        constexpr size_t aligned_header_size = (header_size + Alignment::value - 1) & ~(Alignment::value - 1);
         const size_t aligned_array_size = (capacity * sizeof(T) + Alignment::value - 1) & ~(Alignment::value - 1);
-        const size_t total_size = header_size + aligned_array_size;
+        const size_t total_size = aligned_header_size + aligned_array_size;
         
         void* memory = mem_alloc(total_size);
 
@@ -79,7 +81,17 @@ private:
         }
     }
 
-    STDROMANO_FORCE_INLINE void grow() noexcept { this->resize(static_cast<size_t>(static_cast<float>(this->capacity()) * GROW_RATE)); }
+    STDROMANO_FORCE_INLINE void grow() noexcept 
+    { 
+        if(this->_header == nullptr)
+        {
+            this->resize(MIN_SIZE);
+        }
+        else
+        {
+            this->resize(static_cast<size_t>(static_cast<float>(this->capacity()) * GROW_RATE)); 
+        }
+    }
 
 public:
     using value_type = T;
@@ -90,10 +102,32 @@ public:
     using pointer = value_type*;
     using const_pointer = const value_type*;
 
-    Vector(const size_t initial_capacity = 0)
+    Vector() : _header(nullptr) {}
+
+    Vector(const size_t initial_capacity)
     {
-        const size_t capacity = initial_capacity == 0 ? 128 : initial_capacity;
+        const size_t capacity = initial_capacity == 0 ? MIN_SIZE : initial_capacity;
         this->_header = Vector::allocate(capacity);
+    }
+
+    Vector(const size_t count, const T& value)
+    {
+        if(count == 0)
+        {
+            this->_header = Vector::allocate(MIN_SIZE);
+            return;
+        }
+
+        this->_header = Vector::allocate(count);
+
+        T* data_ptr = reinterpret_cast<T*>(this->_header->data);
+
+        for(size_t i = 0; i < count; ++i) 
+        {
+            ::new (data_ptr + i) T(value);
+        }
+
+        this->set_size(count);
     }
 
     ~Vector()
@@ -159,8 +193,8 @@ public:
         return *this;
     }
 
-    STDROMANO_FORCE_INLINE size_t capacity() const noexcept { return _header != nullptr ? _header->capacity : 0; }
-    STDROMANO_FORCE_INLINE size_t size() const noexcept { return _header != nullptr ? _header->size : 0; }
+    STDROMANO_FORCE_INLINE size_t capacity() const noexcept { return this->_header != nullptr ? this->_header->capacity : 0; }
+    STDROMANO_FORCE_INLINE size_t size() const noexcept { return this->_header != nullptr ? this->_header->size : 0; }
     STDROMANO_FORCE_INLINE bool empty() const noexcept { return this->size() == 0; }
 
     class iterator
@@ -267,8 +301,10 @@ public:
 
     iterator begin() { return iterator(this, 0); }
     iterator end() { return iterator(this, this->size()); }
-    const_iterator cbegin() { return const_iterator(this, 0); }
-    const_iterator cend() { return const_iterator(this, this->size()); }
+    const_iterator begin() const { return const_iterator(this, 0); }
+    const_iterator end() const { return const_iterator(this, this->size()); }
+    const_iterator cbegin() const { return const_iterator(this, 0); }
+    const_iterator cend() const { return const_iterator(this, this->size()); }
 
     STDROMANO_FORCE_INLINE T* at(const size_t index) noexcept { return this->data() + index; }
     STDROMANO_FORCE_INLINE const T* at(const size_t index) const noexcept { return this->data() + index; }
@@ -296,25 +332,30 @@ public:
 
         Header* new_header = Vector<T, Alignment>::allocate(new_capacity);
 
-        if(!new_header) 
+        if(new_header == nullptr) 
         {
             return;
         }
 
-        if(_header) 
+        if(this->_header != nullptr) 
         {
-            new_header->size = _header->size;
+            new_header->size = this->_header->size;
             
             for(size_t i = 0; i < this->size(); ++i) 
             {
-                new (this->data() + i) T(std::move((*this)[i]));
+                new (new_header->data + i) T(std::move((*this)[i]));
                 (*this)[i].~T();
             }
-            
-            Vector<T, Alignment>::deallocate(_header);
+
+            for(size_t i = this->size(); i < new_capacity; i++)
+            {
+                new (new_header->data + i) T;
+            }
+
+            Vector<T, Alignment>::deallocate(this->_header);
         }
 
-        _header = new_header;
+        this->_header = new_header;
     }
 
     STDROMANO_FORCE_INLINE void reserve(const size_t new_capacity) noexcept { this->resize(new_capacity); }
@@ -394,25 +435,58 @@ public:
         this->decr_size();
     }
 
+    void remove(const iterator it) noexcept
+    {
+        const size_t position = it.index;
+
+        this->at(position)->~T();
+
+        std::memmove(this->at(position), this->at(position + 1), (this->size() - position) * sizeof(T));
+
+        this->decr_size();
+    }
+
+    void remove(const const_iterator it) noexcept
+    {
+        const size_t position = it.index;
+
+        this->at(position)->~T();
+
+        std::memmove(this->at(position), this->at(position + 1), (this->size() - position) * sizeof(T));
+
+        this->decr_size();
+    }
+
     T pop(const int64_t position = -1) noexcept
     {
         this->decr_size();
 
         if(position < 0)
         {
-            T object = std::move(this->operator[](this->size() - 1));
-            this->operator[](this->size() - 1).~T();
+            T object = std::move((*this)[this->size()]);
+            (*this)[this->size()].~T();
 
             return object;
         }
         else
         {
-            T object = std::move(this->operator[](position));
-            this->operator[](position).~T();
+            T object = std::move((*this)[position]);
+            (*this)[position].~T();
+
             std::memmove(this->at(position), this->at(position + 1), (this->size() - position + 1) * sizeof(T));
 
             return object;
         }
+    }
+
+    T pop_back() noexcept
+    {
+        this->decr_size();
+
+        T object = std::move((*this)[this->size()]);
+        (*this)[this->size()].~T();
+
+        return object;
     }
 
     iterator find(const T& other) noexcept
@@ -425,7 +499,7 @@ public:
         return this->end();
     }
 
-    const_iterator find(const T& other) const noexcept
+    const_iterator cfind(const T& other) const noexcept
     {
         for(size_t i = 0; i < this->size(); i++)
         {
