@@ -126,7 +126,9 @@
 #define CONCAT_(prefix, suffix)     prefix##suffix
 #define CONCAT(prefix, suffix)      CONCAT_(prefix, suffix)
 
-#define STATIC_ASSERT(expr)                             \
+#define STDROMANO_ASSERT(expression) assert(expression)
+
+#define STDROMANO_STATIC_ASSERT(expr)                   \
     struct CONCAT(__outscope_assert_, __COUNTER__)      \
     {                                                   \
         char                                            \

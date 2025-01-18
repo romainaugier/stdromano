@@ -8,14 +8,15 @@
 #define __STDROMANO_HASHMAP
 
 #include "stdromano/bits.h"
-#include "stdromano/vector.h"
 #include "stdromano/optional.h"
+#include "stdromano/random.h"
 
 #include <memory>
+#include <vector>
 #include <functional>
 #include <stdexcept>
 #include <cmath>
-#include <random>
+#include <type_traits>
 
 STDROMANO_NAMESPACE_BEGIN
 
@@ -24,110 +25,308 @@ class HashMap
 {
 private:
     static constexpr float MAX_LOAD_FACTOR = 0.9f;
-    static constexpr size_t INITIAL_CAPACITY = 1024;
+    static constexpr size_t INITIAL_CAPACITY = 8;
 
-    struct Bucket 
+    class KeySelect 
     {
-        Optional<Key> key;
-        Optional<Value> value;
-        uint32_t hash = 0;
-        uint16_t probe_length = 0;
-        
-        bool is_empty() const 
-        { 
-            return !this->key.has_value(); 
+    public:
+        using key_type = Key;
+
+        const key_type& operator()(const std::pair<Key, Value>& key_value) const noexcept 
+        {
+            return key_value.first;
         }
 
-        void clear() 
-        { 
-            this->key.reset();
-            this->value.reset();
-            this->hash = 0;
-            this->probe_length = 0;
+        key_type& operator()(std::pair<Key, Value>& key_value) noexcept 
+        {
+            return key_value.first;
         }
     };
 
-    std::vector<Bucket> buckets;
-    size_t items_count = 0;
-    uint32_t hash_key;
-    uint32_t max_probes;
-
-    inline uint32_t get_hash(const Key& key) const 
+    class ValueSelect 
     {
-        return Hash{}(key) ^ hash_key;
-    }
+    public:
+        using value_type = Value;
 
-    inline size_t get_index(const uint32_t hash) const 
-    {
-        return hash & (this->buckets.size() - 1);
-    }
-
-    inline size_t get_new_capacity() const 
-    {
-        return bit_ceil(buckets.size() + 1);
-    }
-
-    inline uint32_t generate_hash_key() 
-    {
-        static std::random_device rd;
-        static std::mt19937 gen(rd());
-        static std::uniform_int_distribution<uint32_t> dis;
-        return dis(gen);
-    }
-
-    void move_entry(Bucket& entry, const bool rehash) 
-    {
-        if(rehash) 
+        const value_type& operator()(const std::pair<Key, Value>& key_value) const noexcept 
         {
-            entry.hash = this->get_hash(entry.key.value());
+            return key_value.second;
         }
 
-        entry.probe_length = 0;
-
-        size_t index = this->get_index(entry.hash);
-        
-        while(true) 
+        value_type& operator()(std::pair<Key, Value>& key_value) noexcept 
         {
-            auto& bucket = this->buckets[index];
-            
-            if(!bucket.is_empty()) 
+            return key_value.second;
+        }
+    };
+
+public:
+    using key_type = Key;
+    using mapped_type = Value;
+    using value_type = std::pair<Key, Value>;
+    using size_type = std::size_t;
+    using hasher = Hash;
+
+private:
+
+    struct Bucket 
+    {
+        static constexpr int16_t EMPTY_BUCKET_MARKER = -1;
+
+        using value_type = std::pair<Key, Value>;
+
+    private:
+        uint32_t _hash;
+        int16_t _probe_length;
+
+        alignas(value_type) unsigned char _storage[sizeof(value_type)];
+
+    public:
+        Bucket() noexcept : _hash(0), _probe_length(EMPTY_BUCKET_MARKER) 
+        {
+            STDROMANO_ASSERT(this->is_empty());
+        }
+
+        Bucket(const Bucket& other) noexcept(std::is_nothrow_copy_constructible<value_type>::value)
+        {
+            if(!other.is_empty())
             {
-                if(entry.probe_length > bucket.probe_length) 
+                ::new(static_cast<void*>(std::addressof(this->_storage))) value_type(other.value());
+
+                this->_hash = other._hash;
+                this->_probe_length = other._probe_length;
+            }
+
+            STDROMANO_ASSERT(this->is_empty() == other.is_empty());
+        }
+
+        Bucket(Bucket&& other) noexcept(std::is_nothrow_move_constructible<value_type>::value)
+        {
+            if(!other.is_empty())
+            {
+                ::new(static_cast<void*>(std::addressof(this->_storage))) value_type(std::move(other.value()));
+
+                this->_hash = other._hash;
+                this->_probe_length = other._probe_length;
+            }
+
+            STDROMANO_ASSERT(this->is_empty() == other.is_empty());
+        }
+
+        Bucket& operator=(const Bucket& other) noexcept(std::is_nothrow_copy_assignable<value_type>::value)
+        {
+            if(this != &other)
+            {
+                this->clear();
+
+                if(!other.is_empty())
                 {
-                    std::swap(entry, bucket);
+                    ::new(static_cast<void*>(std::addressof(this->_storage))) value_type(other.value());
                 }
-                
-                index = (index + 1) & (buckets.size() - 1);
-                entry.probe_length++;
-            } 
-            else 
+
+                this->_hash = other._hash;
+                this->_probe_length = other._probe_length;
+            }
+
+            return *this;
+        }
+
+        Bucket& operator=(Bucket&& other) = delete;
+
+        ~Bucket() noexcept 
+        {
+            this->clear();
+        }
+
+        template<typename... Args>
+        void construct(Args&&... args) 
+        {
+            ::new(static_cast<void*>(std::addressof(this->_storage))) value_type(std::forward<Args>(args)...);
+        }
+
+        void swap_bucket_content(value_type& value,
+                                 uint32_t& hash,
+                                 int16_t& probe_length)
+        {
+            STDROMANO_ASSERT(!this->is_empty() && "Cannot swap an empty bucket");
+            STDROMANO_ASSERT(probe_length > this->_probe_length && "Cannot swap a bucket with a lower probe_length");
+
+            std::swap(value, this->value());
+            std::swap(hash, this->_hash);
+            std::swap(probe_length, this->_probe_length);
+        }
+
+        template<typename... Args>
+        void set_bucket_content(const uint32_t hash,
+                                const int16_t probe_length,
+                                Args&&... value_args)
+        {
+            STDROMANO_ASSERT(this->is_empty() && "Cannot set content of non empty bucket");
+            STDROMANO_ASSERT(probe_length >= 0 && "Cannot set content of bucket with uninitialized probe_length");
+
+            ::new(static_cast<void*>(std::addressof(this->_storage))) value_type(std::forward<Args>(value_args)...);
+
+            this->_hash = hash;
+            this->_probe_length = probe_length;
+
+            STDROMANO_ASSERT(!this->is_empty() && "Set bucket content failed");
+        }
+
+        STDROMANO_FORCE_INLINE value_type& value() noexcept 
+        { 
+            return *reinterpret_cast<value_type*>(this->_storage); 
+        }
+
+        STDROMANO_FORCE_INLINE const value_type& value() const noexcept 
+        { 
+            return *reinterpret_cast<const value_type*>(this->_storage); 
+        }
+        
+        STDROMANO_FORCE_INLINE bool is_empty() const noexcept
+        { 
+            return this->_probe_length == EMPTY_BUCKET_MARKER; 
+        }
+
+        STDROMANO_FORCE_INLINE int16_t probe_length() const noexcept
+        {
+            return this->_probe_length;
+        }
+
+        STDROMANO_FORCE_INLINE void reset_probe_length() noexcept
+        {
+            this->_probe_length = 0;
+        }
+
+        STDROMANO_FORCE_INLINE void set_probe_length(int16_t probe_length) noexcept
+        {
+            this->_probe_length = probe_length;
+        }
+
+        STDROMANO_FORCE_INLINE void increment_probe_length() noexcept
+        {
+            this->_probe_length++;
+        }
+
+        STDROMANO_FORCE_INLINE void decrement_probe_length() noexcept
+        {
+            this->_probe_length--;
+        }
+
+        STDROMANO_FORCE_INLINE uint32_t hash() const noexcept
+        {
+            return this->_hash;
+        }
+
+        STDROMANO_FORCE_INLINE void set_hash(const uint32_t hash) noexcept
+        {
+            this->_hash = hash;
+        }
+
+        void clear() noexcept
+        { 
+            if(!this->is_empty())
             {
-                bucket = std::move(entry);
-                this->items_count++;
+                this->value().~value_type();
+                this->_hash = 0;
+                this->_probe_length = EMPTY_BUCKET_MARKER;
+            }
+        }
+    };
+
+    std::vector<Bucket> _buckets;
+    size_t _items_count = 0;
+    uint32_t _hash_key;
+    uint32_t _max_probes;
+
+    KeySelect _key_select;
+
+    STDROMANO_FORCE_INLINE uint32_t get_hash(const key_type& key) const 
+    {
+        return Hash{}(key) ^ this->_hash_key;
+    }
+
+    STDROMANO_FORCE_INLINE size_t get_index(const uint32_t hash) const 
+    {
+        return hash & (this->_buckets.size() - 1);
+    }
+
+    STDROMANO_FORCE_INLINE size_t get_next_index(const size_t index) const
+    {
+        return (index + 1) & (this->_buckets.size() - 1);
+    }
+
+    STDROMANO_FORCE_INLINE size_t get_new_capacity() const 
+    {
+        return bit_ceil(this->_buckets.size() + 1);
+    }
+
+    STDROMANO_FORCE_INLINE uint32_t generate_hash_key() 
+    {
+        return next_random_uint32();
+    }
+
+    void insert_internal(value_type&& value) 
+    {
+        const key_type& key = this->_key_select(value);
+        uint32_t hash = this->get_hash(key);
+        size_type index = this->get_index(hash);
+        int16_t probe_length = 0;
+
+        while(true)
+        {
+            Bucket& bucket = this->_buckets[index];
+
+            if(bucket.is_empty()) 
+            {
+                bucket.set_bucket_content(hash, probe_length, std::forward<value_type>(value));
+
+                this->_items_count++;
+
+                return;
+            }
+
+            if(bucket.hash() == hash && this->_key_select(bucket.value()) == key) 
+            {
+                bucket.construct(std::forward<value_type&&>(value));
+                return;
+            }
+
+            if(probe_length > bucket.probe_length()) 
+            {
+                bucket.swap_bucket_content(value, hash, probe_length);
+            }
+
+            index = this->get_next_index(index);
+            probe_length++;
+
+            if(probe_length >= this->_max_probes) 
+            {
+                this->grow(this->get_new_capacity(), false);
+                this->insert_internal(std::forward<value_type>(value));
+
                 return;
             }
         }
     }
 
-    void grow(size_t new_capacity, bool rehash) 
+    void grow(const size_t new_capacity, bool rehash) 
     {
-        std::vector<Bucket> old_buckets = std::move(this->buckets);
+        std::vector<Bucket> old_buckets = std::move(this->_buckets);
 
-        this->buckets.resize(new_capacity);
-        this->items_count = 0;
+        this->_buckets.resize(new_capacity);
+        this->_items_count = 0;
         
         if(rehash) 
         {
-            this->hash_key ^= generate_hash_key();
+            this->_hash_key ^= this->generate_hash_key();
         }
 
-        this->max_probes = static_cast<uint32_t>(std::log2(static_cast<float>(buckets.size())));
+        this->_max_probes = static_cast<uint32_t>(std::log2(static_cast<float>(new_capacity)));
 
         for(auto& bucket : old_buckets) 
         {
             if(!bucket.is_empty()) 
             {
-                this->move_entry(bucket, rehash);
+                this->insert_internal(std::move(bucket.value()));
             }
         }
     }
@@ -141,8 +340,8 @@ public:
         
         void advance() 
         {
-            while(this->index < this->map->buckets.size() && 
-                  this->map->buckets[index].is_empty()) 
+            while(this->index < this->map->_buckets.size() && 
+                  this->map->_buckets[index].is_empty()) 
             {
                 this->index++;
             }
@@ -150,7 +349,7 @@ public:
         
     public:
         using iterator_category = std::forward_iterator_tag;
-        using value_type = std::pair<const Key&, Value&>;
+        using value_type = std::pair<Key, Value>;
         using difference_type = std::ptrdiff_t;
         using pointer = value_type*;
         using reference = value_type&;
@@ -173,14 +372,26 @@ public:
         {
             return !(*this == other);
         }
-        
-        value_type operator*() 
+
+        reference operator*() const
         {
-            return { this->map->buckets[index].key.value(), this->map->buckets[index].value.value() };
+            return this->map->_buckets[index].value();
         }
 
-        const Key& key() const { return this->map->buckets[index].key.value(); }
-        Value& value() { return this->map->buckets[index].value.value(); }
+        pointer operator->() const
+        {
+            return std::addressof(this->map->_buckets[this->index].value());
+        }
+
+        const typename KeySelect::key_type& key() const 
+        {
+            return KeySelect()(this->map->_buckets[index].value());
+        }
+
+        typename ValueSelect::value_type& value() const 
+        {
+            return ValueSelect()(this->map->_buckets[index].value());
+        }
     };
 
     class const_iterator 
@@ -191,8 +402,8 @@ public:
         
         void advance() 
         {
-            while(this->index < this->map->buckets.size() && 
-                  this->map->buckets[index].is_empty()) 
+            while(this->index < this->map->_buckets.size() && 
+                  this->map->_buckets[index].is_empty()) 
             {
                 this->index++;
             }
@@ -200,10 +411,10 @@ public:
         
     public:
         using iterator_category = std::forward_iterator_tag;
-        using value_type = std::pair<const Key&, const Value&>;
+        using value_type = std::pair<Key, Value>;
         using difference_type = std::ptrdiff_t;
-        using pointer = value_type*;
-        using reference = value_type&;
+        using pointer = const value_type*;
+        using reference = const value_type&;
         
         const_iterator(const HashMap* m, size_t i) : map(m), index(i) { this->advance(); }
         
@@ -224,24 +435,36 @@ public:
             return !(*this == other);
         }
         
-        value_type operator*() const 
+        reference operator*() const 
         {
-            return { this->map->buckets[index].key.value(), this->map->buckets[index].value.value() };
+            return this->map->_buckets[index].value();
         }
 
-        const Key& key() const { return this->map->buckets[index].key.value(); }
-        const Value& value() const { return this->map->buckets[index].value.value(); }
+        pointer operator->() const
+        {
+            return std::addressof(this->map->_buckets[this->index].value());
+        }
+
+        const typename KeySelect::key_type& key() const 
+        {
+            return KeySelect()(this->map->_buckets[index].value());
+        }
+
+        const typename ValueSelect::value_type& value() const 
+        {
+            return ValueSelect()(this->map->_buckets[index].value());
+        }
     };
 
     iterator begin() { return iterator(this, 0); }
-    iterator end() { return iterator(this, this->buckets.size()); }
+    iterator end() { return iterator(this, this->_buckets.size()); }
     const_iterator begin() const { return const_iterator(this, 0); }
-    const_iterator end() const { return const_iterator(this, this->buckets.size()); }
+    const_iterator end() const { return const_iterator(this, this->_buckets.size()); }
     const_iterator cbegin() const { return const_iterator(this, 0); }
-    const_iterator cend() const { return const_iterator(this, this->buckets.size()); }
+    const_iterator cend() const { return const_iterator(this, this->_buckets.size()); }
 
     explicit HashMap(size_t initial_capacity = INITIAL_CAPACITY)
-        : hash_key(generate_hash_key())
+        : _hash_key(this->generate_hash_key())
     {
         if (initial_capacity == 0) 
         {
@@ -252,187 +475,160 @@ public:
             initial_capacity = bit_ceil(initial_capacity + 1);
         }
 
-        this->buckets.resize(initial_capacity);
-        this->max_probes = static_cast<uint32_t>(std::log2(static_cast<float>(initial_capacity)));
+        this->_buckets.resize(initial_capacity);
+        this->_max_probes = static_cast<uint32_t>(std::log2(static_cast<float>(initial_capacity)));
     }
 
-    void insert(const Key& key, const Value& value) 
+    // void insert(const key_type& key, const mapped_type& value) 
+    // {
+    //     if (this->load_factor() > MAX_LOAD_FACTOR) 
+    //     {
+    //         this->grow(this->get_new_capacity(), false);
+    //     }
+
+    //     return this->insert_internal(std::make_pair<key_type, mapped_type>(std::forward<const key_type&>(key), 
+    //                                                                        std::forward<const mapped_type&>(value)));
+    // }
+
+    template<typename P>
+    void insert(P&& value) 
     {
         if (this->load_factor() > MAX_LOAD_FACTOR) 
         {
             this->grow(this->get_new_capacity(), false);
         }
 
-        uint32_t hash = this->get_hash(key);
-        size_t index = this->get_index(hash);
-
-        Bucket entry;
-        entry.key = key;
-        entry.value = value;
-        entry.hash = hash;
-        entry.probe_length = 0;
-
-        while (true) 
-        {
-            auto& bucket = this->buckets[index];
-
-            if (!bucket.is_empty()) 
-            {
-                if (bucket.hash == hash && bucket.key.value() == key) 
-                {
-                    return;
-                }
-
-                if (entry.probe_length > bucket.probe_length) 
-                {
-                    std::swap(entry, bucket);
-                }
-
-                index = (index + 1) & (this->buckets.size() - 1);
-                entry.probe_length++;
-
-                if (entry.probe_length >= this->max_probes) 
-                {
-                    this->grow(this->get_new_capacity(), false);
-                    this->insert(entry.key.value(), entry.value.value());
-                    return;
-                }
-            } 
-            else 
-            {
-                bucket = std::move(entry);
-                this->items_count++;
-                return;
-            }
-        }
+        return this->insert_internal(std::forward<P>(value));
     }
 
-    iterator find(const Key& key) 
+    iterator find(const key_type& key) 
     {
-        const uint32_t hash = this->get_hash(key);
-        size_t index = this->get_index(hash);
-        uint16_t probe_length = 0;
+        uint32_t hash = this->get_hash(key);
+        size_type index = this->get_index(hash);
+        int16_t probe_length = 0;
 
         while(true) 
         {
-            auto& bucket = this->buckets[index];
+            Bucket& bucket = this->_buckets[index];
 
-            if(bucket.is_empty() || probe_length > bucket.probe_length) 
+            if(bucket.is_empty() || probe_length > bucket.probe_length()) 
             {
                 return this->end();
             }
 
-            if(bucket.hash == hash && bucket.key.value() == key) 
+            if(bucket.hash() == hash && this->_key_select(bucket.value()) == key) 
             {
                 return iterator(this, index);
             }
 
-            index = (index + 1) & (this->buckets.size() - 1);
+            index = this->get_next_index(index);
             probe_length++;
         }
     }
 
-    const_iterator find(const Key& key) const 
+    const_iterator find(const key_type& key) const
     {
-        const uint32_t hash = this->get_hash(key);
-        size_t index = this->get_index(hash);
-        uint16_t probe_length = 0;
+        uint32_t hash = this->get_hash(key);
+        size_type index = this->get_index(hash);
+        int16_t probe_length = 0;
 
         while(true) 
         {
-            const auto& bucket = this->buckets[index];
+            Bucket& bucket = this->_buckets[index];
 
-            if(bucket.is_empty() || probe_length > bucket.probe_length) 
+            if(bucket.is_empty() || probe_length > bucket.probe_length()) 
             {
                 return this->cend();
             }
 
-            if(bucket.hash == hash && bucket.key.value() == key) 
+            if(bucket.hash() == hash && this->_key_select(bucket.value()) == key) 
             {
                 return const_iterator(this, index);
             }
 
-            index = (index + 1) & (this->buckets.size() - 1);
+            index = this->get_next_index(index);
             probe_length++;
         }
     }
 
-    const_iterator cfind(const Key& key) const
+    void erase(iterator pos) 
     {
-        return this->find(key);
-    }
+        if(pos == this->end()) 
+        {
+            return;
+        }
 
-    void erase(const Key& key) 
-    {
-        const uint32_t hash = this->get_hash(key);
-        size_t index = this->get_index(hash);
-        uint16_t probe_length = 0;
+        size_type index = pos.index;
+        size_type next_index = this->get_next_index(index);
+
+        this->_buckets[index].clear();
+        this->_items_count--;
 
         while(true) 
         {
-            auto& bucket = this->buckets[index];
-
-            if(bucket.is_empty() || probe_length > bucket.probe_length) 
+            Bucket& next_bucket = this->_buckets[next_index];
+            
+            if(next_bucket.is_empty() || next_bucket.probe_length() == 0) 
             {
                 return;
             }
 
-            if(bucket.hash == hash && bucket.key.value() == key) 
-            {
-                bucket.clear();
-                this->items_count--;
-
-                while(true) 
-                {
-                    const size_t next_index = (index + 1) & (buckets.size() - 1);
-                    auto& next_bucket = buckets[next_index];
-
-                    if(next_bucket.is_empty() || next_bucket.probe_length == 0) 
-                    {
-                        return;
-                    }
-
-                    next_bucket.probe_length--;
-                    this->buckets[index] = std::move(next_bucket);
-                    index = next_index;
-                }
-            }
-
-            index = (index + 1) & (this->buckets.size() - 1);
-            probe_length++;
+            next_bucket.decrement_probe_length();
+            
+            this->_buckets[index].construct(std::move(next_bucket.value()));
+            this->_buckets[index].set_hash(next_bucket.hash());
+            this->_buckets[index].set_probe_length(next_bucket.probe_length());
+            
+            next_bucket.clear();
+            
+            index = next_index;
+            next_index = this->get_next_index(next_index);
         }
     }
 
-    size_t size() const 
-    { 
-        return this->items_count;
-    }
-
-    size_t capacity() const 
-    { 
-        return this->buckets.size();
-    }
-
-    float load_factor() const
+    void erase(const key_type& key) 
     {
-        return static_cast<float>(this->items_count) / static_cast<float>(this->buckets.size());
-    }
+        auto it = this->find(key);
 
-    bool empty() const 
-    { 
-        return this->items_count == 0; 
+        if(it != this->end()) 
+        {
+            this->erase(it);
+        }
     }
 
     void clear() 
     {
-        this->buckets.clear();
-        this->buckets.resize(INITIAL_CAPACITY);
-        this->items_count = 0;
+        for(auto& bucket : this->_buckets) 
+        {
+            bucket.clear();
+        }
+
+        this->_items_count = 0;
+    }
+
+    size_t size() const 
+    { 
+        return this->_items_count;
+    }
+
+    size_t capacity() const 
+    { 
+        return this->_buckets.size();
+    }
+
+    float load_factor() const
+    {
+        return static_cast<float>(this->_items_count) / static_cast<float>(this->_buckets.size());
+    }
+
+    bool empty() const 
+    { 
+        return this->_items_count == 0; 
     }
 
     void reserve(size_t new_capacity) 
     {
-        if(new_capacity <= this->buckets.size()) 
+        if(new_capacity <= this->_buckets.size()) 
         {
             return;
         }
@@ -442,13 +638,14 @@ public:
         this->grow(new_capacity, false);
     }
 
-    Value& operator[](const Key& key) 
+    mapped_type& operator[](const key_type& key) 
     {
         auto it = this->find(key);
 
         if(it == this->end()) 
         {
-            this->insert(key, Value{});
+            this->insert(std::pair<key_type, mapped_type>(key, Value{}));
+
             it = this->find(key);
         }
 

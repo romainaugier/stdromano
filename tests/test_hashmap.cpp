@@ -32,29 +32,29 @@ struct ComplexKeyHash
 
 TEST_CASE(test_basic_operations) 
 {
-    stdromano::HashMap<int, std::string> map;
+    stdromano::HashMap<int, std::string> my_map;
     
     // Test initial state
-    ASSERT_EQUAL(0u, map.size());
-    ASSERT(map.empty());
+    ASSERT_EQUAL(0u, my_map.size());
+    ASSERT(my_map.empty());
     
     // Test insertion
-    map.insert(1, "one");
-    ASSERT_EQUAL(1u, map.size());
-    ASSERT(!map.empty());
+    my_map.insert(std::pair<int, std::string>(1, "one"));
+    ASSERT_EQUAL(1u, my_map.size());
+    ASSERT(!my_map.empty());
     
     // Test find
-    auto it = map.find(1);
-    ASSERT(it != map.end());
-    ASSERT_EQUAL("one", it.value());
+    auto it = my_map.find(1);
+    ASSERT(it != my_map.end());
+    ASSERT_EQUAL("one", it->second);
     
     // Test non-existent key
-    ASSERT(map.find(2) == map.end());
+    ASSERT(my_map.find(2) == my_map.end());
     
     // Test erase
-    map.erase(1);
-    ASSERT_EQUAL(0u, map.size());
-    ASSERT(map.empty());
+    my_map.erase(1);
+    ASSERT_EQUAL(0u, my_map.size());
+    ASSERT(my_map.empty());
 }
 
 TEST_CASE(test_operator_bracket) 
@@ -85,12 +85,12 @@ TEST_CASE(test_complex_key)
     ComplexKey key1{1, "one"};
     ComplexKey key2{2, "two"};
     
-    map.insert(key1, 1.1);
-    map.insert(key2, 2.2);
+    map.insert(std::pair<ComplexKey, double>(key1, 1.1));
+    map.insert(std::pair<ComplexKey, double>(key2, 2.2));
     
     ASSERT_EQUAL(2u, map.size());
-    ASSERT_EQUAL(1.1, map.find(key1).value());
-    ASSERT_EQUAL(2.2, map.find(key2).value());
+    ASSERT_EQUAL(1.1, map.find(key1)->second);
+    ASSERT_EQUAL(2.2, map.find(key2)->second);
 }
 
 TEST_CASE(test_iterator) 
@@ -101,7 +101,7 @@ TEST_CASE(test_iterator)
     // Insert elements
     for(int i = 0; i < TEST_SIZE; ++i)
     {
-        map.insert(i, i * i);
+        map.insert(std::pair<int, int>(i, i * i));
     }
     
     // Test iterator traversal
@@ -109,7 +109,7 @@ TEST_CASE(test_iterator)
 
     for(auto it = map.begin(); it != map.end(); ++it) 
     {
-        ASSERT_EQUAL(it.key() * it.key(), it.value());
+        ASSERT_EQUAL(it->first * it->first, it->second);
         ++count;
     }
 
@@ -122,7 +122,7 @@ TEST_CASE(test_iterator)
 
     for(auto it = const_map.cbegin(); it != const_map.cend(); ++it) 
     {
-        ASSERT_EQUAL(it.key() * it.key(), it.value());
+        ASSERT_EQUAL(it->first * it->first, it->second);
         ++count;
     }
 
@@ -136,7 +136,7 @@ TEST_CASE(test_load_factor_and_rehashing)
     // Insert elements to trigger rehashing
     for(int i = 0; i < 100; ++i) 
     {
-        map.insert(i, i);
+        map.insert(std::pair<int, int>(i, i));
         ASSERT(map.load_factor() <= 1.0f);
     }
     
@@ -145,7 +145,7 @@ TEST_CASE(test_load_factor_and_rehashing)
     {
         auto it = map.find(i);
         ASSERT(it != map.end());
-        ASSERT_EQUAL(i, it.value());
+        ASSERT_EQUAL(i, it->second);
     }
 }
 
@@ -159,14 +159,14 @@ TEST_CASE(test_collisions)
     stdromano::HashMap<int, std::string, CollisionHash> map;
     
     // Insert elements that will all collide
-    map.insert(1, "one");
-    map.insert(2, "two");
-    map.insert(3, "three");
+    map.insert(std::pair<int, std::string>(1, "one"));
+    map.insert(std::pair<int, std::string>(2, "two"));
+    map.insert(std::pair<int, std::string>(3, "three"));
     
     ASSERT_EQUAL(3u, map.size());
-    ASSERT_EQUAL("one", map.find(1).value());
-    ASSERT_EQUAL("two", map.find(2).value());
-    ASSERT_EQUAL("three", map.find(3).value());
+    ASSERT_EQUAL("one", map.find(1)->second);
+    ASSERT_EQUAL("two", map.find(2)->second);
+    ASSERT_EQUAL("three", map.find(3)->second);
 }
 
 TEST_CASE(test_clear_and_reserve) 
@@ -181,7 +181,7 @@ TEST_CASE(test_clear_and_reserve)
     // Insert elements
     for(int i = 0; i < 50; ++i) 
     {
-        map.insert(i, i);
+        map.insert(std::pair<int, int>(i, i));
     }
     
     // Test clear
@@ -196,12 +196,12 @@ TEST_CASE(test_edge_cases)
     stdromano::HashMap<std::string, int> map;
     
     // Test empty string key
-    map.insert("", 0);
+    map.insert(std::pair<std::string, int>("", 0));
     ASSERT_EQUAL(0, map[""]);
     
     // Test duplicate insertions
-    map.insert("test", 1);
-    map.insert("test", 2);
+    map.insert(std::pair<std::string, int>("test", 1));
+    map.insert(std::pair<std::string, int>("test", 2));
     ASSERT_EQUAL(2, map["test"]); // Should update value
     
     // Test erase of non-existent key
@@ -213,20 +213,30 @@ TEST_CASE(test_edge_cases)
     ASSERT(map.find("non-existent") == map.end());
 }
 
+static std::random_device rd;
+static std::mt19937 generator(rd());
+
+std::vector<std::int64_t> get_random_shuffle_range_ints(std::size_t nb_ints) 
+{
+    std::vector<std::int64_t> random_shuffle_ints(nb_ints);
+    std::iota(random_shuffle_ints.begin(), random_shuffle_ints.end(), 0);
+    std::shuffle(random_shuffle_ints.begin(), random_shuffle_ints.end(), generator);
+    
+    return random_shuffle_ints;
+}
+
 TEST_CASE(test_stress) 
 {
-    stdromano::HashMap<int, int> map;
-    std::random_device rd;
-    std::mt19937 gen(rd());
-    std::uniform_int_distribution<> dis(1, 1000000);
+    stdromano::HashMap<int64_t, int64_t> map;
     
     // Insert many random elements
-    const int TEST_SIZE = 10000;
+    const int TEST_SIZE = 1000000;
+
+    std::vector<std::int64_t> keys = get_random_shuffle_range_ints(TEST_SIZE);
 
     for(int i = 0; i < TEST_SIZE; ++i) 
     {
-        int key = dis(gen);
-        map.insert(key, i);
+        map.insert(std::pair<int64_t, int64_t>(keys[i], 1));
     }
     
     // Verify load factor
@@ -240,7 +250,29 @@ TEST_CASE(test_stress)
     {
         ++count;
     }
+
     ASSERT_EQUAL(count, map.size());
+
+    std::shuffle(keys.begin(), keys.end(), generator);
+
+    for(int i = 0; i < TEST_SIZE / 2; i++)
+    {
+        map.erase(keys[i]);
+    }
+
+    std::shuffle(keys.begin(), keys.end(), generator);
+
+    size_t num_found = 0;
+
+    for(int i = 0; i < TEST_SIZE; ++i) 
+    {
+        if(map.find(keys[i]) != map.end())
+        {
+            num_found++;
+        }
+    }
+
+    ASSERT_EQUAL(num_found, TEST_SIZE / 2);
 }
 
 int main() 
