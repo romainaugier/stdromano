@@ -170,12 +170,12 @@
 #define STDROMANO_NAMESPACE_BEGIN namespace stdromano {
 #define STDROMANO_NAMESPACE_END }
 
-#define STDROMANO_ATEXIT_REGISTER(func, exit)                                       \
+#define STDROMANO_ATEXIT_REGISTER(func, do_exit)                                    \
         int res_##func = std::atexit(func);                                         \
         if(res_##func != 0)                                                         \
         {                                                                           \
             std::fprintf(stderr, "Cannot register function \""#func"\" in atexit"); \
-            if(exit) return 1;                                                      \
-        }                                                                           \
+            if(do_exit) std::exit(1);                                               \
+        } 
 
 #endif /* !defined(__STDROMANO) */

@@ -17,6 +17,11 @@ if(RUN_TESTS EQUAL 1)
     enable_testing()
 endif()
 
+# concurrentqueue
+set(concurrentqueue_INCLUDE_DIRS "${CMAKE_SOURCE_DIR}/concurrentqueue")
+
+include_directories(${concurrentqueue_INCLUDE_DIRS})
+
 add_subdirectory(src)
 
 if(RUN_TESTS EQUAL 1)
