@@ -12,7 +12,7 @@ add_definitions(-DROMANO_BUILD_SHARED)
 add_library(${PROJECT_NAME} SHARED ${src_files})
 set_target_properties(${PROJECT_NAME} PROPERTIES PREFIX "")
 set_target_properties(${PROJECT_NAME} PROPERTIES CXX_STANDARD 11)
-set_target_properties(${PROJECT_NAME} PROPERTIES OUTPUT_NAME "${PROJECT_NAME}$<$<CONFIG:Debug>:d>")
+set_target_properties(${PROJECT_NAME} PROPERTIES DEBUG_POSTFIX "d")
 
 set_target_options(${PROJECT_NAME})
 
@@ -37,6 +37,7 @@ install(
     EXPORT "${PROJECT_NAME}Targets"
     RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
     ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
+    LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
 )
 
 install(
