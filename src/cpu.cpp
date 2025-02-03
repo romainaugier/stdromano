@@ -6,8 +6,6 @@
 #include <windows.h>
 #include <powerbase.h>
 
-STDROMANO_NAMESPACE_BEGIN
-
 typedef struct _PROCESSOR_POWER_INFORMATION 
 {
    ULONG Number;
@@ -26,6 +24,8 @@ typedef struct _PROCESSOR_POWER_INFORMATION
 #endif /* !defined(__USE_POSIX199309) */
 #include <time.h>
 #endif /* defined(STDROMANO_WIN) */
+
+STDROMANO_NAMESPACE_BEGIN
 
 static uint64_t _get_frequency_counter = 0;
 static uint32_t _frequency = 0;
