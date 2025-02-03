@@ -60,7 +60,7 @@ STDROMANO_FORCE_INLINE uint32_t random_int_range(const uint32_t state, const uin
 
 /* Thread safe random generators */
 
-static std::atomic<uint32_t> _state = 0;
+static std::atomic<uint32_t> _state;
 
 STDROMANO_FORCE_INLINE uint32_t next_random_uint32() noexcept
 {

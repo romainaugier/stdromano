@@ -325,34 +325,43 @@ public:
     {
         const size_t old_capacity = this->capacity();
 
-        if(!force && (new_capacity == 0 || new_capacity < old_capacity))
+        if (!force && (new_capacity == 0 || new_capacity < old_capacity))
         {
             return;
         }
 
         Header* new_header = Vector<T, Alignment>::allocate(new_capacity);
 
-        if(new_header == nullptr) 
+        if (new_header == nullptr)
         {
             return;
         }
 
-        if(this->_header != nullptr) 
+        if (this->_header != nullptr)
         {
-            new_header->size = this->_header->size;
-            
-            for(size_t i = 0; i < this->size(); ++i) 
+            const size_t old_size = this->size();
+            const size_t new_size = std::min(old_size, new_capacity);
+            new_header->size = new_size;
+
+            T* old_data = this->data();
+            T* new_data = reinterpret_cast<T*>(new_header->data);
+
+            for (size_t i = 0; i < new_size; ++i)
             {
-                new (new_header->data + i) T(std::move((*this)[i]));
-                (*this)[i].~T();
+                ::new (new_data + i) T(std::move_if_noexcept(old_data[i]));
+                old_data[i].~T();
             }
 
-            for(size_t i = this->size(); i < new_capacity; i++)
+            for (size_t i = new_size; i < old_size; ++i)
             {
-                new (new_header->data + i) T;
+                old_data[i].~T();
             }
 
             Vector<T, Alignment>::deallocate(this->_header);
+        }
+        else
+        {
+            new_header->size = 0;
         }
 
         this->_header = new_header;
@@ -513,12 +522,15 @@ public:
 
     void clear() noexcept
     {
-        for(size_t i = 0; i < this->size(); i++)
+        if(this->_header != nullptr)
         {
-            this->operator[](i).~T();
-        }
+            for(size_t i = 0; i < this->size(); i++)
+            {
+                this->operator[](i).~T();
+            }
 
-        this->set_size(0);
+            this->set_size(0);
+        }
     }
 
     template<typename F>

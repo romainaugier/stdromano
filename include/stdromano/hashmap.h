@@ -534,7 +534,7 @@ public:
 
         while(true) 
         {
-            Bucket& bucket = this->_buckets[index];
+            const Bucket& bucket = this->_buckets[index];
 
             if(bucket.is_empty() || probe_length > bucket.probe_length()) 
             {

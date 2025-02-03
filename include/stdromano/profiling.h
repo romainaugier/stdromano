@@ -199,8 +199,8 @@ static auto _func_timer(const char* func_name, F&& func, Args&&... args)
 STDROMANO_NAMESPACE_END
 
 #if defined(STDROMANO_ENABLE_PROFILING)
-#define SCOPED_PROFILE_START(profile_unit, name) stdromano::ScopedProfile<profile_unit> __profile_##name##(#name)
-#define SCOPED_PROFILE_STOP(name) __profile_##name##.stop()
+#define SCOPED_PROFILE_START(profile_unit, name) stdromano::ScopedProfile<profile_unit> __profile_##name(#name)
+#define SCOPED_PROFILE_STOP(name) __profile_##name.stop()
 
 #define PROFILE_FUNC(profile_unit, func, ...) stdromano::_func_timer<profile_unit>(#func, func, ##__VA_ARGS__)
 
