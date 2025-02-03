@@ -121,7 +121,9 @@ void* ThreadPool::worker_func(void* args) noexcept
     
     tp->_num_workers--;
 
+#if defined(STDROMANO_LINUX)
     return nullptr;
+#endif /* defined(STDROMANO_LINUX) */
 }
 
 ThreadPool::ThreadPool(const int64_t workers_count)
