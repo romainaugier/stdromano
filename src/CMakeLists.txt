@@ -46,6 +46,19 @@ install(
 )
 
 install(
+    DIRECTORY ${spdlog_INCLUDE_DIRS}/
+    DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
+    FILES_MATCHING PATTERN "*.h"
+)
+
+install(
+    FILES ${concurrentqueue_INCLUDE_DIRS}/concurrentqueue.h 
+          ${concurrentqueue_INCLUDE_DIRS}/blockingconcurrentqueue.h
+          ${concurrentqueue_INCLUDE_DIRS}/lightweightsemaphore.h
+    DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
+)
+
+install(
     EXPORT "${PROJECT_NAME}Targets"
     FILE "${PROJECT_NAME}Targets.cmake"
     NAMESPACE "${PROJECT_NAME}::"

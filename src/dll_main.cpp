@@ -1,8 +1,4 @@
-// SPDX-License-Identifier: BSD-3-Clause 
-// Copyright (c) 2025 - Present Romain Augier 
-// All rights reserved. 
-
-#include "stdromano/stdromano.h"
+#include "stdromano/cpu.h"
 
 #include <cstdio>
 
@@ -23,6 +19,7 @@ void STDROMANO_LIB_ENTRY lib_entry(void)
 #if STDROMANO_DEBUG
     std::printf("stdromano entry\n");
 #endif // STDROMANO_DEBUG
+    stdromano::cpu_check();
 }
 
 void STDROMANO_LIB_EXIT lib_exit(void)

@@ -6,20 +6,32 @@
 
 #include <cstdio>
 
+#if defined(STDROMANO_WIN)
+void t1_func(void* args)
+#elif defined(STDROMANO_LINUX)
 void* t1_func(void* args)
+#endif /* defined(STDROMANO_WIN) */
 {
     stdromano::thread_sleep(500);
 
     std::printf("Hello from t1\n");
 
+#if defined(STDROMANO_LINUX)
     return nullptr;
+#endif /* defined(STDROMANO_LINUX) */
 }
 
+#if defined(STDROMANO_WIN)
+void t2_func(void* args)
+#elif defined(STDROMANO_LINUX)
 void* t2_func(void* args)
+#endif /* defined(STDROMANO_WIN) */
 {
     std::printf("Hello from t2\n");
 
+#if defined(STDROMANO_LINUX)
     return nullptr;
+#endif /* defined(STDROMANO_LINUX) */
 }
 
 class TPoolWork : public stdromano::ThreadPoolWork

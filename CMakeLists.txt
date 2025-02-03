@@ -20,7 +20,11 @@ endif()
 # concurrentqueue
 set(concurrentqueue_INCLUDE_DIRS "${CMAKE_SOURCE_DIR}/concurrentqueue")
 
+# spdlog
+set(spdlog_INCLUDE_DIRS "${CMAKE_SOURCE_DIR}/spdlog/include")
+
 include_directories(${concurrentqueue_INCLUDE_DIRS})
+include_directories(${spdlog_INCLUDE_DIRS})
 
 add_subdirectory(src)
 

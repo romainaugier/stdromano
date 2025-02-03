@@ -8,6 +8,7 @@
 
 #include <string>
 #include <random>
+#include <numeric>
 
 // Custom type to test with complex keys
 struct ComplexKey 
