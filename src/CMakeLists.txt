@@ -11,7 +11,7 @@ add_definitions(-DSTDROMANO_BUILD_SHARED)
 
 add_library(${PROJECT_NAME} SHARED ${src_files})
 set_target_properties(${PROJECT_NAME} PROPERTIES PREFIX "")
-set_target_properties(${PROJECT_NAME} PROPERTIES CXX_STANDARD 11)
+set_target_properties(${PROJECT_NAME} PROPERTIES CXX_STANDARD 17)
 set_target_properties(${PROJECT_NAME} PROPERTIES DEBUG_POSTFIX "d")
 
 set_target_options(${PROJECT_NAME})

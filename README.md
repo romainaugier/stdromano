@@ -1,6 +1,6 @@
 # STDRomano
 
-C++ 11 data structures and utilities.
+C++ 17 data structures and utilities.
 
 ## Acknowledgment
 
