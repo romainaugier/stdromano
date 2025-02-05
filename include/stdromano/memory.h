@@ -10,9 +10,8 @@
 #include "stdromano/stdromano.h"
 
 #include <immintrin.h>
-#include <cstdlib>
 #include <cstring>
-#include <type_traits>
+#include <cstdio>
 
 #if defined(STDROMANO_GCC)
 #include <alloca.h>
@@ -47,6 +46,29 @@ static STDROMANO_FORCE_INLINE void mem_swap(void* a, void* b, const size_t size)
         *p = *q;
         *q = t;
     }
+}
+
+static void format_byte_size(float size, char* buffer) noexcept
+{
+    char* unit = "Bytes";
+
+    if(size > 1000000000)
+    {
+        unit = "Gb";
+        size = size / 1000000000;
+    }
+    else if(size > 1000000)
+    {
+        unit = "Mb";
+        size = size / 1000000;
+    }
+    else if(size > 1e3)
+    {
+        unit = "Kb";
+        size = size / 1000;
+    }
+
+    std::snprintf(buffer, 16, "%.02f %s", size, unit);
 }
 
 STDROMANO_NAMESPACE_END
