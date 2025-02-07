@@ -127,16 +127,7 @@
 #define CONCAT(prefix, suffix)      CONCAT_(prefix, suffix)
 
 #define STDROMANO_ASSERT(expression) assert(expression)
-
-#define STDROMANO_STATIC_ASSERT(expr)                   \
-    struct CONCAT(__outscope_assert_, __COUNTER__)      \
-    {                                                   \
-        char                                            \
-        outscope_assert                                 \
-        [2*(expr)-1];                                   \
-                                                        \
-    } CONCAT(__outscope_assert_, __COUNTER__)
-
+#define STDROMANO_STATIC_ASSERT(expr, message) static_assert(expr, message)
 #define STDROMANO_NOT_IMPLEMENTED std::fprintf(stderr, "Function " STDROMANO_FUNCTION " not implemented"); std::exit(1);
 
 #define STDROMANO_NON_COPYABLE(__class__)                   \

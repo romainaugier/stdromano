@@ -10,8 +10,9 @@
 #include "stdromano/stdromano.h"
 
 #include <immintrin.h>
-#include <cstring>
 #include <cstdio>
+#include <cstdlib>
+#include <cstring>
 
 #if defined(STDROMANO_GCC)
 #include <alloca.h>
