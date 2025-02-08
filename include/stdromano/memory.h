@@ -49,27 +49,34 @@ static STDROMANO_FORCE_INLINE void mem_swap(void* a, void* b, const size_t size)
     }
 }
 
+static constexpr const char* units[4] = {
+    "Bytes",
+    "Gb",
+    "Mb",
+    "Kb"
+};
+
 static void format_byte_size(float size, char* buffer) noexcept
 {
-    char* unit = "Bytes";
+    size_t unit = 0;
 
     if(size > 1000000000)
     {
-        unit = "Gb";
+        unit = 1;
         size = size / 1000000000;
     }
     else if(size > 1000000)
     {
-        unit = "Mb";
+        unit = 2;
         size = size / 1000000;
     }
     else if(size > 1e3)
     {
-        unit = "Kb";
+        unit = 3;
         size = size / 1000;
     }
 
-    std::snprintf(buffer, 16, "%.02f %s", size, unit);
+    std::snprintf(buffer, 16, "%.02f %s", size, units[unit]);
 }
 
 STDROMANO_NAMESPACE_END
