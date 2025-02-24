@@ -479,17 +479,6 @@ public:
         this->_max_probes = static_cast<uint32_t>(std::log2(static_cast<float>(initial_capacity)));
     }
 
-    // void insert(const key_type& key, const mapped_type& value) 
-    // {
-    //     if (this->load_factor() > MAX_LOAD_FACTOR) 
-    //     {
-    //         this->grow(this->get_new_capacity(), false);
-    //     }
-
-    //     return this->insert_internal(std::make_pair<key_type, mapped_type>(std::forward<const key_type&>(key), 
-    //                                                                        std::forward<const mapped_type&>(value)));
-    // }
-
     template<typename P>
     void insert(P&& value) 
     {

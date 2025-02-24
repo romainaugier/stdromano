@@ -4,13 +4,16 @@
 
 #include "stdromano/hashmap.h"
 
+#define STDROMANO_ENABLE_PROFILING
+#include "stdromano/profiling.h"
+
 #include "test.h"
 
 #include <string>
 #include <random>
 #include <numeric>
+#include <vector>
 
-// Custom type to test with complex keys
 struct ComplexKey 
 {
     int id;
@@ -22,7 +25,6 @@ struct ComplexKey
     }
 };
 
-// Custom hash function for ComplexKey
 struct ComplexKeyHash 
 {
     size_t operator()(const ComplexKey& key) const 
@@ -35,24 +37,19 @@ TEST_CASE(test_basic_operations)
 {
     stdromano::HashMap<int, std::string> my_map;
     
-    // Test initial state
     ASSERT_EQUAL(0u, my_map.size());
     ASSERT(my_map.empty());
     
-    // Test insertion
     my_map.insert(std::pair<int, std::string>(1, "one"));
     ASSERT_EQUAL(1u, my_map.size());
     ASSERT(!my_map.empty());
     
-    // Test find
     auto it = my_map.find(1);
     ASSERT(it != my_map.end());
     ASSERT_EQUAL("one", it->second);
     
-    // Test non-existent key
     ASSERT(my_map.find(2) == my_map.end());
     
-    // Test erase
     my_map.erase(1);
     ASSERT_EQUAL(0u, my_map.size());
     ASSERT(my_map.empty());
@@ -62,17 +59,14 @@ TEST_CASE(test_operator_bracket)
 {
     stdromano::HashMap<std::string, int> map;
     
-    // Test operator[] insertion
     map["test"] = 42;
     ASSERT_EQUAL(1u, map.size());
     ASSERT_EQUAL(42, map["test"]);
     
-    // Test operator[] update
     map["test"] = 24;
     ASSERT_EQUAL(1u, map.size());
     ASSERT_EQUAL(24, map["test"]);
     
-    // Test operator[] auto-insertion
     int& value = map["new"];
     ASSERT_EQUAL(2u, map.size());
     value = 100;
@@ -99,13 +93,11 @@ TEST_CASE(test_iterator)
     stdromano::HashMap<int, int> map;
     const int TEST_SIZE = 10;
     
-    // Insert elements
     for(int i = 0; i < TEST_SIZE; ++i)
     {
         map.insert(std::pair<int, int>(i, i * i));
     }
     
-    // Test iterator traversal
     size_t count = 0;
 
     for(auto it = map.begin(); it != map.end(); ++it) 
@@ -116,7 +108,6 @@ TEST_CASE(test_iterator)
 
     ASSERT_EQUAL(TEST_SIZE, count);
     
-    // Test const iterator
     const stdromano::HashMap<int, int>& const_map = map;
 
     count = 0;
@@ -132,16 +123,14 @@ TEST_CASE(test_iterator)
 
 TEST_CASE(test_load_factor_and_rehashing) 
 {
-    stdromano::HashMap<int, int> map(2); // Start with small capacity
+    stdromano::HashMap<int, int> map(2);
     
-    // Insert elements to trigger rehashing
     for(int i = 0; i < 100; ++i) 
     {
         map.insert(std::pair<int, int>(i, i));
         ASSERT(map.load_factor() <= 1.0f);
     }
     
-    // Verify all elements are still accessible
     for(int i = 0; i < 100; ++i) 
     {
         auto it = map.find(i);
@@ -154,12 +143,11 @@ TEST_CASE(test_collisions)
 {
     struct CollisionHash 
     {
-        size_t operator()(int) const { return 1; } // Always returns same hash
+        size_t operator()(int) const { return 1; }
     };
     
     stdromano::HashMap<int, std::string, CollisionHash> map;
     
-    // Insert elements that will all collide
     map.insert(std::pair<int, std::string>(1, "one"));
     map.insert(std::pair<int, std::string>(2, "two"));
     map.insert(std::pair<int, std::string>(3, "three"));
@@ -174,43 +162,37 @@ TEST_CASE(test_clear_and_reserve)
 {
     stdromano::HashMap<int, int> map;
     
-    // Test reserve
     map.reserve(100);
     size_t capacity = map.capacity();
     ASSERT(capacity >= 100);
     
-    // Insert elements
     for(int i = 0; i < 50; ++i) 
     {
         map.insert(std::pair<int, int>(i, i));
     }
     
-    // Test clear
     map.clear();
     ASSERT_EQUAL(0u, map.size());
     ASSERT(map.empty());
-    ASSERT_EQUAL(capacity, map.capacity()); // Capacity should remain unchanged after clear
+    ASSERT_EQUAL(capacity, map.capacity());
 }
 
 TEST_CASE(test_edge_cases) 
 {
     stdromano::HashMap<std::string, int> map;
     
-    // Test empty string key
     map.insert(std::pair<std::string, int>("", 0));
     ASSERT_EQUAL(0, map[""]);
     
-    // Test duplicate insertions
     map.insert(std::pair<std::string, int>("test", 1));
-    map.insert(std::pair<std::string, int>("test", 2));
-    ASSERT_EQUAL(2, map["test"]); // Should update value
     
-    // Test erase of non-existent key
+    map.insert(std::pair<std::string, int>("test", 2));
+    ASSERT_EQUAL(2, map["test"]);
+    
     size_t size_before = map.size();
     map.erase("non-existent");
     ASSERT_EQUAL(size_before, map.size());
     
-    // Test find with non-existent key
     ASSERT(map.find("non-existent") == map.end());
 }
 
@@ -230,40 +212,55 @@ TEST_CASE(test_stress)
 {
     stdromano::HashMap<int64_t, int64_t> map;
     
-    // Insert many random elements
+#if defined(DEBUG_BUILD)
+    const int TEST_SIZE = 10000;
+#else
     const int TEST_SIZE = 1000000;
+#endif // DEBUG_BUILD
 
     std::vector<std::int64_t> keys = get_random_shuffle_range_ints(TEST_SIZE);
+
+    SCOPED_PROFILE_START(stdromano::ProfileUnit::MilliSeconds, map_insert);
 
     for(int i = 0; i < TEST_SIZE; ++i) 
     {
         map.insert(std::pair<int64_t, int64_t>(keys[i], 1));
     }
+
+    SCOPED_PROFILE_STOP(map_insert);
     
-    // Verify load factor
     float load_factor = map.load_factor();
     ASSERT(load_factor > 0.0f && load_factor <= 1.0f);
     
-    // Test iteration stability
     size_t count = 0;
+
+    SCOPED_PROFILE_START(stdromano::ProfileUnit::MilliSeconds, map_iterate);
 
     for(auto it = map.begin(); it != map.end(); ++it) 
     {
         ++count;
     }
 
+    SCOPED_PROFILE_STOP(map_iterate);
+
     ASSERT_EQUAL(count, map.size());
 
     std::shuffle(keys.begin(), keys.end(), generator);
+
+    SCOPED_PROFILE_START(stdromano::ProfileUnit::MilliSeconds, map_erase);
 
     for(int i = 0; i < TEST_SIZE / 2; i++)
     {
         map.erase(keys[i]);
     }
 
+    SCOPED_PROFILE_STOP(map_erase);
+
     std::shuffle(keys.begin(), keys.end(), generator);
 
     size_t num_found = 0;
+
+    SCOPED_PROFILE_START(stdromano::ProfileUnit::MilliSeconds, map_find);
 
     for(int i = 0; i < TEST_SIZE; ++i) 
     {
@@ -273,7 +270,35 @@ TEST_CASE(test_stress)
         }
     }
 
+    SCOPED_PROFILE_STOP(map_find);
+
     ASSERT_EQUAL(num_found, TEST_SIZE / 2);
+}
+
+TEST_CASE(test_stress_emplace_vs_find_existing) 
+{
+    stdromano::HashMap<int64_t, std::string> map;
+
+#if defined(DEBUG_BUILD)
+    const int TEST_SIZE = 10000;
+#else
+    const int TEST_SIZE = 1000000;
+#endif // DEBUG_BUILD
+
+    std::vector<std::int64_t> keys = get_random_shuffle_range_ints(TEST_SIZE);
+
+    for(int i = 0; i < TEST_SIZE; ++i) 
+    {
+        map.insert(std::pair<int64_t, std::string>(keys[i], std::string(1000, 'a')));
+    }
+
+    SCOPED_PROFILE_START(stdromano::ProfileUnit::MilliSeconds, find_time);
+    for(int i = 0; i < TEST_SIZE; ++i) 
+    {
+        auto it = map.find(keys[i]);
+        ASSERT(it != map.end());
+    }
+    SCOPED_PROFILE_STOP(find_time);
 }
 
 int main() 
@@ -289,6 +314,7 @@ int main()
     runner.add_test("Clear and Reserve", test_clear_and_reserve);
     runner.add_test("Edge Cases", test_edge_cases);
     runner.add_test("Stress Test", test_stress);
+    runner.add_test("Stress Emplace vs Find Existing", test_stress_emplace_vs_find_existing);
     
     runner.run_all();
 
