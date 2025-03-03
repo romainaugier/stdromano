@@ -108,6 +108,25 @@ public:
         }
     }
 
+    bool operator==(const String<>& other) const
+    {
+        if(this->empty())
+        {
+            return other.empty() ? true : false;
+        }
+        else if(other.empty())
+        {
+            return false;
+        }
+
+        return this->size() == other.size() && std::memcmp(this->c_str(), other.c_str(), this->size()) == 0;
+    }
+
+    bool operator!=(const String<>& other) const
+    {
+        return !this->operator==(other);
+    }
+
     static String make_ref(const char* str, size_t size) noexcept 
     {
         String s;

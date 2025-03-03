@@ -367,7 +367,7 @@ public:
         this->_header = new_header;
     }
 
-    STDROMANO_FORCE_INLINE void reserve(const size_t new_capacity) noexcept { this->resize(new_capacity); }
+    STDROMANO_FORCE_INLINE void reserve(const size_t new_capacity) noexcept { this->resize(this->capacity() + new_capacity + 1); }
 
     void push_back(const T& element) noexcept
     {
