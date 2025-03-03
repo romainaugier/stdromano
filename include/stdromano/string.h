@@ -8,6 +8,7 @@
 #define __STDROMANO_STRING
 
 #include "stdromano/memory.h"
+#include "stdromano/hash.h"
 
 #include "spdlog/fmt/fmt.h"
 
@@ -251,6 +252,15 @@ struct fmt::formatter<stdromano::String<>> {
     constexpr auto parse(format_parse_context& ctx) { return ctx.begin(); }    
     
     auto format(const stdromano::String<>& s, format_context& ctx) const { return !s.empty() ? format_to(ctx.out(), "{}", fmt::string_view(s.c_str(), s.size())) : format_to(ctx.out(), ""); }
+};
+
+template<>
+struct std::hash<stdromano::String<>>
+{
+    std::size_t operator()(const stdromano::String<>& s) const
+    {
+        return static_cast<std::size_t>(stdromano::hash_murmur3(static_cast<const void*>(s.c_str()), s.size(), 483910));
+    }
 };
 
 #endif /* !defined(__STDROMANO_STRING) */
