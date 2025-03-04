@@ -1,6 +1,6 @@
-// SPDX-License-Identifier: BSD-3-Clause 
-// Copyright (c) 2025 - Present Romain Augier 
-// All rights reserved. 
+// SPDX-License-Identifier: BSD-3-Clause
+// Copyright (c) 2025 - Present Romain Augier
+// All rights reserved.
 
 #include "stdromano/threading.h"
 
@@ -37,10 +37,7 @@ void* t2_func(void* args)
 class TPoolWork : public stdromano::ThreadPoolWork
 {
 public:
-    TPoolWork(const size_t job_id)
-    {
-        this->_job_id = job_id;
-    }
+    TPoolWork(const size_t job_id) { this->_job_id = job_id; }
 
     virtual ~TPoolWork() override {}
 
@@ -50,14 +47,10 @@ public:
     }
 
 private:
-
     size_t _job_id;
 };
 
-void atexit_handler_stdromano_global_threadpool()
-{
-    stdromano::atexit_handler_global_threadpool();
-}
+void atexit_handler_stdromano_global_threadpool() { stdromano::atexit_handler_global_threadpool(); }
 
 #define NUM_WORKS 1000
 

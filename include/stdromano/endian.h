@@ -1,11 +1,12 @@
-// SPDX-License-Identifier: BSD-3-Clause 
-// Copyright (c) 2025 - Present Romain Augier 
-// All rights reserved. 
+// SPDX-License-Identifier: BSD-3-Clause
+// Copyright (c) 2025 - Present Romain Augier
+// All rights reserved.
 
 #if !defined(__STDROMANO_ENDIAN)
 #define __STDROMANO_ENDIAN
 
-/* from here: https://gist.githubusercontent.com/panzi/6856583/raw/12f9f02f1298bb0bc054ba667bccc0cf032cdb03/portable_endian.h */
+/* from here:
+ * https://gist.githubusercontent.com/panzi/6856583/raw/12f9f02f1298bb0bc054ba667bccc0cf032cdb03/portable_endian.h */
 
 #include "stdromano/stdromano.h"
 
@@ -62,12 +63,12 @@
 #define htole16(x) (x)
 #define be16toh(x) ntohs(x)
 #define le16toh(x) (x)
- 
+
 #define htobe32(x) htonl(x)
 #define htole32(x) (x)
 #define be32toh(x) ntohl(x)
 #define le32toh(x) (x)
- 
+
 #define htobe64(x) htonll(x)
 #define htole64(x) (x)
 #define be64toh(x) ntohll(x)
@@ -79,12 +80,12 @@
 #define htole16(x) _byteswap_ushort(x)
 #define be16toh(x) (x)
 #define le16toh(x) _byteswap_ushort(x)
- 
+
 #define htobe32(x) (x)
 #define htole32(x) _byteswap_ulong(x)
 #define be32toh(x) (x)
 #define le32toh(x) _byteswap_ulong(x)
- 
+
 #define htobe64(x) (x)
 #define htole64(x) _byteswap_uint64(x)
 #define be64toh(x) (x)

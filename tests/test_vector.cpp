@@ -1,6 +1,6 @@
-// SPDX-License-Identifier: BSD-3-Clause 
-// Copyright (c) 2025 - Present Romain Augier 
-// All rights reserved. 
+// SPDX-License-Identifier: BSD-3-Clause
+// Copyright (c) 2025 - Present Romain Augier
+// All rights reserved.
 
 #include "stdromano/vector.h"
 #include "test.h"
@@ -9,7 +9,7 @@
 
 INIT_TEST_OBJECT;
 
-TEST_CASE(test_constructor_and_destructor) 
+TEST_CASE(test_constructor_and_destructor)
 {
     // Default constructor
     {
@@ -26,10 +26,10 @@ TEST_CASE(test_constructor_and_destructor)
     }
 }
 
-TEST_CASE(test_push_back_and_pop_back) 
+TEST_CASE(test_push_back_and_pop_back)
 {
     stdromano::Vector<TestObject> vec;
-    
+
     // Push back
     vec.push_back(TestObject("first"));
     ASSERT_EQUAL(1u, vec.size());
@@ -45,7 +45,7 @@ TEST_CASE(test_push_back_and_pop_back)
     ASSERT_EQUAL("first", vec[0].get_data());
 }
 
-TEST_CASE(test_copy_and_move) 
+TEST_CASE(test_copy_and_move)
 {
     stdromano::Vector<TestObject> vec1;
     vec1.push_back(TestObject("test1"));
@@ -74,7 +74,7 @@ TEST_CASE(test_copy_and_move)
     ASSERT_EQUAL(0u, vec2.size()); // vec2 should be empty after move
 }
 
-TEST_CASE(test_element_access) 
+TEST_CASE(test_element_access)
 {
     stdromano::Vector<TestObject> vec;
     vec.push_back(TestObject("first"));
@@ -91,32 +91,33 @@ TEST_CASE(test_element_access)
     // ASSERT_EQUAL(vec.at(2), nullptr);
 }
 
-TEST_CASE(test_capacity) 
+TEST_CASE(test_capacity)
 {
     stdromano::Vector<TestObject> vec;
-    
+
     // Test initial capacity
     ASSERT_EQUAL(0u, vec.size());
-    
+
     // Test capacity growth
-    for (int i = 0; i < 100; ++i) {
+    for(int i = 0; i < 100; ++i)
+    {
         vec.push_back(TestObject(std::to_string(i)));
     }
-    
+
     ASSERT_EQUAL(100u, vec.size());
     ASSERT(vec.capacity() >= vec.size());
 }
 
-int main() 
+int main()
 {
     TestRunner runner;
-    
+
     runner.add_test("Constructor and Destructor", test_constructor_and_destructor);
     runner.add_test("Push Back and Pop Back", test_push_back_and_pop_back);
     runner.add_test("Copy and Move", test_copy_and_move);
     runner.add_test("Element Access", test_element_access);
     runner.add_test("Capacity", test_capacity);
-    
+
     runner.run_all();
 
     return 0;

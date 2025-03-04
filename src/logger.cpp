@@ -1,6 +1,6 @@
-// SPDX-License-Identifier: BSD-3-Clause 
-// Copyright (c) 2025 - Present Romain Augier 
-// All rights reserved. 
+// SPDX-License-Identifier: BSD-3-Clause
+// Copyright (c) 2025 - Present Romain Augier
+// All rights reserved.
 
 #include "stdromano/logger.h"
 #include "stdromano/memory.h"
@@ -18,7 +18,7 @@ Logger::Logger() : _logger("null")
     console_sink->set_pattern("%l : %v");
 
     char* log_level = std::getenv("STDROMANO_LOG_LEVEL");
-    
+
     if(log_level == nullptr)
     {
         console_sink->set_level(spdlog::level::info);
@@ -61,9 +61,6 @@ Logger::Logger() : _logger("null")
     spdlog::flush_on(spdlog::level::info);
 }
 
-Logger::~Logger()
-{
-    this->_logger.flush();
-}
+Logger::~Logger() { this->_logger.flush(); }
 
 STDROMANO_NAMESPACE_END

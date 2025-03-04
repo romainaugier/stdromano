@@ -1,25 +1,26 @@
-// SPDX-License-Identifier: BSD-3-Clause 
-// Copyright (c) 2025 - Present Romain Augier 
+// SPDX-License-Identifier: BSD-3-Clause
+// Copyright (c) 2025 - Present Romain Augier
 // All rights reserved.
 
-#include "test.h"
 #include "stdromano/string.h"
+#include "test.h"
+
 
 using namespace stdromano;
 
-String<> create_large_string(size_t size) 
+String<> create_large_string(size_t size)
 {
     String<> result;
 
-    for(size_t i = 0; i < size; ++i) 
+    for(size_t i = 0; i < size; ++i)
     {
         result.push_back(static_cast<char>('A' + (i % 26)));
     }
-    
+
     return result;
 }
 
-TEST_CASE(TestConstruction) 
+TEST_CASE(TestConstruction)
 {
     String<> empty_str;
     ASSERT_EQUAL(0, empty_str.size());
@@ -35,7 +36,7 @@ TEST_CASE(TestConstruction)
     ASSERT_EQUAL(0, std::strcmp(fmt_str.c_str(), "Hello World"));
 }
 
-TEST_CASE(TestMakeRef) 
+TEST_CASE(TestMakeRef)
 {
     const char* raw = "Reference";
     String<> ref = String<>::make_ref(raw, std::strlen(raw));
@@ -50,7 +51,7 @@ TEST_CASE(TestMakeRef)
     ASSERT_EQUAL(str.size(), ref_from_str.size());
 }
 
-TEST_CASE(TestComparison) 
+TEST_CASE(TestComparison)
 {
     String<> str1("Hello");
     String<> str2("Hello");
@@ -66,14 +67,15 @@ TEST_CASE(TestComparison)
     ASSERT(empty_str == empty_str);
 }
 
-TEST_CASE(TestPushBack) 
+TEST_CASE(TestPushBack)
 {
     String<> str;
     str.push_back('A');
     ASSERT_EQUAL(1, str.size());
     ASSERT_EQUAL(0, std::strcmp(str.c_str(), "A"));
 
-    for (size_t i = 0; i < 10; ++i) {
+    for(size_t i = 0; i < 10; ++i)
+    {
         str.push_back('B');
     }
 
@@ -81,7 +83,7 @@ TEST_CASE(TestPushBack)
     ASSERT_EQUAL(0, std::strcmp(str.c_str(), "ABBBBBBBBBB"));
 }
 
-TEST_CASE(TestAppendPrepend) 
+TEST_CASE(TestAppendPrepend)
 {
     String<> str("Middle");
 
@@ -106,7 +108,7 @@ TEST_CASE(TestAppendPrepend)
     ASSERT_EQUAL(0, std::strcmp(str.c_str(), "Before PreStartMiddleEndMore Formatted"));
 }
 
-TEST_CASE(TestCaseConversion) 
+TEST_CASE(TestCaseConversion)
 {
     String<> str("Hello World");
 
@@ -125,7 +127,7 @@ TEST_CASE(TestCaseConversion)
     ASSERT_EQUAL(0, std::strcmp(empty_str.capitalize().c_str(), ""));
 }
 
-TEST_CASE(TestStrip) 
+TEST_CASE(TestStrip)
 {
     String<> str("  Hello World  ");
 
@@ -147,7 +149,7 @@ TEST_CASE(TestStrip)
     ASSERT_EQUAL(0, std::strcmp(stripped_custom.c_str(), "Hello"));
 }
 
-TEST_CASE(TestStartsWithEndsWith) 
+TEST_CASE(TestStartsWithEndsWith)
 {
     String<> str("Hello World");
 
@@ -167,7 +169,7 @@ TEST_CASE(TestStartsWithEndsWith)
     ASSERT(!str.endswith("Long Hello World"));
 }
 
-TEST_CASE(TestFind) 
+TEST_CASE(TestFind)
 {
     String<> str("Hello Hello World");
 
@@ -181,7 +183,7 @@ TEST_CASE(TestFind)
     ASSERT_EQUAL(-1, empty_str.find("a"));
 }
 
-TEST_CASE(TestSplit) 
+TEST_CASE(TestSplit)
 {
     String<> str("Hello,World,Test");
     String<> sep(",");
@@ -223,7 +225,7 @@ TEST_CASE(TestSplit)
     ASSERT_EQUAL(str3.size(), it);
 }
 
-TEST_CASE(TestReferenceStringRestrictions) 
+TEST_CASE(TestReferenceStringRestrictions)
 {
     const char* raw = "Immutable";
     String<> ref = String<>::make_ref(raw, std::strlen(raw));
@@ -233,12 +235,12 @@ TEST_CASE(TestReferenceStringRestrictions)
     ASSERT_EQUAL(std::strlen(raw), ref.size());
 }
 
-TEST_CASE(TestLargeString) 
+TEST_CASE(TestLargeString)
 {
     String<> large_str = create_large_string(1000);
     ASSERT_EQUAL(1000, large_str.size());
 
-    for(size_t i = 0; i < large_str.size(); ++i) 
+    for(size_t i = 0; i < large_str.size(); ++i)
     {
         ASSERT_EQUAL('A' + (i % 26), large_str.data()[i]);
     }
@@ -246,7 +248,7 @@ TEST_CASE(TestLargeString)
     ASSERT_EQUAL(0, large_str.data()[large_str.size()]);
 }
 
-TEST_CASE(TestCopyConstructor) 
+TEST_CASE(TestCopyConstructor)
 {
     String<> local("Hello");
     String<> local_copy(local);
@@ -273,7 +275,7 @@ TEST_CASE(TestCopyConstructor)
     ASSERT(ref == ref_copy);
 }
 
-TEST_CASE(TestMoveConstructor) 
+TEST_CASE(TestMoveConstructor)
 {
     String<> local("Hello");
     String<> local_moved(std::move(local));
@@ -298,7 +300,7 @@ TEST_CASE(TestMoveConstructor)
     ASSERT_EQUAL(0, ref.size());
 }
 
-TEST_CASE(TestCopyAssignment) 
+TEST_CASE(TestCopyAssignment)
 {
     String<> local("Hello");
     String<> target;
@@ -330,7 +332,7 @@ TEST_CASE(TestCopyAssignment)
     ASSERT_EQUAL(0, std::strcmp(self.c_str(), "Self"));
 }
 
-TEST_CASE(TestMoveAssignment) 
+TEST_CASE(TestMoveAssignment)
 {
     String<> local("Hello");
     String<> target;
@@ -362,7 +364,7 @@ TEST_CASE(TestMoveAssignment)
     ASSERT_EQUAL(0, std::strcmp(self.c_str(), "Self"));
 }
 
-int main() 
+int main()
 {
     TestRunner runner;
 

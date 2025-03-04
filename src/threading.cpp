@@ -1,6 +1,6 @@
-// SPDX-License-Identifier: BSD-3-Clause 
-// Copyright (c) 2025 - Present Romain Augier 
-// All rights reserved. 
+// SPDX-License-Identifier: BSD-3-Clause
+// Copyright (c) 2025 - Present Romain Augier
+// All rights reserved.
 
 #include "stdromano/threading.h"
 #include "stdromano/memory.h"
@@ -9,40 +9,26 @@
 
 STDROMANO_NAMESPACE_BEGIN
 
-Thread::Thread(thread_func func,
-               void* args,
-               bool daemon,
-               bool detached)
+Thread::Thread(thread_func func, void* args, bool daemon, bool detached)
 {
     this->_func = func;
     this->_args = args;
 
 #if defined(STDROMANO_WIN)
-    this->_handle = CreateThread(NULL,
-                                 0,
-                                 (LPTHREAD_START_ROUTINE)this->_func,
-                                 args,
-                                 CREATE_SUSPENDED,
-                                 &(this->_id));
+    this->_handle = CreateThread(NULL, 0, (LPTHREAD_START_ROUTINE)this->_func, args, CREATE_SUSPENDED, &(this->_id));
 #endif /* defined(STDROMANO_WIN) */
 
     this->_running = false;
 }
 
-Thread::~Thread()
-{
-
-}
+Thread::~Thread() {}
 
 void Thread::start() noexcept
 {
 #if defined(STDROMANO_WIN)
     ResumeThread(this->_handle);
 #elif defined(STDROMANO_LINUX)
-    pthread_create(&this->_handle,
-                   NULL,
-                   this->_func,
-                   this->_args);
+    pthread_create(&this->_handle, NULL, this->_func, this->_args);
 #endif /* defined(STDROMANO_WIN) */
 
     this->_running = true;
@@ -118,7 +104,7 @@ void* ThreadPool::worker_func(void* args) noexcept
             }
         }
     }
-    
+
     tp->_num_workers--;
 
 #if defined(STDROMANO_LINUX)
@@ -171,7 +157,7 @@ void ThreadPool::init(const int64_t workers_count) noexcept
 
     for(size_t i = 0; i < num_workers; i++)
     {
-        ::new (std::addressof(this->_workers[i])) Thread(&ThreadPool::worker_func, this, true, true);
+        ::new(std::addressof(this->_workers[i])) Thread(&ThreadPool::worker_func, this, true, true);
         this->_workers[i].start();
         this->_num_workers++;
     }
@@ -179,10 +165,7 @@ void ThreadPool::init(const int64_t workers_count) noexcept
     this->_started.store(true);
 }
 
-bool ThreadPool::add_work(ThreadPoolWork* work) noexcept
-{
-    return this->_work_queue.enqueue(work);
-}
+bool ThreadPool::add_work(ThreadPoolWork* work) noexcept { return this->_work_queue.enqueue(work); }
 
 void ThreadPool::wait() const noexcept
 {
@@ -207,14 +190,11 @@ GlobalThreadPool::~GlobalThreadPool()
     {
         delete this->_tp;
         this->_tp = nullptr;
-        
+
         this->_stopped = true;
     }
 }
 
-void atexit_handler_global_threadpool() noexcept
-{
-    global_threadpool.stop();
-}
+void atexit_handler_global_threadpool() noexcept { global_threadpool.stop(); }
 
 STDROMANO_NAMESPACE_END

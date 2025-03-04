@@ -1,11 +1,11 @@
-// SPDX-License-Identifier: BSD-3-Clause 
-// Copyright (c) 2025 - Present Romain Augier 
-// All rights reserved. 
+// SPDX-License-Identifier: BSD-3-Clause
+// Copyright (c) 2025 - Present Romain Augier
+// All rights reserved.
 
 #pragma once
 
 #if !defined(__STDROMANO_HASH)
-#define __STDROMANO_HASH 
+#define __STDROMANO_HASH
 
 #include "stdromano/stdromano.h"
 
@@ -13,7 +13,7 @@
 
 STDROMANO_NAMESPACE_BEGIN
 
-static STDROMANO_FORCE_INLINE uint32_t hash_fnv1a(char* data, const size_t n)
+static STDROMANO_FORCE_INLINE uint32_t hash_fnv1a(char *data, const size_t n)
 {
     uint32_t result = static_cast<uint32_t>(0x811c9dc5u);
 
@@ -29,7 +29,7 @@ static STDROMANO_FORCE_INLINE uint32_t hash_fnv1a(char* data, const size_t n)
     return result;
 }
 
-static STDROMANO_FORCE_INLINE uint32_t hash_fnv1a(const char* data)
+static STDROMANO_FORCE_INLINE uint32_t hash_fnv1a(const char *data)
 {
     uint32_t result = static_cast<uint32_t>(0x811c9dc5);
 
@@ -54,39 +54,39 @@ static STDROMANO_FORCE_INLINE uint32_t hash_fnv1a(const char* data)
 
 #define _PADr_KAZE(x, n) (((x) << (n)) >> (n))
 
-static STDROMANO_FORCE_INLINE uint32_t hash_fnv1a_pippip(const char *str, size_t n) 
+static STDROMANO_FORCE_INLINE uint32_t hash_fnv1a_pippip(const char *str, size_t n)
 {
     assert(n < (FNV1A_MAX_KEY_SIZE - 8));
 
-	const uint32_t PRIME = static_cast<uint32_t>(591798841); 
+    const uint32_t PRIME = static_cast<uint32_t>(591798841);
 
-    uint32_t hash32; 
+    uint32_t hash32;
     uint64_t hash64 = static_cast<uint64_t>(14695981039346656037);
-	size_t cycles, nd_head;
+    size_t cycles, nd_head;
 
     char _str[FNV1A_MAX_KEY_SIZE];
     std::memcpy(_str, str, n * sizeof(char));
 
-    char* _str_ptr = _str;
+    char *_str_ptr = _str;
 
-    if (n > 8)
+    if(n > 8)
     {
-        cycles = ((n - 1) >> 4) + 1; 
+        cycles = ((n - 1) >> 4) + 1;
         nd_head = n - (cycles << 3);
 
 #if defined(STDROMANO_CLANG) || defined(STDROMANO_GCC)
 #pragma nounroll
 #endif /* defined(STDROMANO_CLANG) || defined(STDROMANO_GCC) */
 
-        for(; cycles--; _str_ptr += 8) 
+        for(; cycles--; _str_ptr += 8)
         {
-            hash64 = (hash64 ^ (*(uint64_t *)(_str_ptr)) ) * PRIME;        
-            hash64 = (hash64 ^ (*(uint64_t *)(_str_ptr + nd_head))) * PRIME;        
+            hash64 = (hash64 ^ (*(uint64_t *)(_str_ptr))) * PRIME;
+            hash64 = (hash64 ^ (*(uint64_t *)(_str_ptr + nd_head))) * PRIME;
         }
     }
     else
     {
-        hash64 = (hash64 ^ _PADr_KAZE(*(uint64_t *)(_str_ptr + 0), (8 - n) << 3)) * PRIME;        
+        hash64 = (hash64 ^ _PADr_KAZE(*(uint64_t *)(_str_ptr + 0), (8 - n) << 3)) * PRIME;
     }
 
     hash32 = (uint32_t)(hash64 ^ (hash64 >> 32));
@@ -94,7 +94,7 @@ static STDROMANO_FORCE_INLINE uint32_t hash_fnv1a_pippip(const char *str, size_t
     return hash32 ^ (hash32 >> 16);
 }
 
-static STDROMANO_FORCE_INLINE uint32_t hash_u32(uint32_t x) 
+static STDROMANO_FORCE_INLINE uint32_t hash_u32(uint32_t x)
 {
     x = ((x >> 16) ^ x) * static_cast<uint32_t>(0x45d9f3b);
     x = ((x >> 16) ^ x) * static_cast<uint32_t>(0x45d9f3b);

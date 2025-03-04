@@ -1,6 +1,6 @@
-// SPDX-License-Identifier: BSD-3-Clause 
-// Copyright (c) 2025 - Present Romain Augier 
-// All rights reserved. 
+// SPDX-License-Identifier: BSD-3-Clause
+// Copyright (c) 2025 - Present Romain Augier
+// All rights reserved.
 
 #pragma once
 
@@ -9,7 +9,7 @@
 
 #if defined(_MSC_VER)
 #define STDROMANO_MSVC
-#pragma warning(disable:4711) /* function selected for automatic inline expansion */
+#pragma warning(disable : 4711) /* function selected for automatic inline expansion */
 #define _SILENCE_ALL_MS_EXT_DEPRECATION_WARNINGS
 #elif defined(__GNUC__)
 #define STDROMANO_GCC
@@ -36,14 +36,15 @@
 #define STDROMANO_VERSION_REVISION 0
 #endif /* !defined(STDROMANO_VERSION_REVISION) */
 
-#define STDROMANO_VERSION_STR STDROMANO_STRIFY_MACRO(STDROMANO_VERSION_MAJOR)"." \
-                              STDROMANO_STRIFY_MACRO(STDROMANO_VERSION_MINOR)"." \
-                              STDROMANO_STRIFY_MACRO(STDROMANO_VERSION_PATCH)"." \
-                              STDROMANO_STRIFY_MACRO(STDROMANO_VERSION_REVISION)
+#define STDROMANO_VERSION_STR                                                                                          \
+    STDROMANO_STRIFY_MACRO(STDROMANO_VERSION_MAJOR)                                                                    \
+    "." STDROMANO_STRIFY_MACRO(STDROMANO_VERSION_MINOR) "." STDROMANO_STRIFY_MACRO(                                    \
+        STDROMANO_VERSION_PATCH) "." STDROMANO_STRIFY_MACRO(STDROMANO_VERSION_REVISION)
 
+#include <cassert>
 #include <cstddef>
 #include <cstdint>
-#include <cassert>
+
 
 #if INTPTR_MAX == INT64_MAX || defined(__x86_64__)
 #define STDROMANO_X64
@@ -90,7 +91,7 @@
 #define STDROMANO_LIB_ENTRY
 #define STDROMANO_LIB_EXIT
 #elif defined(STDROMANO_GCC)
-#define STDROMANO_FORCE_INLINE inline __attribute__((always_inline)) 
+#define STDROMANO_FORCE_INLINE inline __attribute__((always_inline))
 #define STDROMANO_LIB_ENTRY __attribute__((constructor))
 #define STDROMANO_LIB_EXIT __attribute__((destructor))
 #elif defined(STDROMANO_CLANG)
@@ -106,7 +107,9 @@
 #endif /* defined(STDROMANO_BUILD_SHARED) */
 
 #if defined __cplusplus
-#define STDROMANO_CPP_ENTER extern "C" {
+#define STDROMANO_CPP_ENTER                                                                                            \
+    extern "C"                                                                                                         \
+    {
 #define STDROMANO_CPP_END }
 #else
 #define STDROMANO_CPP_ENTER
@@ -123,18 +126,20 @@
 #define STDROMANO_FUNCTION __PRETTY_FUNCTION__
 #endif /* STDROMANO_WIN */
 
-#define CONCAT_(prefix, suffix)     prefix##suffix
-#define CONCAT(prefix, suffix)      CONCAT_(prefix, suffix)
+#define CONCAT_(prefix, suffix) prefix##suffix
+#define CONCAT(prefix, suffix) CONCAT_(prefix, suffix)
 
 #define STDROMANO_ASSERT(expression) assert(expression)
 #define STDROMANO_STATIC_ASSERT(expr, message) static_assert(expr, message)
-#define STDROMANO_NOT_IMPLEMENTED std::fprintf(stderr, "Function " STDROMANO_FUNCTION " not implemented"); std::exit(1);
+#define STDROMANO_NOT_IMPLEMENTED                                                                                      \
+    std::fprintf(stderr, "Function " STDROMANO_FUNCTION " not implemented");                                           \
+    std::exit(1);
 
-#define STDROMANO_NON_COPYABLE(__class__)                   \
-    __class__(const __class__ &) = delete;                  \
-    __class__(__class__ &&) = delete;                       \
-    const __class__ &operator=(const __class__ &) = delete; \
-    void operator=(__class__ &&) = delete;
+#define STDROMANO_NON_COPYABLE(__class__)                                                                              \
+    __class__(const __class__&) = delete;                                                                              \
+    __class__(__class__&&) = delete;                                                                                   \
+    const __class__& operator=(const __class__&) = delete;                                                             \
+    void operator=(__class__&&) = delete;
 
 #if defined(STDROMANO_MSVC)
 #define STDROMANO_PACKED_STRUCT(__struct__) __pragma(pack(push, 1)) __struct__ __pragma(pack(pop))
@@ -145,11 +150,11 @@
 #endif /* defined(STDROMANO_MSVC) */
 
 #if defined(STDROMANO_MSVC)
-#define dump_struct(s) 
+#define dump_struct(s)
 #elif defined(STDROMANO_CLANG)
 #define dump_struct(s) __builtin_dump_struct(s, printf)
 #elif defined(STDROMANO_GCC)
-#define dump_struct(s) 
+#define dump_struct(s)
 #endif /* defined(STDROMANO_MSVC) */
 
 #if defined(DEBUG_BUILD)
@@ -158,15 +163,18 @@
 #define STDROMANO_DEBUG 0
 #endif /* defined(DEBUG_BUILD) */
 
-#define STDROMANO_NAMESPACE_BEGIN namespace stdromano {
+#define STDROMANO_NAMESPACE_BEGIN                                                                                      \
+    namespace stdromano                                                                                                \
+    {
 #define STDROMANO_NAMESPACE_END }
 
-#define STDROMANO_ATEXIT_REGISTER(func, do_exit)                                    \
-        int res_##func = std::atexit(func);                                         \
-        if(res_##func != 0)                                                         \
-        {                                                                           \
-            std::fprintf(stderr, "Cannot register function \""#func"\" in atexit"); \
-            if(do_exit) std::exit(1);                                               \
-        } 
+#define STDROMANO_ATEXIT_REGISTER(func, do_exit)                                                                       \
+    int res_##func = std::atexit(func);                                                                                \
+    if(res_##func != 0)                                                                                                \
+    {                                                                                                                  \
+        std::fprintf(stderr, "Cannot register function \"" #func "\" in atexit");                                      \
+        if(do_exit)                                                                                                    \
+            std::exit(1);                                                                                              \
+    }
 
 #endif /* !defined(__STDROMANO) */

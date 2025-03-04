@@ -3,9 +3,10 @@
 
 #include "stdromano/stdromano.h"
 
-#include "spdlog/spdlog.h"
-#include "spdlog/sinks/stdout_color_sinks.h"
 #include "spdlog/sinks/basic_file_sink.h"
+#include "spdlog/sinks/stdout_color_sinks.h"
+#include "spdlog/spdlog.h"
+
 
 STDROMANO_NAMESPACE_BEGIN
 
@@ -20,43 +21,47 @@ enum LogLevel : uint8_t
 class STDROMANO_API Logger
 {
 public:
-    static Logger& get_instance() noexcept { static Logger c; return c; }
+    static Logger &get_instance() noexcept
+    {
+        static Logger c;
+        return c;
+    }
 
-    Logger(const Logger&) = delete;
-    Logger& operator=(const Logger&) = delete;
+    Logger(const Logger &) = delete;
+    Logger &operator=(const Logger &) = delete;
 
-    template<typename ...Args>
-    void error(Args&&... args) noexcept
+    template <typename... Args>
+    void error(Args &&...args) noexcept
     {
         this->_logger.error(std::forward<Args>(args)...);
     }
 
-    template<typename ...Args>
-    void warn(Args&&... args) noexcept
+    template <typename... Args>
+    void warn(Args &&...args) noexcept
     {
         this->_logger.warn(std::forward<Args>(args)...);
     }
 
-    template<typename ...Args>
-    void info(Args&&... args) noexcept
+    template <typename... Args>
+    void info(Args &&...args) noexcept
     {
         this->_logger.info(std::forward<Args>(args)...);
     }
 
-    template<typename ...Args>
-    void debug(Args&&... args) noexcept
+    template <typename... Args>
+    void debug(Args &&...args) noexcept
     {
         this->_logger.debug(std::forward<Args>(args)...);
     }
 
-    template<typename ...Args>
-    void trace(Args&&... args) noexcept
+    template <typename... Args>
+    void trace(Args &&...args) noexcept
     {
         this->_logger.trace(std::forward<Args>(args)...);
     }
 
-    template<typename ...Args>
-    void critical(Args&&... args) noexcept
+    template <typename... Args>
+    void critical(Args &&...args) noexcept
     {
         this->_logger.critical(std::forward<Args>(args)...);
     }
@@ -67,7 +72,7 @@ public:
         this->_logger.sinks()[0]->set_level(static_cast<spdlog::level::level_enum>(log_level));
     }
 
-private: 
+private:
     Logger();
     ~Logger();
 

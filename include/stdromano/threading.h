@@ -1,6 +1,6 @@
-// SPDX-License-Identifier: BSD-3-Clause 
-// Copyright (c) 2025 - Present Romain Augier 
-// All rights reserved. 
+// SPDX-License-Identifier: BSD-3-Clause
+// Copyright (c) 2025 - Present Romain Augier
+// All rights reserved.
 
 #if !defined(__STDROMANO_THREADING)
 #define __STDROMANO_THREADING
@@ -9,14 +9,16 @@
 
 #include "concurrentqueue.h"
 
-#include <mutex>
 #include <atomic>
+#include <mutex>
+
 
 #if defined(STDROMANO_WIN)
 #include "Windows.h"
 #elif defined(STDROMANO_LINUX)
-#include <unistd.h>
 #include <syscall.h>
+#include <unistd.h>
+
 #endif /* defined(STDROMANO_WIN) */
 
 STDROMANO_NAMESPACE_BEGIN
@@ -34,25 +36,23 @@ STDROMANO_FORCE_INLINE size_t get_num_procs() noexcept
 
 #if defined(STDROMANO_WIN)
 using thread_handle = HANDLE;
-using thread_func = void(*)(void*);
+using thread_func = void (*)(void*);
 #elif defined(STDROMANO_LINUX)
 using thread_handle = pthread_t;
-using thread_func = void*(*)(void*);
+using thread_func = void* (*)(void*);
 #endif /* defined(STDROMANO_WIN) */
 
-class Mutex 
+class Mutex
 {
     std::atomic<bool> _flag;
 
 public:
-    Mutex() 
-    {
-        this->_flag.store(false);
-    }
+    Mutex() { this->_flag.store(false); }
 
     STDROMANO_FORCE_INLINE void lock() noexcept
     {
-        while (this->_flag.exchange(true, std::memory_order_relaxed));
+        while(this->_flag.exchange(true, std::memory_order_relaxed))
+            ;
         std::atomic_thread_fence(std::memory_order_acquire);
     }
 
@@ -65,7 +65,6 @@ public:
 
 class ScopedLock
 {
-
 };
 
 class STDROMANO_API Thread
@@ -73,7 +72,7 @@ class STDROMANO_API Thread
     thread_handle _handle;
     thread_func _func;
     void* _args = nullptr;
-    
+
 #if defined(STDROMANO_WIN)
     DWORD _id;
 #elif defined(STDROMANO_LINUX)
@@ -83,10 +82,7 @@ class STDROMANO_API Thread
     bool _running = false;
 
 public:
-    Thread(thread_func func,
-           void* args,
-           bool daemon = false,
-           bool detached = false);
+    Thread(thread_func func, void* args, bool daemon = false, bool detached = false);
 
     ~Thread();
 
@@ -173,22 +169,27 @@ private:
     void init(const int64_t workers_count) noexcept;
 };
 
-class STDROMANO_API GlobalThreadPool 
+class STDROMANO_API GlobalThreadPool
 {
 public:
-    static GlobalThreadPool& get_instance() noexcept { static GlobalThreadPool tp; return tp; }
+    static GlobalThreadPool& get_instance() noexcept
+    {
+        static GlobalThreadPool tp;
+        return tp;
+    }
 
     GlobalThreadPool(const GlobalThreadPool&) = delete;
     GlobalThreadPool& operator=(const GlobalThreadPool&) = delete;
 
-    bool add_work(ThreadPoolWork* work) noexcept 
-    { 
-        return this->_tp->add_work(std::forward<ThreadPoolWork*>(work));
-    }
+    bool add_work(ThreadPoolWork* work) noexcept { return this->_tp->add_work(std::forward<ThreadPoolWork*>(work)); }
 
     void wait() const noexcept { return this->_tp->wait(); }
 
-    void stop() noexcept { this->_stopped = true; this->~GlobalThreadPool(); }
+    void stop() noexcept
+    {
+        this->_stopped = true;
+        this->~GlobalThreadPool();
+    }
 
 private:
     GlobalThreadPool();

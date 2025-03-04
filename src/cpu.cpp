@@ -1,23 +1,24 @@
-// SPDX-License-Identifier: BSD-3-Clause 
-// Copyright (c) 2025 - Present Romain Augier 
-// All rights reserved. 
+// SPDX-License-Identifier: BSD-3-Clause
+// Copyright (c) 2025 - Present Romain Augier
+// All rights reserved.
 
 #include "stdromano/cpu.h"
 
 #include <cstring>
 
 #if defined(STDROMANO_WIN)
-#include <windows.h>
 #include <powerbase.h>
+#include <windows.h>
 
-typedef struct _PROCESSOR_POWER_INFORMATION 
+
+typedef struct _PROCESSOR_POWER_INFORMATION
 {
-   ULONG Number;
-   ULONG MaxMhz;
-   ULONG CurrentMhz;
-   ULONG MhzLimit;
-   ULONG MaxIdleState;
-   ULONG CurrentIdleState;
+    ULONG Number;
+    ULONG MaxMhz;
+    ULONG CurrentMhz;
+    ULONG MhzLimit;
+    ULONG MaxIdleState;
+    ULONG CurrentIdleState;
 } PROCESSOR_POWER_INFORMATION, *PPROCESSOR_POWER_INFORMATION;
 
 #elif defined(STDROMANO_LINUX)
@@ -139,15 +140,9 @@ void cpu_get_name(char* name) noexcept
     name[12 * sizeof(uint32_t)] = '\0';
 }
 
-uint32_t cpu_get_frequency() noexcept
-{
-    return _cpu_freq_mhz;
-}
+uint32_t cpu_get_frequency() noexcept { return _cpu_freq_mhz; }
 
-uint32_t cpu_get_current_frequency() noexcept
-{
-    return _get_cpu_frequency();
-}
+uint32_t cpu_get_current_frequency() noexcept { return _get_cpu_frequency(); }
 
 void cpu_get_current_frequency_set_refresh_frequency(const uint32_t refresh_frequency) noexcept
 {

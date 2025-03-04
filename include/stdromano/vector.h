@@ -1,6 +1,6 @@
-// SPDX-License-Identifier: BSD-3-Clause 
-// Copyright (c) 2025 - Present Romain Augier 
-// All rights reserved. 
+// SPDX-License-Identifier: BSD-3-Clause
+// Copyright (c) 2025 - Present Romain Augier
+// All rights reserved.
 
 #pragma once
 
@@ -13,13 +13,13 @@
 
 STDROMANO_NAMESPACE_BEGIN
 
-template<typename T, typename Alignment = std::alignment_of<T>>
-class Vector 
+template <typename T, typename Alignment = std::alignment_of<T> >
+class Vector
 {
     static constexpr float GROW_RATE = 1.61803398875f;
     static constexpr size_t MIN_SIZE = 128;
 
-    struct Header 
+    struct Header
     {
         size_t capacity;
         size_t size;
@@ -29,67 +29,56 @@ class Vector
 private:
     Header* _header = nullptr;
 
-    STDROMANO_FORCE_INLINE Header* header() noexcept 
-    { 
-        return this->_header; 
-    }
-    
-    STDROMANO_FORCE_INLINE const Header* header() const noexcept 
-    { 
-        return this->_header; 
-    }
+    STDROMANO_FORCE_INLINE Header* header() noexcept { return this->_header; }
 
-    STDROMANO_FORCE_INLINE void set_capacity(const size_t capacity) noexcept 
-    { 
-        this->_header->capacity = capacity; 
-    }
-    
-    STDROMANO_FORCE_INLINE void set_size(const size_t size) noexcept 
-    { 
-        this->_header->size = size; 
-    }
+    STDROMANO_FORCE_INLINE const Header* header() const noexcept { return this->_header; }
+
+    STDROMANO_FORCE_INLINE void set_capacity(const size_t capacity) noexcept { this->_header->capacity = capacity; }
+
+    STDROMANO_FORCE_INLINE void set_size(const size_t size) noexcept { this->_header->size = size; }
 
     STDROMANO_FORCE_INLINE void incr_size() noexcept { this->_header->size++; }
+
     STDROMANO_FORCE_INLINE void decr_size() noexcept { this->_header->size--; }
 
-    static Header* allocate(const size_t capacity) 
+    static Header* allocate(const size_t capacity)
     {
         constexpr size_t header_size = sizeof(Header);
         constexpr size_t aligned_header_size = (header_size + Alignment::value - 1) & ~(Alignment::value - 1);
         const size_t aligned_array_size = (capacity * sizeof(T) + Alignment::value - 1) & ~(Alignment::value - 1);
         const size_t total_size = aligned_header_size + aligned_array_size;
-        
+
         void* memory = mem_alloc(total_size);
 
-        if(!memory) 
+        if(!memory)
         {
             return nullptr;
         }
-        
+
         Header* header = static_cast<Header*>(memory);
         header->capacity = capacity;
         header->size = 0;
-        
+
         return header;
     }
 
-    static void deallocate(Header* header) 
+    static void deallocate(Header* header)
     {
-        if(header) 
+        if(header)
         {
             mem_free(header);
         }
     }
 
-    STDROMANO_FORCE_INLINE void grow() noexcept 
-    { 
+    STDROMANO_FORCE_INLINE void grow() noexcept
+    {
         if(this->_header == nullptr)
         {
             this->resize(MIN_SIZE);
         }
         else
         {
-            this->resize(static_cast<size_t>(static_cast<float>(this->capacity()) * GROW_RATE)); 
+            this->resize(static_cast<size_t>(static_cast<float>(this->capacity()) * GROW_RATE));
         }
     }
 
@@ -122,9 +111,9 @@ public:
 
         T* data_ptr = reinterpret_cast<T*>(this->_header->data);
 
-        for(size_t i = 0; i < count; ++i) 
+        for(size_t i = 0; i < count; ++i)
         {
-            ::new (data_ptr + i) T(value);
+            ::new(data_ptr + i) T(value);
         }
 
         this->set_size(count);
@@ -151,9 +140,9 @@ public:
 
         this->_header = Vector::allocate(other.capacity());
 
-        for(size_t i = 0; i < other.size(); i++) 
+        for(size_t i = 0; i < other.size(); i++)
         {
-            ::new (this->at(i)) T(other[i]);
+            ::new(this->at(i)) T(other[i]);
         }
 
         this->set_size(other.size());
@@ -175,9 +164,9 @@ public:
 
         this->_header = Vector::allocate(other.capacity());
 
-        for(size_t i = 0; i < other.size(); i++) 
+        for(size_t i = 0; i < other.size(); i++)
         {
-            ::new (this->at(i)) T(other[i]);
+            ::new(this->at(i)) T(other[i]);
         }
 
         this->set_size(other.size());
@@ -193,8 +182,13 @@ public:
         return *this;
     }
 
-    STDROMANO_FORCE_INLINE size_t capacity() const noexcept { return this->_header != nullptr ? this->_header->capacity : 0; }
+    STDROMANO_FORCE_INLINE size_t capacity() const noexcept
+    {
+        return this->_header != nullptr ? this->_header->capacity : 0;
+    }
+
     STDROMANO_FORCE_INLINE size_t size() const noexcept { return this->_header != nullptr ? this->_header->size : 0; }
+
     STDROMANO_FORCE_INLINE bool empty() const noexcept { return this->size() == 0; }
 
     class iterator
@@ -232,20 +226,11 @@ public:
             return this->index == other.index && this->vector == other.vector;
         }
 
-        bool operator!=(const iterator& other) const
-        {
-            return !(*this == other);
-        }
+        bool operator!=(const iterator& other) const { return !(*this == other); }
 
-        reference operator*()
-        {
-            return (*this->vector)[this->index];
-        }
+        reference operator*() { return (*this->vector)[this->index]; }
 
-        pointer operator->()
-        {
-            return &(*this->vector)[this->index];
-        }
+        pointer operator->() { return &(*this->vector)[this->index]; }
     };
 
     class const_iterator
@@ -283,61 +268,62 @@ public:
             return this->index == other.index && this->vector == other.vector;
         }
 
-        bool operator!=(const const_iterator& other) const
-        {
-            return !(*this == other);
-        }
+        bool operator!=(const const_iterator& other) const { return !(*this == other); }
 
-        reference operator*() const
-        {
-            return (*this->vector)[this->index];
-        }
+        reference operator*() const { return (*this->vector)[this->index]; }
 
-        pointer operator->() const
-        {
-            return &(*this->vector)[this->index];
-        }
+        pointer operator->() const { return &(*this->vector)[this->index]; }
     };
 
     iterator begin() { return iterator(this, 0); }
+
     iterator end() { return iterator(this, this->size()); }
+
     const_iterator begin() const { return const_iterator(this, 0); }
+
     const_iterator end() const { return const_iterator(this, this->size()); }
+
     const_iterator cbegin() const { return const_iterator(this, 0); }
+
     const_iterator cend() const { return const_iterator(this, this->size()); }
 
     STDROMANO_FORCE_INLINE T* at(const size_t index) noexcept { return this->data() + index; }
+
     STDROMANO_FORCE_INLINE const T* at(const size_t index) const noexcept { return this->data() + index; }
 
     STDROMANO_FORCE_INLINE T& operator[](const size_t i) noexcept { return *this->at(i); }
+
     STDROMANO_FORCE_INLINE const T& operator[](const size_t i) const noexcept { return *this->at(i); }
 
     STDROMANO_FORCE_INLINE T* data() noexcept { return reinterpret_cast<T*>(this->_header->data); }
+
     STDROMANO_FORCE_INLINE const T* data() const noexcept { return reinterpret_cast<const T*>(this->_header->data); }
 
     STDROMANO_FORCE_INLINE T& front() { return this->operator[](0); }
+
     STDROMANO_FORCE_INLINE const T& front() const { return this->operator[](0); }
 
     STDROMANO_FORCE_INLINE T& back() { return this->operator[](this->size() - 1); }
+
     STDROMANO_FORCE_INLINE const T& back() const { return this->operator[](this->size() - 1); }
 
     void resize(const size_t new_capacity, bool force = false) noexcept
     {
         const size_t old_capacity = this->capacity();
 
-        if (!force && (new_capacity == 0 || new_capacity < old_capacity))
+        if(!force && (new_capacity == 0 || new_capacity < old_capacity))
         {
             return;
         }
 
         Header* new_header = Vector<T, Alignment>::allocate(new_capacity);
 
-        if (new_header == nullptr)
+        if(new_header == nullptr)
         {
             return;
         }
 
-        if (this->_header != nullptr)
+        if(this->_header != nullptr)
         {
             const size_t old_size = this->size();
             const size_t new_size = std::min(old_size, new_capacity);
@@ -346,13 +332,13 @@ public:
             T* old_data = this->data();
             T* new_data = reinterpret_cast<T*>(new_header->data);
 
-            for (size_t i = 0; i < new_size; ++i)
+            for(size_t i = 0; i < new_size; ++i)
             {
-                ::new (new_data + i) T(std::move_if_noexcept(old_data[i]));
+                ::new(new_data + i) T(std::move_if_noexcept(old_data[i]));
                 old_data[i].~T();
             }
 
-            for (size_t i = new_size; i < old_size; ++i)
+            for(size_t i = new_size; i < old_size; ++i)
             {
                 old_data[i].~T();
             }
@@ -367,11 +353,15 @@ public:
         this->_header = new_header;
     }
 
-    STDROMANO_FORCE_INLINE void reserve(const size_t new_capacity) noexcept { this->resize(this->capacity() + new_capacity + 1); }
+    STDROMANO_FORCE_INLINE void reserve(const size_t new_capacity) noexcept
+    {
+        this->resize(this->capacity() + new_capacity + 1);
+    }
 
     void push_back(const T& element) noexcept
     {
-        if(this->size() == this->capacity()) this->grow();
+        if(this->size() == this->capacity())
+            this->grow();
 
         ::new(this->data() + this->size()) T(element);
 
@@ -380,17 +370,19 @@ public:
 
     void push_back(T&& element) noexcept
     {
-        if(this->size() == this->capacity()) this->grow();
+        if(this->size() == this->capacity())
+            this->grow();
 
         ::new(this->data() + this->size()) T(std::move(element));
 
         this->incr_size();
     }
-    
-    template<typename ...Args>
+
+    template <typename... Args>
     T& emplace_back(Args&&... args) noexcept
     {
-        if(this->size() == this->capacity()) this->grow();
+        if(this->size() == this->capacity())
+            this->grow();
 
         T* ptr = ::new(this->data() + this->size()) T(std::forward<Args&&>(args)...);
 
@@ -399,10 +391,11 @@ public:
         return *ptr;
     }
 
-    template<typename ...Args>
+    template <typename... Args>
     T& emplace_at(const size_t position, Args&&... args) noexcept
     {
-        if(this->size() == this->capacity()) this->grow();
+        if(this->size() == this->capacity())
+            this->grow();
 
         std::memmove(this->at(position + 1), this->at(position), (this->size() - position) * sizeof(T));
 
@@ -415,7 +408,8 @@ public:
 
     void insert(const T& element, const size_t position) noexcept
     {
-        if(this->size() == this->capacity()) this->grow();
+        if(this->size() == this->capacity())
+            this->grow();
 
         std::memmove(this->at(position + 1), this->at(position), (this->size() - position) * sizeof(T));
 
@@ -426,7 +420,8 @@ public:
 
     void insert(T&& element, const size_t position) noexcept
     {
-        if(this->size() == this->capacity()) this->grow();
+        if(this->size() == this->capacity())
+            this->grow();
 
         std::memmove(this->at(position + 1), this->at(position), (this->size() - position) * sizeof(T));
 
@@ -502,7 +497,8 @@ public:
     {
         for(size_t i = 0; i < this->size(); i++)
         {
-            if(other == this->operator[](i)) return iterator(this, i);
+            if(other == this->operator[](i))
+                return iterator(this, i);
         }
 
         return this->end();
@@ -512,7 +508,8 @@ public:
     {
         for(size_t i = 0; i < this->size(); i++)
         {
-            if(other == this->operator[](i)) return const_iterator(this, i);
+            if(other == this->operator[](i))
+                return const_iterator(this, i);
         }
 
         return this->cend();
@@ -533,7 +530,7 @@ public:
         }
     }
 
-    template<typename F>
+    template <typename F>
     STDROMANO_FORCE_INLINE void sort(F&& cmp) noexcept
     {
         std::qsort(this->data(), this->size(), sizeof(T), std::forward<F&&>(cmp));
