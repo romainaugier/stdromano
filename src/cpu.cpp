@@ -7,9 +7,8 @@
 #include <cstring>
 
 #if defined(STDROMANO_WIN)
+#include <Windows.h>
 #include <powerbase.h>
-#include <windows.h>
-
 
 typedef struct _PROCESSOR_POWER_INFORMATION
 {
