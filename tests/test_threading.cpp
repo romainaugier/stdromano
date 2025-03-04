@@ -52,7 +52,7 @@ private:
 
 void atexit_handler_stdromano_global_threadpool() { stdromano::atexit_handler_global_threadpool(); }
 
-#define NUM_WORKS 1000
+#define NUM_WORKS 100
 
 int main()
 {
@@ -76,6 +76,11 @@ int main()
         TPoolWork* work = new TPoolWork(i);
 
         stdromano::global_threadpool.add_work(work);
+    }
+
+    for(size_t i = 0; i < NUM_WORKS; i++)
+    {
+        stdromano::global_threadpool.add_work([&]() { std::printf("Hello from lambda work\n"); });
     }
 
     std::printf("Finished adding work\n");

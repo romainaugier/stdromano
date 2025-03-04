@@ -10,6 +10,7 @@
 #include "concurrentqueue.h"
 
 #include <atomic>
+#include <functional>
 #include <mutex>
 
 
@@ -136,12 +137,36 @@ public:
 
 class STDROMANO_API ThreadPool
 {
+    class STDROMANO_API LambdaWork : public ThreadPoolWork
+    {
+        std::function<void()> _func;
+
+    public:
+        explicit LambdaWork(std::function<void()> func) : _func(std::move(func)) {}
+
+        ~LambdaWork() override = default;
+
+        void execute() override
+        {
+            if(this->_func != nullptr)
+            {
+                this->_func();
+            }
+        }
+    };
+
 public:
     ThreadPool(const int64_t workers_count = -1);
 
     ~ThreadPool();
 
     bool add_work(ThreadPoolWork* work) noexcept;
+
+    bool add_work(std::function<void()>&& func) noexcept
+    {
+        LambdaWork* work = new LambdaWork(std::forward<std::function<void()>&&>(func));
+        return this->add_work(work);
+    }
 
     void wait() const noexcept;
 
@@ -182,6 +207,11 @@ public:
     GlobalThreadPool& operator=(const GlobalThreadPool&) = delete;
 
     bool add_work(ThreadPoolWork* work) noexcept { return this->_tp->add_work(std::forward<ThreadPoolWork*>(work)); }
+
+    bool add_work(std::function<void()>&& work) noexcept
+    {
+        return this->_tp->add_work(std::forward<std::function<void()>&&>(work));
+    }
 
     void wait() const noexcept { return this->_tp->wait(); }
 

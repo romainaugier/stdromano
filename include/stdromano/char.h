@@ -26,7 +26,7 @@ STDROMANO_FORCE_INLINE bool is_letter_upper(unsigned int c) noexcept { return (c
 
 STDROMANO_FORCE_INLINE bool is_letter_lower(unsigned int c) noexcept { return (c - 97) < 26; }
 
-STDROMANO_FORCE_INLINE char to_lower(unsigned int c) noexcept { return c | ~0x20; }
+STDROMANO_FORCE_INLINE char to_lower(unsigned int c) noexcept { return c | 0x60; }
 
 STDROMANO_FORCE_INLINE char to_upper(unsigned int c) noexcept { return c & ~0x20; }
 

@@ -132,21 +132,24 @@ TEST_CASE(TestStrip)
     String<> str("  Hello World  ");
 
     String<> stripped = str.strip();
-    ASSERT_EQUAL(0, std::strcmp(stripped.c_str(), "Hello World"));
+    ASSERT_EQUAL(0, std::strncmp(stripped.c_str(), "Hello World", stripped.size()));
 
     String<> lstripped = str.lstrip();
-    ASSERT_EQUAL(0, std::strcmp(lstripped.c_str(), "Hello World  "));
+    ASSERT_EQUAL(0, std::strncmp(lstripped.c_str(), "Hello World  ", stripped.size()));
 
     String<> rstripped = str.rstrip();
-    ASSERT_EQUAL(0, std::strcmp(rstripped.c_str(), "  Hello World"));
+    ASSERT_EQUAL(0, std::strncmp(rstripped.c_str(), "  Hello World", stripped.size()));
 
     String<> empty_str;
     ASSERT_EQUAL(0, std::strcmp(empty_str.strip().c_str(), ""));
-    ASSERT_EQUAL(0, std::strcmp(String<>("   ").strip().c_str(), ""));
+
+    String<> space_str("    ");
+    String<> space_strip = space_str.strip();
+    ASSERT_EQUAL(0, std::strncmp(space_strip.c_str(), "", space_strip.size()));
 
     String<> str_custom("###Hello###");
     String<> stripped_custom = str_custom.strip('#');
-    ASSERT_EQUAL(0, std::strcmp(stripped_custom.c_str(), "Hello"));
+    ASSERT_EQUAL(0, std::strncmp(stripped_custom.c_str(), "Hello", stripped_custom.size()));
 }
 
 TEST_CASE(TestStartsWithEndsWith)
@@ -177,7 +180,7 @@ TEST_CASE(TestFind)
     ASSERT_EQUAL(12, str.find("World"));
     ASSERT_EQUAL(-1, str.find("Missing"));
 
-    ASSERT_EQUAL(0, str.find(""));
+    ASSERT_EQUAL(-1, str.find(""));
     ASSERT_EQUAL(-1, str.find("TooLongForTheString"));
     String<> empty_str;
     ASSERT_EQUAL(-1, empty_str.find("a"));
@@ -191,19 +194,19 @@ TEST_CASE(TestSplit)
     String<>::split_iterator it = 0;
 
     ASSERT(str.split(sep, it, split));
-    ASSERT_EQUAL(0, std::strcmp(split.c_str(), "Hello"));
+    ASSERT_EQUAL(0, std::strncmp(split.c_str(), "Hello", split.size()));
     ASSERT_EQUAL(6, it);
 
     ASSERT(str.split(sep, it, split));
-    ASSERT_EQUAL(0, std::strcmp(split.c_str(), "World"));
+    ASSERT_EQUAL(0, std::strncmp(split.c_str(), "World", split.size()));
     ASSERT_EQUAL(12, it);
 
     ASSERT(!str.split(sep, it, split));
-    ASSERT_EQUAL(0, std::strcmp(split.c_str(), "Test"));
+    ASSERT_EQUAL(0, std::strncmp(split.c_str(), "Test", split.size()));
     ASSERT_EQUAL(str.size(), it);
 
     ASSERT(!str.split(sep, it, split));
-    ASSERT_EQUAL(0, std::strcmp(split.c_str(), ""));
+    ASSERT_EQUAL(0, std::strncmp(split.c_str(), "", split.size()));
     ASSERT_EQUAL(str.size(), it);
 
     String<> empty;

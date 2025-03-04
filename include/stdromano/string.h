@@ -298,7 +298,7 @@ public:
 
         if((this->_size + size + 1) > this->_capacity)
         {
-            this->reallocate(size + 1);
+            this->reallocate(this->_size + size + 1);
         }
 
         std::memcpy(this->back(), c, size + 1);
@@ -377,7 +377,10 @@ public:
 
         for(uint32_t i = 0; i < result.size(); i++)
         {
-            result[i] = to_upper(result[i]);
+            if(is_letter(result[i]))
+            {
+                result[i] = to_upper(result[i]);
+            }
         }
 
         return std::move(result);
@@ -392,7 +395,10 @@ public:
 
         for(uint32_t i = 0; i < result.size(); i++)
         {
-            result[i] = to_lower(result[i]);
+            if(is_letter(result[i]))
+            {
+                result[i] = to_lower(result[i]);
+            }
         }
 
         return std::move(result);
@@ -407,7 +413,10 @@ public:
 
         for(uint32_t i = 0; i < result.size(); i++)
         {
-            result[i] = to_lower(result[i]);
+            if(is_letter(result[i]))
+            {
+                result[i] = to_lower(result[i]);
+            }
         }
 
         result[0] = to_upper(result[0]);
@@ -444,7 +453,7 @@ public:
     String strip(char c = ' ') const noexcept
     {
         const char* start = this->data();
-        const char* end = this->back();
+        const char* end = this->back() - 1;
 
         while(start < end && *start == c)
         {
@@ -482,7 +491,7 @@ public:
     int find(const String& substring) const noexcept
     {
         if(substring.empty() || substring.size() > this->size())
-            return 0;
+            return -1;
 
         const char* found = std::strstr(this->c_str(), substring.c_str());
 
