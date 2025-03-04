@@ -5,11 +5,9 @@
 #if !defined(__STDROMANO_TEST)
 #define __STDROMANO_TEST
 
-#include <iostream>
-#include <string>
 #include <functional>
 #include <vector>
-#include <sstream>
+#include <string>
 
 #define TEST_CASE(name) void name()
 
@@ -18,11 +16,8 @@
     { \
         if(!(condition)) \
         { \
-            std::ostringstream ss; \
-            ss << "Assertion failed: " << #condition << "\n" \
-               << "File: " << __FILE__ << "\n" \
-               << "Line: " << __LINE__; \
-            throw std::runtime_error(ss.str()); \
+            std::printf("Assertion failed: %s\nFile: %s\nLine: %d\n", #condition, __FILE__, __LINE__); \
+            std::abort(); \
         } \
     } \
     while (0)
@@ -55,13 +50,8 @@
     { \
         if(!((expected) == (actual))) \
         { \
-            std::ostringstream ss; \
-            ss << "Assertion failed: " << #expected << " == " << #actual << "\n" \
-               << "Expected: " << (expected) << "\n" \
-               << "Actual: " << (actual) << "\n" \
-               << "File: " << __FILE__ << "\n" \
-               << "Line: " << __LINE__; \
-            throw std::runtime_error(ss.str()); \
+            std::printf("Assertion failed\nExpected: %sActual: %s\nFile: %s\nLine: %d\n", #expected, #actual, __FILE__, __LINE__); \
+            std::abort(); \
         } \
     } \
     while (0)
@@ -70,7 +60,7 @@ class TestRunner
 {
     struct TestCase 
     {
-        std::string name;
+        const char* name;
         std::function<void()> func;
     };
 
@@ -79,7 +69,7 @@ class TestRunner
     int failed = 0;
 
 public:
-    void add_test(const std::string& name, std::function<void()> test) 
+    void add_test(const char* name, std::function<void()> test) 
     {
         tests.push_back({name, test});
     }
@@ -88,24 +78,22 @@ public:
     {
         for(const auto& test : tests) 
         {
-            std::cout << "Running " << test.name << "... ";
+            std::printf("Running %s ...\n", test.name);
+
             try 
             {
                 test.func();
-                std::cout << "PASSED\n";
+                std::printf("PASSED\n");
                 ++passed;
             } 
             catch (const std::exception& e) 
             {
-                std::cout << "FAILED\n" << e.what() << "\n";
+                std::printf("FAILED: %s\n", e.what());
                 ++failed;
             }
         }
-        
-        std::cout << "\nTest Summary:\n"
-                  << "Passed: " << passed << "\n"
-                  << "Failed: " << failed << "\n"
-                  << "Total:  " << tests.size() << "\n";
+
+        std::printf("Test Summary:\nPassed: %d\nFailed: %d\nTotal: %zu\n", passed, failed, tests.size());
     }
 };
 
