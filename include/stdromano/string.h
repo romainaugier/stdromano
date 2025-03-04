@@ -246,10 +246,20 @@ public:
         s._capacity = static_cast<uint32_t>(size);
         s._is_local = 0;
         s._is_ref = 1;
-        return s;
+        return std::move(s);
     }
 
     static String make_ref(const String& str) noexcept { return String::make_ref(str.data(), str.size()); }
+
+    static String make_zeroed(const size_t size) noexcept
+    {
+        String s;
+
+        s.reallocate(size + 1);
+        std::memset(s.data(), 0, s.size() + 1);
+
+        return std::move(s);
+    }
 
     STDROMANO_FORCE_INLINE const char* data() const noexcept
     {

@@ -367,6 +367,12 @@ TEST_CASE(TestMoveAssignment)
     ASSERT_EQUAL(0, std::strcmp(self.c_str(), "Self"));
 }
 
+TEST_CASE(TestZeroedString)
+{
+    String<> zeroed = String<>::make_zeroed(2048);
+    ASSERT_EQUAL(2049, zeroed.capacity());
+}
+
 int main()
 {
     TestRunner runner;
@@ -387,6 +393,7 @@ int main()
     runner.add_test("MoveConstructor", TestMoveConstructor);
     runner.add_test("CopyAssignment", TestCopyAssignment);
     runner.add_test("MoveAssignment", TestMoveAssignment);
+    runner.add_test("ZeroedString", TestZeroedString);
 
     runner.run_all();
 
