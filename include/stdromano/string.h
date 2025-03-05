@@ -257,6 +257,7 @@ public:
 
         s.reallocate(size + 1);
         std::memset(s.data(), 0, s.size() + 1);
+        s._size = size;
 
         return std::move(s);
     }
@@ -536,7 +537,7 @@ public:
         {
             split = String::make_ref(start, this->_size - it);
             it = this->_size;
-            return false;
+            return true;
         }
     }
 };
