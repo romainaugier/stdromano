@@ -201,7 +201,7 @@ TEST_CASE(TestSplit)
     ASSERT_EQUAL(0, std::strncmp(split.c_str(), "World", split.size()));
     ASSERT_EQUAL(12, it);
 
-    ASSERT(!str.split(sep, it, split));
+    ASSERT(str.split(sep, it, split));
     ASSERT_EQUAL(0, std::strncmp(split.c_str(), "Test", split.size()));
     ASSERT_EQUAL(str.size(), it);
 
@@ -223,7 +223,7 @@ TEST_CASE(TestSplit)
 
     String<> str3("Hello");
     it = 0;
-    ASSERT(!str3.split(String<>(";"), it, split));
+    ASSERT(str3.split(String<>(";"), it, split));
     ASSERT_EQUAL(0, std::strcmp(split.c_str(), "Hello"));
     ASSERT_EQUAL(str3.size(), it);
 }
