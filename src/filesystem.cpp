@@ -50,4 +50,28 @@ stdromano::String<> expand_from_executable_dir(const stdromano::String<>& path_t
     return stdromano::String<>("{}/{}", fmt::string_view(sz_path, size), path_to_expand);
 }
 
+stdromano::String<> load_file_content(const char* file_path) noexcept
+{
+    FILE* file_handle;
+
+    file_handle = std::fopen(file_path, "r");
+
+    if(file_handle == nullptr)
+    {
+        return stdromano::String<>();
+    }
+
+
+    std::fseek(file_handle, 0, SEEK_END);
+    const size_t file_size = std::ftell(file_handle);
+
+    stdromano::String<> file_content = stdromano::String<>::make_zeroed(file_size);
+
+    std::rewind(file_handle);
+    std::fread(file_content.data(), sizeof(char), file_size, file_handle);
+    std::fclose(file_handle);
+
+    return std::move(file_content);
+}
+
 STDROMANO_NAMESPACE_END

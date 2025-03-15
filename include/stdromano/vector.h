@@ -485,7 +485,7 @@ public:
             return *ptr;
         }
 
-        static T dummy{};
+        static T dummy;
         return dummy;
     }
 

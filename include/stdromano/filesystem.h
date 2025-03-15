@@ -13,6 +13,8 @@ STDROMANO_NAMESPACE_BEGIN
 
 STDROMANO_API stdromano::String<> expand_from_executable_dir(const stdromano::String<>& path_to_expand) noexcept;
 
+STDROMANO_API stdromano::String<> load_file_content(const char* file_path) noexcept;
+
 STDROMANO_NAMESPACE_END
 
 #endif // !defined(__STDROMANO_FILESYSTEM)
