@@ -19,7 +19,8 @@ TEST_CASE(test_load_file_content)
 
 TEST_CASE(test_list_dir)
 {
-    const stdromano::String<> directory_path = stdromano::fs_parent_dir(stdromano::String<>::make_ref(__FILE__, std::strlen(__FILE__)));
+    const stdromano::String<> directory_path
+        = stdromano::fs_parent_dir(stdromano::String<>::make_ref(__FILE__, std::strlen(__FILE__)));
     stdromano::log_debug("Listing directory: {}", directory_path);
 
     stdromano::ListDirIterator it;
@@ -27,6 +28,7 @@ TEST_CASE(test_list_dir)
     while(fs_list_dir(it, directory_path, stdromano::ListDirFlags_ListAll))
     {
         stdromano::log_debug(it.get_current_path());
+        stdromano::log_debug(stdromano::fs_filename(it.get_current_path()));
     }
 }
 

@@ -38,6 +38,18 @@ String<> fs_parent_dir(const String<>& path) noexcept
     return String<>::make_ref(path.c_str(), path_len);
 }
 
+String<> fs_filename(const String<>& path) noexcept
+{
+    size_t path_len = path.size() - 1;
+
+    while(path_len > 0 && (path[path_len] != '/' && path[path_len] != '\\'))
+    {
+        path_len--;
+    }
+
+    return String<>::make_ref(path.c_str() + path_len + 1, path.size() - path_len - 1);
+}
+
 String<> expand_from_executable_dir(const String<>& path_to_expand) noexcept
 {
     size_t size;
