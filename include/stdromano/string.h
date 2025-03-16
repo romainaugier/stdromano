@@ -238,8 +238,13 @@ public:
 
     bool operator!=(const String<>& other) const { return !this->operator==(other); }
 
-    static String make_ref(const char* str, size_t size) noexcept
+    static String make_ref(const char* str, size_t size = 0) noexcept
     {
+        if(size == 0)
+        {
+            size = std::strlen(str) - 1;
+        }
+
         String s;
         s._heap_data = const_cast<char*>(str);
         s._size = static_cast<uint32_t>(size);
@@ -261,6 +266,8 @@ public:
 
         return std::move(s);
     }
+
+    String copy() const noexcept { return std::move(String("{}", fmt::string_view(this->c_str(), this->size()))); }
 
     STDROMANO_FORCE_INLINE const char* data() const noexcept
     {
