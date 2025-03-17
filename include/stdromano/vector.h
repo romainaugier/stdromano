@@ -582,8 +582,9 @@ public:
                 this->at(start_pos + i)->~T();
             }
 
-            std::memmove(
-                this->at(start_pos), this->at(start_pos + count), (this->size() - start_pos - count) * sizeof(T));
+            std::memmove(this->at(start_pos),
+                         this->at(start_pos + count),
+                         (this->size() - start_pos - count) * sizeof(T));
             this->set_size(this->size() - count);
             return iterator(this, start_pos);
         }

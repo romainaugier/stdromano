@@ -10,7 +10,7 @@
 #include "stdromano/string.h"
 
 #if defined(STDROMANO_WIN)
-#include "windows.h"
+#include <Windows.h>
 #elif defined(STDROMANO_LINUX)
 #include <dirent.h>
 #endif /* defined(STDROMANO_WIN) */

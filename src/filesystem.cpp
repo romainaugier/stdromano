@@ -6,6 +6,7 @@
 
 #if defined(STDROMANO_WIN)
 #include "ShlObj_core.h"
+#include "Shlwapi.h"
 #elif defined(STDROMANO_LINUX)
 #include <limits.h>
 #include <pwd.h>
@@ -112,7 +113,7 @@ ListDirIterator::~ListDirIterator()
 #if defined(STDROMANO_WIN)
     if(this->_h_find != INVALID_HANDLE_VALUE)
     {
-        FindClose(this->h_find);
+        FindClose(this->_h_find);
     }
 #elif defined(STDROMANO_LINUX)
     if(this->_dir != nullptr)
@@ -129,8 +130,9 @@ String<> ListDirIterator::get_current_path() const noexcept
                     fmt::string_view(this->_directory_path.c_str(), this->_directory_path.size() - 1),
                     this->_find_data.cFileName);
 #elif defined(STDROMANO_LINUX)
-    return String<>(
-        "{}/{}", fmt::string_view(this->_directory_path.c_str(), this->_directory_path.size()), this->_entry->d_name);
+    return String<>("{}/{}",
+                    fmt::string_view(this->_directory_path.c_str(), this->_directory_path.size()),
+                    this->_entry->d_name);
 #endif /* defined(STDROMANO_WIN) */
     return String<>();
 }
@@ -142,67 +144,52 @@ bool fs_list_dir(ListDirIterator& it, const String<>& directory_path, const uint
         return false;
     }
 
-#if defined(STROMANO_WIN)
-#error "No implementation of fs_list_dir working on Windows"
-    if(_list_dir_data_count == 0 || dir_hash != CURRENT_LIST_DIR_DATA.directory_hash)
+#if defined(STDROMANO_WIN)
+    if(it._h_find == INVALID_HANDLE_VALUE)
     {
-        _list_dir_data_count++;
+        it._directory_path = directory_path.copy();
+        it._directory_path.appendc("\\*");
+        it._h_find = FindFirstFileA(it._directory_path.c_str(), &it._find_data);
 
-        if(_list_dir_data_count == MAX_RECURSE_LIST_DIR)
-        {
-            log_error("Cannot recurse more than {} times in fs_list_dir", MAX_RECURSE_LIST_DIR);
-            return false;
-        }
-
-        CURRENT_LIST_DIR_DATA = ListDirData(directory_path, directory_path_length);
-        CURRENT_LIST_DIR_DATA.h_find
-            = FindFirstFileA(CURRENT_LIST_DIR_DATA.directory_path.c_str(), &CURRENT_LIST_DIR_DATA.find_data);
-
-        if(CURRENT_LIST_DIR_DATA.h_find == INVALID_HANDLE_VALUE)
+        if(it._h_find == INVALID_HANDLE_VALUE)
         {
             DWORD err = GetLastError();
 
-            log_error("Error during fs_list_dir. Error code: {}", err);
-
-            CURRENT_LIST_DIR_DATA.~ListDirData();
-            _list_dir_data_count--;
+            std::fprintf(stderr, "Error during fs_list_dir. Error code: %u", err);
 
             return false;
         }
 
-        if((CURRENT_LIST_DIR_DATA.find_data.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY))
+        if((it._find_data.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY))
         {
-            if(CURRENT_LIST_DIR_DATA.find_data.cFileName[0] != '.' && (mode & ListDirFlags::ListDirFlags_YieldDirs))
-            {
-                CURRENT_LIST_DIR_DATA.make_current_file_path(out.path);
+            const size_t c_file_name_size = std::strlen(it._find_data.cFileName);
 
+            if((it._find_data.cFileName[0] != '.' || c_file_name_size > 2) && (flags & ListDirFlags_ListDirs))
+            {
                 return true;
             }
         }
-        else if(mode & ListDirFlags::ListDirFlags_YieldFiles)
+        else if(flags & ListDirFlags_ListFiles)
         {
-            CURRENT_LIST_DIR_DATA.make_current_file_path(out.path);
             return true;
         }
     }
 
     while(1)
     {
-        if(FindNextFileA(CURRENT_LIST_DIR_DATA.h_find, &CURRENT_LIST_DIR_DATA.find_data))
+        if(FindNextFileA(it._h_find, &it._find_data))
         {
-            if((CURRENT_LIST_DIR_DATA.find_data.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY))
+            if((it._find_data.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY))
             {
-                if(CURRENT_LIST_DIR_DATA.find_data.cFileName[0] != '.' && (mode & ListDirFlags::ListDirFlags_YieldDirs))
-                {
-                    CURRENT_LIST_DIR_DATA.make_current_file_path(out.path);
+                const size_t c_file_name_size = std::strlen(it._find_data.cFileName);
 
+                if((it._find_data.cFileName[0] != '.' || c_file_name_size > 2) && (flags & ListDirFlags_ListDirs))
+                {
                     return true;
                 }
             }
-            else if(mode & ListDirFlags::ListDirFlags_YieldFiles)
+            else if(flags & ListDirFlags_ListFiles)
             {
-                CURRENT_LIST_DIR_DATA.make_current_file_path(out.path);
-
                 return true;
             }
         }
@@ -212,11 +199,8 @@ bool fs_list_dir(ListDirIterator& it, const String<>& directory_path, const uint
 
             if(err != ERROR_NO_MORE_FILES)
             {
-                log_error("Error during fs_list_dir. Error code: {}", err);
+                std::fprintf(stderr, "Error during fs_list_dir. Error code: %u", err);
             }
-
-            CURRENT_LIST_DIR_DATA.~ListDirData();
-            _list_dir_data_count--;
 
             return false;
         }

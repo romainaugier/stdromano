@@ -21,47 +21,47 @@ enum LogLevel : uint8_t
 class STDROMANO_API Logger
 {
 public:
-    static Logger &get_instance() noexcept
+    static Logger& get_instance() noexcept
     {
         static Logger c;
         return c;
     }
 
-    Logger(const Logger &) = delete;
-    Logger &operator=(const Logger &) = delete;
+    Logger(const Logger&) = delete;
+    Logger& operator=(const Logger&) = delete;
 
     template <typename... Args>
-    void error(Args &&...args) noexcept
+    void error(Args&&... args) noexcept
     {
         this->_logger.error(std::forward<Args>(args)...);
     }
 
     template <typename... Args>
-    void warn(Args &&...args) noexcept
+    void warn(Args&&... args) noexcept
     {
         this->_logger.warn(std::forward<Args>(args)...);
     }
 
     template <typename... Args>
-    void info(Args &&...args) noexcept
+    void info(Args&&... args) noexcept
     {
         this->_logger.info(std::forward<Args>(args)...);
     }
 
     template <typename... Args>
-    void debug(Args &&...args) noexcept
+    void debug(Args&&... args) noexcept
     {
         this->_logger.debug(std::forward<Args>(args)...);
     }
 
     template <typename... Args>
-    void trace(Args &&...args) noexcept
+    void trace(Args&&... args) noexcept
     {
         this->_logger.trace(std::forward<Args>(args)...);
     }
 
     template <typename... Args>
-    void critical(Args &&...args) noexcept
+    void critical(Args&&... args) noexcept
     {
         this->_logger.critical(std::forward<Args>(args)...);
     }

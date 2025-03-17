@@ -1,5 +1,5 @@
 BasedOnStyle: GNU
-AccessModifierOffset: -4 
+AccessModifierOffset: -4
 AlignAfterOpenBracket: Align
 AlwaysBreakTemplateDeclarations: true
 AlwaysBreakAfterDefinitionReturnType: None
@@ -13,6 +13,8 @@ EmptyLineBeforeAccessModifier: LogicalBlock
 IndentAccessModifiers: false
 IndentWidth: 4
 MaxEmptyLinesToKeep: 2
+PenaltyBreakAssignment: 10000
+PenaltyBreakBeforeFirstCallParameter: 10000
 PointerAlignment: Left
 SeparateDefinitionBlocks: Always
 SpaceBeforeParens: Never
