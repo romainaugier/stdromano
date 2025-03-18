@@ -662,7 +662,7 @@ public:
     {
         if(this->_data && this->size() > 1)
         {
-            std::sort(this->begin(), this->end(), std::forward<F&&>(cmp));
+            std::qsort(this->data(), this->size(), sizeof(T), std::forward<F&&>(cmp));
         }
     }
 };

@@ -7,9 +7,9 @@
 #include <cstdio>
 
 #if defined(STDROMANO_WIN)
-void t1_func(void* args)
+void t1_func()
 #elif defined(STDROMANO_LINUX)
-void* t1_func(void* args)
+void* t1_func()
 #endif /* defined(STDROMANO_WIN) */
 {
     stdromano::thread_sleep(500);
@@ -22,9 +22,9 @@ void* t1_func(void* args)
 }
 
 #if defined(STDROMANO_WIN)
-void t2_func(void* args)
+void t2_func()
 #elif defined(STDROMANO_LINUX)
-void* t2_func(void* args)
+void* t2_func()
 #endif /* defined(STDROMANO_WIN) */
 {
     std::printf("Hello from t2\n");
@@ -60,16 +60,19 @@ int main()
 
     std::printf("Starting threading test\n");
 
-    stdromano::Thread t1(&t1_func, nullptr);
-    stdromano::Thread t2(&t2_func, nullptr);
+    stdromano::Thread t1(t1_func);
+    stdromano::Thread t2(t2_func);
+    stdromano::Thread t3([]() { std::printf("Hello from t3 lambda: (tid: %zu)\n", stdromano::thread_get_id()); });
 
     t1.start();
     t2.start();
+    t3.start();
 
     stdromano::thread_sleep(1000);
 
     t1.join();
     t2.join();
+    t3.join();
 
     for(size_t i = 0; i < NUM_WORKS; i++)
     {

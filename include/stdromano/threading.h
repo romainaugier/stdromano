@@ -70,20 +70,50 @@ class ScopedLock
 
 class STDROMANO_API Thread
 {
+private:
     thread_handle _handle;
-    thread_func _func;
-    void* _args = nullptr;
+    std::function<void()> _task;
 
 #if defined(STDROMANO_WIN)
     DWORD _id;
+
+    static DWORD WINAPI ThreadProc(LPVOID param)
+    {
+        Thread* thread = static_cast<Thread*>(param);
+        thread->_task();
+        return 0;
+    }
 #elif defined(STDROMANO_LINUX)
     int _id;
+
+    static void* ThreadProc(void* param)
+    {
+        Thread* thread = static_cast<Thread*>(param);
+        thread->_task();
+        return nullptr;
+    }
 #endif /* defined(STDROMANO_WIN) */
 
     bool _running = false;
 
 public:
-    Thread(thread_func func, void* args, bool daemon = false, bool detached = false);
+    Thread(std::function<void()> func, bool daemon = false, bool detached = false)
+    {
+        this->_task = std::move(func);
+
+#if defined(STDROMANO_WIN)
+        this->_handle = CreateThread(NULL, 0, ThreadProc, this, CREATE_SUSPENDED, &this->_id);
+#elif defined(STDROMANO_LINUX)
+        this->_handle = 0;
+#endif /* defined(STDROMANO_WIN) */
+
+        this->_running = false;
+
+        if(detached)
+        {
+            this->detach();
+        }
+    }
 
     ~Thread();
 
@@ -173,12 +203,6 @@ public:
     bool is_started() const noexcept { return this->_started.load(); }
 
     bool is_stopped() const noexcept { return this->_stop.load(); }
-
-#if defined(STDROMANO_WIN)
-    static void worker_func(void* args) noexcept;
-#elif defined(STDROMANO_LINUX)
-    static void* worker_func(void* args) noexcept;
-#endif /* defined(STDROMANO_WIN) */
 
 private:
     moodycamel::ConcurrentQueue<ThreadPoolWork*> _work_queue;
