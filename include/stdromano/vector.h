@@ -473,7 +473,7 @@ public:
     }
 
     template <typename... Args>
-    T& emplace_back(Args&&... args) noexcept
+    void emplace_back(Args&&... args) noexcept
     {
         if(this->size() == this->capacity())
             this->grow();
@@ -482,11 +482,7 @@ public:
         {
             T* ptr = ::new(this->data() + this->size()) T(std::forward<Args&&>(args)...);
             this->incr_size();
-            return *ptr;
         }
-
-        static T dummy;
-        return dummy;
     }
 
     void insert(const T& element, const uint32_t position) noexcept
