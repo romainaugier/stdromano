@@ -661,6 +661,11 @@ public:
             std::qsort(this->data(), this->size(), sizeof(T), std::forward<F&&>(cmp));
         }
     }
+
+    STDROMANO_FORCE_INLINE size_t memory_usage() const noexcept
+    {
+        return sizeof(T) * this->_size;
+    }
 };
 
 STDROMANO_NAMESPACE_END
