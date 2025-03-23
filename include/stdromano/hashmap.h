@@ -545,6 +545,13 @@ public:
 
         return it.value();
     }
+
+    STDROMANO_FORCE_INLINE size_t memory_usage() const noexcept
+    {
+        return this->capacity() * sizeof(Bucket) + 
+               sizeof(size_t) + sizeof(uint32_t) + sizeof(uint32_t) +
+               sizeof(KeySelect);
+    }
 };
 
 STDROMANO_NAMESPACE_END
