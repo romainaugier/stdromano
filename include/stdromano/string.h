@@ -486,6 +486,21 @@ public:
         return String::make_ref(start, static_cast<size_t>(end - start));
     }
 
+    String replace(char occurence, char replacement) const noexcept
+    {
+        String res = *this;
+
+        for(uint32_t i = 0; i < res.size(); i++)
+        {
+            if(res[i] == occurence)
+            {
+                res[i] = replacement;
+            }
+        }
+
+        return res;
+    }
+
     bool startswith(const String& prefix) const noexcept
     {
         if(prefix.size() > this->size())

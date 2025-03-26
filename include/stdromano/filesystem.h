@@ -57,9 +57,27 @@ public:
     ~ListDirIterator();
 
     String<> get_current_path() const noexcept;
+
+    bool is_file() const noexcept;
+
+    bool is_directory() const noexcept;
 };
 
 STDROMANO_API bool fs_list_dir(ListDirIterator& it, const String<>& directory_path, const uint32_t flags) noexcept;
+
+enum FileDialogMode_ : uint32_t
+{
+    FileDialogMode_OpenFile,
+    FileDialogMode_SaveFile,
+    FileDialogMode_OpenDir,
+};
+
+// filter should be formatted like: *.h|*.cpp
+
+STDROMANO_API String<> open_file_dialog(FileDialogMode_ mode, 
+                                        const String<>& title,
+                                        const String<>& initial_path,
+                                        const String<>& filter) noexcept;
 
 STDROMANO_NAMESPACE_END
 

@@ -373,6 +373,15 @@ TEST_CASE(TestZeroedString)
     ASSERT_EQUAL(2049, zeroed.capacity());
 }
 
+TEST_CASE(TestReplace)
+{
+    String<> s = "this,string,is,sep,by,commas";
+
+    String<> r_without_commas = s.replace(',', ' ');
+
+    ASSERT_EQUAL(-1, r_without_commas.find(","));
+}
+
 int main()
 {
     TestRunner runner;
@@ -394,6 +403,7 @@ int main()
     runner.add_test("CopyAssignment", TestCopyAssignment);
     runner.add_test("MoveAssignment", TestMoveAssignment);
     runner.add_test("ZeroedString", TestZeroedString);
+    runner.add_test("Replace", TestReplace);
 
     runner.run_all();
 

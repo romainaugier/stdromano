@@ -9,6 +9,7 @@ cmake_minimum_required(VERSION 3.15)
 project(stdromano VERSION ${VERSION})
 
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/cmake")
+list(APPEND CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/cmake/finders")
 
 set(CMAKE_VERBOSE_MAKEFILE ON)
 
@@ -19,12 +20,19 @@ endif()
 
 # concurrentqueue
 set(concurrentqueue_INCLUDE_DIRS "${CMAKE_SOURCE_DIR}/concurrentqueue")
+include_directories(${concurrentqueue_INCLUDE_DIRS})
 
 # spdlog
 set(spdlog_INCLUDE_DIRS "${CMAKE_SOURCE_DIR}/spdlog/include")
-
-include_directories(${concurrentqueue_INCLUDE_DIRS})
 include_directories(${spdlog_INCLUDE_DIRS})
+
+# gtk
+if(UNIX)
+    find_package(PkgConfig REQUIRED)
+    pkg_check_modules(GTK REQUIRED IMPORTED_TARGET "gtk+-2.0")
+
+    include_directories(${GTK_INCLUDE_DIRS})
+endif()
 
 add_subdirectory(src)
 
