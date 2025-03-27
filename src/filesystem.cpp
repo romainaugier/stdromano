@@ -5,6 +5,7 @@
 #include "stdromano/filesystem.h"
 
 #if defined(STDROMANO_WIN)
+#define STRICT_TYPED_ITEMIDS // Better type safety for IDLists
 #include "ShlObj_core.h"
 #include "Shlwapi.h"
 #include "commdlg.h"
@@ -281,44 +282,90 @@ String<> open_file_dialog(FileDialogMode_ mode,
                           const String<>& filter) noexcept
 {
 #if defined(STDROMANO_WIN)
-    char filename[MAX_PATH] = {0};
-
-    OPENFILENAMEA ofn = {0};
-    ofn.lStructSize = sizeof(ofn);
-    ofn.hwndOwner = NULL;
-    ofn.lpstrFile = filename;
-    ofn.nMaxFile = sizeof(filename);
-
-    String<> windows_filter = filter.replace('|', '\0');
-    windows_filter.push_back('\0');
-    ofn.lpstrFilter = windows_filter.c_str();
-
-    if(!initial_path.empty())
+    if(mode == FileDialogMode_OpenFile || mode == FileDialogMode_SaveFile)
     {
-        ofn.lpstrInitialDir = initial_path.c_str();
-    }
+        char filename[MAX_PATH];
+        std::memset(filename, 0, sizeof(filename));
 
-    ofn.lpstrTitle = title.c_str();
-    ofn.Flags = OFN_PATHMUSTEXIST | OFN_FILEMUSTEXIST;
+        OPENFILENAMEA ofn;
+        std::memset(&ofn, 0, sizeof(OPENFILENAMEA));
+        ofn.lStructSize = sizeof(ofn);
+        ofn.hwndOwner = NULL;
+        ofn.lpstrFile = filename;
+        ofn.nMaxFile = sizeof(filename);
 
-    BOOL result = FALSE;
+        String<> windows_filter = filter.replace('|', '\0');
+        windows_filter.push_back('\0');
+        ofn.lpstrFilter = windows_filter.c_str();
 
-    switch(type)
-    {
-    case FileDialogMode_OpenFile:
-        result = GetOpenFileNameA(&ofn);
-        break;
-    case FileDialogMode_SaveFile:
-        ofn.Flags |= OFN_OVERWRITEPROMPT;
-        result = GetSaveFileNameA(&ofn);
-        break;
-    case FileDialogMode_OpenDir:
+        if(!initial_path.empty())
+        {
+            ofn.lpstrInitialDir = initial_path.c_str();
+        }
+
+        ofn.lpstrTitle = title.c_str();
+        ofn.Flags = OFN_PATHMUSTEXIST | OFN_FILEMUSTEXIST;
+
+        if(mode == FileDialogMode_SaveFile)
+        {
+            ofn.Flags |= OFN_OVERWRITEPROMPT;
+        }
+
+        BOOL result = GetOpenFileNameA(&ofn);
+
+        if(result)
+        {
+            return std::move(String<>(filename));
+        }
+
         return String<>();
     }
-
-    if(result != nullptr)
+    else if(mode == FileDialogMode_OpenDir)
     {
-        std::move(String<>(filename));
+        char dirname[MAX_PATH];
+        std::memset(dirname, 0, sizeof(dirname));
+
+        BROWSEINFOA bi;
+        std::memset(&bi, 0, sizeof(BROWSEINFOA));
+        bi.lpszTitle = title.c_str();
+        bi.pszDisplayName = dirname;
+
+        if(!initial_path.empty())
+        {
+            WCHAR* initial_path_wide = static_cast<WCHAR*>(mem_alloca((initial_path.size() + 1) * sizeof(WCHAR)));
+            std::memset(initial_path_wide, 0, (initial_path.size() + 1) * sizeof(WCHAR));
+            MultiByteToWideChar(CP_UTF8, 0, initial_path.c_str(), initial_path.size(), initial_path_wide, initial_path.size());
+
+            PIDLIST_ABSOLUTE pidl = NULL;
+            ULONG sfgao_out = 0;
+
+            HRESULT hr = SHParseDisplayName(initial_path_wide, NULL, &pidl, 0, &sfgao_out);
+
+            if(SUCCEEDED(hr))
+            {
+                bi.pidlRoot = pidl;
+            }
+        }
+
+        LPITEMIDLIST pidl = SHBrowseForFolderA(&bi);
+        String<> dirpath = String<>::make_zeroed(MAX_PATH);
+
+        if(pidl != NULL)
+        {
+            if(!SHGetPathFromIDListA((PCIDLIST_ABSOLUTE)pidl, dirpath.c_str()))
+            {
+                dirpath = String<>();
+            }
+        }
+
+        IMalloc* p_malloc = NULL;
+        if(SUCCEEDED(SHGetMalloc(&p_malloc)))
+        {
+            p_malloc->Free(pidl);
+            p_malloc->Release();
+        }
+
+        return dirpath;
     }
 
     return String<>();

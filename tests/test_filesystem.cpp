@@ -37,10 +37,17 @@ TEST_CASE(test_file_dialog)
 {
     const stdromano::String<> file_path = stdromano::open_file_dialog(stdromano::FileDialogMode_OpenFile,
                                                                       "Open A File",
-                                                                      stdromano::fs_parent_dir(__FILE__),
+                                                                      stdromano::expand_from_executable_dir(""),
                                                                       "*.cpp|*.h|*.txt");
 
-    stdromano::log_debug("Chosen file: {}", file_path);
+    stdromano::log_debug("Chosen file: {}", file_path.empty() ? "None" : file_path.c_str());
+
+    const stdromano::String<> dir_path = stdromano::open_file_dialog(stdromano::FileDialogMode_OpenDir,
+                                                                     "Select A Directory",
+                                                                     stdromano::expand_from_executable_dir(""),
+                                                                     "");
+
+    stdromano::log_debug("Chosen directory: {}", dir_path.empty() ? "None" : dir_path.c_str());
 }
 
 int main()
