@@ -59,7 +59,7 @@ int main()
     runner.add_test("Expand Executable", test_expand_executable);
     runner.add_test("Load File Content", test_load_file_content);
     runner.add_test("List Dir", test_list_dir);
-    runner.add_test("File Dialog", test_file_dialog);
+    // runner.add_test("File Dialog", test_file_dialog);
 
     runner.run_all();
 

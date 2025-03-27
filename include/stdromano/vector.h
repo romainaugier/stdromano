@@ -255,8 +255,12 @@ public:
         bool operator!=(const iterator& other) const { return !(*this == other); }
 
         reference operator*() { return (*this->vector)[this->index]; }
+        
+        const reference operator*() const { return (*this->vector)[this->index]; }
 
         pointer operator->() { return &(*this->vector)[this->index]; }
+
+        const pointer operator->() const { return &(*this->vector)[this->index]; }
 
         iterator& operator--()
         {
@@ -425,11 +429,10 @@ public:
             return;
         }
 
+        const uint32_t new_size = std::min(this->_size, new_capacity);
+
         if(this->_data != nullptr)
         {
-            const uint32_t old_size = this->size();
-            const uint32_t new_size = old_size;
-
             for(uint32_t i = 0; i < new_size; ++i)
             {
                 ::new(new_data + i) T(std::move_if_noexcept(this->_data[i]));
@@ -440,7 +443,8 @@ public:
         }
 
         this->_data = new_data;
-        this->set_capacity(new_capacity);
+        this->_capacity = new_capacity;
+        this->_size = new_size;
     }
 
     STDROMANO_FORCE_INLINE void reserve(const uint32_t new_capacity) noexcept
