@@ -5,7 +5,6 @@
 #include "stdromano/string.h"
 #include "test.h"
 
-
 using namespace stdromano;
 
 String<> create_large_string(size_t size)
@@ -226,6 +225,16 @@ TEST_CASE(TestSplit)
     ASSERT(str3.split(String<>(";"), it, split));
     ASSERT_EQUAL(0, std::strcmp(split.c_str(), "Hello"));
     ASSERT_EQUAL(str3.size(), it);
+
+    String<> lrsplit;
+    String<> lsplit = str.lsplit(",", &lrsplit);
+    ASSERT_EQUAL(0, std::strncmp(lsplit.c_str(), "Hello", lsplit.size()));
+    ASSERT_EQUAL(0, std::strncmp(lrsplit.c_str(), "World,Test", lrsplit.size()));
+
+    String<> rlsplit;
+    String<> rsplit = str.rsplit(",", &rlsplit);
+    ASSERT_EQUAL(0, std::strncmp(rsplit.c_str(), "Test", rsplit.size()));
+    ASSERT_EQUAL(0, std::strncmp(rlsplit.c_str(), "Hello,World", rlsplit.size()));
 }
 
 TEST_CASE(TestReferenceStringRestrictions)
@@ -380,6 +389,15 @@ TEST_CASE(TestReplace)
     String<> r_without_commas = s.replace(',', ' ');
 
     ASSERT_EQUAL(-1, r_without_commas.find(","));
+}
+
+TEST_CASE(TestZFill)
+{
+    String<> s = "1";
+
+    String<> zfilled = s.zfill(8);
+
+    ASSERT_EQUAL(0, std::strcmp(zfilled.c_str(), "00000001"));
 }
 
 int main()

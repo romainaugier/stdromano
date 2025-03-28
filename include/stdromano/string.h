@@ -16,6 +16,9 @@
 
 STDROMANO_NAMESPACE_BEGIN
 
+/* Finds the last occurence of needle in haystack (reverse strstr) */
+STDROMANO_API char* strrstr(const char* haystack, const char* needle) noexcept;
+
 template <size_t LocalCapacity = 7>
 class String
 {
@@ -531,6 +534,7 @@ public:
         return found != nullptr ? static_cast<int>(found - this->c_str()) : -1;
     }
 
+    /* Iterates over the string and returns true for each token found. split will be a reference */
     bool split(const String& sep, split_iterator& it, String& split) const noexcept
     {
         if(sep.empty())
@@ -562,6 +566,62 @@ public:
             return true;
         }
     }
+
+    String lsplit(const String& sep, String* rsplit) const noexcept
+    {
+        if(sep.empty())
+        {
+            return String::make_ref(*this);
+        }
+
+        const char* found = std::strstr(this->data(), sep.c_str());
+
+        if(found != nullptr)
+        {
+            const size_t lsplit_size = static_cast<size_t>(found - this->data());
+
+            if(rsplit != nullptr)
+            {
+                *rsplit = String::make_ref(this->data() + lsplit_size + sep.size(),
+                                           this->size() - lsplit_size - sep.size());
+            }
+
+            return String::make_ref(this->data(), lsplit_size);
+        }
+        
+        return String::make_ref(*this);
+    }
+
+    String rsplit(const String& sep, String* lsplit) const noexcept
+    {
+        if(sep.empty())
+        {
+            return String::make_ref(*this);
+        }
+
+        const char* found = strrstr(this->data(), sep.c_str());
+
+        if(found != nullptr)
+        {
+            const size_t rsplit_size = this->size() - static_cast<size_t>(found - this->data());
+
+            if(lsplit != nullptr)
+            {
+                *lsplit = String::make_ref(this->data(), this->size() - rsplit_size - sep.size());
+            }
+
+            return String::make_ref(found + sep.size(), rsplit_size);
+        }
+
+        return String::make_ref(*this);
+    }
+
+    String zfill(const uint32_t num_zeros) const noexcept
+    {
+        const uint32_t fill_size = num_zeros - this->_size;
+
+        return String("{0:0^{1}}{2}", "", fill_size, *this);
+    }
 };
 
 STDROMANO_NAMESPACE_END
@@ -583,7 +643,9 @@ struct std::hash<stdromano::String<> >
 {
     std::size_t operator()(const stdromano::String<>& s) const
     {
-        return static_cast<std::size_t>(stdromano::hash_murmur3(static_cast<const void*>(s.c_str()), s.size(), 483910));
+        return static_cast<std::size_t>(stdromano::hash_murmur3(static_cast<const void*>(s.c_str()), 
+                                                                s.size(),
+                                                                483910));
     }
 };
 
