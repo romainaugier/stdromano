@@ -24,7 +24,7 @@ STDROMANO_NAMESPACE_BEGIN
 template <class Key, class Value, class Hash = std::hash<Key> >
 class HashMap
 {
-private:
+public:
     static constexpr float MAX_LOAD_FACTOR = 0.9f;
     static constexpr size_t INITIAL_CAPACITY = 8;
 
@@ -48,7 +48,6 @@ private:
         value_type& operator()(std::pair<Key, Value>& key_value) noexcept { return key_value.second; }
     };
 
-public:
     using key_type = Key;
     using mapped_type = Value;
     using value_type = std::pair<Key, Value>;
@@ -193,86 +192,6 @@ private:
 
     KeySelect _key_select;
 
-    STDROMANO_FORCE_INLINE uint32_t get_hash(const key_type& key) const { return Hash{}(key) ^ this->_hash_key; }
-
-    STDROMANO_FORCE_INLINE size_t get_index(const uint32_t hash) const { return hash & (this->_buckets.size() - 1); }
-
-    STDROMANO_FORCE_INLINE size_t get_next_index(const size_t index) const
-    {
-        return (index + 1) & (this->_buckets.size() - 1);
-    }
-
-    STDROMANO_FORCE_INLINE size_t get_new_capacity() const { return bit_ceil(this->_buckets.size() + 1); }
-
-    STDROMANO_FORCE_INLINE uint32_t generate_hash_key() { return next_random_uint32(); }
-
-    void insert_internal(value_type&& value)
-    {
-        const key_type& key = this->_key_select(value);
-        uint32_t hash = this->get_hash(key);
-        size_type index = this->get_index(hash);
-        int16_t probe_length = 0;
-
-        while(true)
-        {
-            Bucket& bucket = this->_buckets[index];
-
-            if(bucket.is_empty())
-            {
-                bucket.set_bucket_content(hash, probe_length, std::forward<value_type>(value));
-
-                this->_items_count++;
-
-                return;
-            }
-
-            if(bucket.hash() == hash && this->_key_select(bucket.value()) == key)
-            {
-                bucket.construct(std::forward<value_type&&>(value));
-                return;
-            }
-
-            if(probe_length > bucket.probe_length())
-            {
-                bucket.swap_bucket_content(value, hash, probe_length);
-            }
-
-            index = this->get_next_index(index);
-            probe_length++;
-
-            if(probe_length >= this->_max_probes)
-            {
-                this->grow(this->get_new_capacity(), false);
-                this->insert_internal(std::forward<value_type>(value));
-
-                return;
-            }
-        }
-    }
-
-    void grow(const size_t new_capacity, bool rehash)
-    {
-        std::vector<Bucket> old_buckets = std::move(this->_buckets);
-
-        this->_buckets.resize(new_capacity);
-        this->_items_count = 0;
-
-        if(rehash)
-        {
-            this->_hash_key ^= this->generate_hash_key();
-        }
-
-        this->_max_probes = static_cast<uint32_t>(std::log2(static_cast<float>(new_capacity)));
-
-        for(auto& bucket : old_buckets)
-        {
-            if(!bucket.is_empty())
-            {
-                this->insert_internal(std::move(bucket.value()));
-            }
-        }
-    }
-
 public:
     class iterator
     {
@@ -340,6 +259,8 @@ public:
 
         const_iterator(const HashMap* m, size_t i) : map(m), index(i) { this->advance(); }
 
+        const_iterator(const iterator& other) : map(other.map), index(other.index) {}
+
         const_iterator& operator++()
         {
             this->index++;
@@ -366,6 +287,133 @@ public:
         }
     };
 
+private:
+    STDROMANO_FORCE_INLINE uint32_t get_hash(const key_type& key) const { return Hash{}(key) ^ this->_hash_key; }
+
+    STDROMANO_FORCE_INLINE size_t get_index(const uint32_t hash) const { return hash & (this->_buckets.size() - 1); }
+
+    STDROMANO_FORCE_INLINE size_t get_next_index(const size_t index) const
+    {
+        return (index + 1) & (this->_buckets.size() - 1);
+    }
+
+    STDROMANO_FORCE_INLINE size_t get_new_capacity() const { return bit_ceil(this->_buckets.size() + 1); }
+
+    STDROMANO_FORCE_INLINE uint32_t generate_hash_key() { return next_random_uint32(); }
+
+    void insert_internal(value_type&& value)
+    {
+        const key_type& key = this->_key_select(value);
+        uint32_t hash = this->get_hash(key);
+        size_type index = this->get_index(hash);
+        int16_t probe_length = 0;
+
+        while(true)
+        {
+            Bucket& bucket = this->_buckets[index];
+
+            if(bucket.is_empty())
+            {
+                bucket.set_bucket_content(hash, probe_length, std::forward<value_type>(value));
+
+                this->_items_count++;
+
+                return;
+            }
+
+            if(bucket.hash() == hash && this->_key_select(bucket.value()) == key)
+            {
+                bucket.construct(std::forward<value_type&&>(value));
+                return;
+            }
+
+            if(probe_length > bucket.probe_length())
+            {
+                bucket.swap_bucket_content(value, hash, probe_length);
+            }
+
+            index = this->get_next_index(index);
+            probe_length++;
+
+            if(probe_length >= this->_max_probes)
+            {
+                this->grow(this->get_new_capacity(), false);
+                this->insert_internal(std::forward<value_type>(value));
+
+                return;
+            }
+        }
+    }
+
+    std::pair<iterator, bool> emplace_internal(value_type&& value_to_insert)
+    {
+        key_type key = this->_key_select(value_to_insert);
+
+        uint32_t hash = this->get_hash(key);
+        size_type index = this->get_index(hash);
+        int16_t probe_length = 0;
+
+        while(true)
+        {
+            Bucket& bucket = this->_buckets[index];
+
+            if(bucket.is_empty())
+            {
+                bucket.set_bucket_content(hash, probe_length, std::move(value_to_insert));
+                this->_items_count++;
+                return { iterator(this, index), true };
+            }
+
+            if(bucket.hash() == hash && this->_key_select(bucket.value()) == key)
+            {
+                return { iterator(this, index), false };
+            }
+
+            if(probe_length > bucket.probe_length())
+            {
+                bucket.swap_bucket_content(value_to_insert, hash, probe_length);
+
+                key = this->_key_select(value_to_insert);
+            }
+
+            index = this->get_next_index(index);
+            probe_length++;
+
+            if(probe_length >= this->_max_probes)
+            {
+                this->grow(this->get_new_capacity(), false);
+
+                hash = this->get_hash(key);
+                index = this->get_index(hash);
+                probe_length = 0;
+            }
+        }
+    }
+
+    void grow(const size_t new_capacity, bool rehash)
+    {
+        std::vector<Bucket> old_buckets = std::move(this->_buckets);
+
+        this->_buckets.resize(new_capacity);
+        this->_items_count = 0;
+
+        if(rehash)
+        {
+            this->_hash_key ^= this->generate_hash_key();
+        }
+
+        this->_max_probes = static_cast<uint32_t>(std::log2(static_cast<float>(new_capacity)));
+
+        for(auto& bucket : old_buckets)
+        {
+            if(!bucket.is_empty())
+            {
+                this->insert_internal(std::move(bucket.value()));
+            }
+        }
+    }
+
+public:
     iterator begin() { return iterator(this, 0); }
 
     iterator end() { return iterator(this, this->_buckets.size()); }
@@ -402,6 +450,19 @@ public:
         }
 
         return this->insert_internal(std::forward<P>(value));
+    }
+
+    template <typename... Args>
+    std::pair<iterator, bool> emplace(Args&&... args)
+    {
+        if (this->load_factor() > MAX_LOAD_FACTOR)
+        {
+            this->grow(this->get_new_capacity(), false);
+        }
+
+        value_type temp_value(std::forward<Args>(args)...);
+
+        return this->emplace_internal(std::move(temp_value));
     }
 
     iterator find(const key_type& key)

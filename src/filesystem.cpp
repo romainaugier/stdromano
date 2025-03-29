@@ -448,9 +448,6 @@ String<> open_file_dialog(FileDialogMode_ mode,
     {
         gtk_main_iteration();
     }
-
-    gtk_free()
-
     return std::move(result);
 #endif /* defined(STDROMANO_WIN) */
 }

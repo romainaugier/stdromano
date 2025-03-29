@@ -109,6 +109,7 @@ public:
             {
                 ::new(this->_data + i) T(value);
             }
+
             this->set_size(count);
         }
     }
