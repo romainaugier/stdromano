@@ -10,7 +10,7 @@ TEST_CASE(test_expand_executable) { stdromano::log_info(stdromano::expand_from_e
 
 TEST_CASE(test_load_file_content)
 {
-    stdromano::String<> content = std::move(stdromano::load_file_content(__FILE__));
+    stdromano::String<> content = std::move(stdromano::load_file_content(__FILE__, "r"));
 
     ASSERT(!content.empty());
 

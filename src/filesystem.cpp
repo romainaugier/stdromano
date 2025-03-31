@@ -88,11 +88,11 @@ String<> expand_from_executable_dir(const String<>& path_to_expand) noexcept
     return std::move(String<>("{}/{}", fmt::string_view(sz_path, size), path_to_expand));
 }
 
-String<> load_file_content(const String<>& file_path) noexcept
+String<> load_file_content(const String<>& file_path, const char* mode) noexcept
 {
-    FILE* file_handle;
+    std::FILE* file_handle;
 
-    file_handle = std::fopen(file_path.c_str(), "r");
+    file_handle = std::fopen(file_path.c_str(), mode);
 
     if(file_handle == nullptr)
     {
