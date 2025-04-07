@@ -146,6 +146,7 @@ public:
             {
                 ::new(this->data() + i) T(other[i]);
             }
+
             this->set_size(other.size());
         }
     }
@@ -186,6 +187,7 @@ public:
                     {
                         ::new(this->data() + i) T(other[i]);
                     }
+
                     this->set_size(other.size());
                 }
             }
@@ -398,9 +400,9 @@ public:
 
     STDROMANO_FORCE_INLINE const T* data() const noexcept { return this->_data; }
 
-    STDROMANO_FORCE_INLINE T* at(const uint32_t index) noexcept { return this->data() + index; }
+    STDROMANO_FORCE_INLINE T* at(const uint32_t index) noexcept { STDROMANO_ASSERT(index < this->size(), "Out of bounds access"); return this->data() + index; }
 
-    STDROMANO_FORCE_INLINE const T* at(const uint32_t index) const noexcept { return this->data() + index; }
+    STDROMANO_FORCE_INLINE const T* at(const uint32_t index) const noexcept { STDROMANO_ASSERT(index < this->size(), "Out of bounds access"); return this->data() + index; }
 
     STDROMANO_FORCE_INLINE T& operator[](const uint32_t i) noexcept { return *this->at(i); }
 
@@ -434,11 +436,16 @@ public:
 
         if(this->_data != nullptr)
         {
+
+#if defined(STDROMANO_VECTOR_COPY_ON_RESIZE)
+            std::memcpy(new_data, this->_data, new_size * sizeof(T));
+#else
             for(uint32_t i = 0; i < new_size; ++i)
             {
                 ::new(new_data + i) T(std::move_if_noexcept(this->_data[i]));
                 this->_data[i].~T();
             }
+#endif /* defined(STDROMANO_VECTOR_COPY_ON_RESIZE) */
 
             Vector<T>::deallocate(this->_data);
         }
@@ -456,124 +463,139 @@ public:
     void push_back(const T& element) noexcept
     {
         if(this->size() == this->capacity())
-            this->grow();
-
-        if(this->_data)
         {
-            ::new(this->data() + this->size()) T(element);
-            this->incr_size();
+            this->grow();
         }
+
+        ::new(this->data() + this->size()) T(element);
+        this->incr_size();
     }
 
     void push_back(T&& element) noexcept
     {
         if(this->size() == this->capacity())
-            this->grow();
-
-        if(this->_data)
         {
-            ::new(this->data() + this->size()) T(std::move(element));
-            this->incr_size();
+            this->grow();
         }
+
+        ::new(this->data() + this->size()) T(std::move(element));
+        this->incr_size();
     }
 
     template <typename... Args>
     void emplace_back(Args&&... args) noexcept
     {
         if(this->size() == this->capacity())
-            this->grow();
-
-        if(this->_data)
         {
-            T* ptr = ::new(this->data() + this->size()) T(std::forward<Args&&>(args)...);
-            this->incr_size();
+            this->grow();
         }
+
+        T* ptr = ::new(this->data() + this->size()) T(std::forward<Args&&>(args)...);
+        this->incr_size();
     }
 
     void insert(const T& element, const uint32_t position) noexcept
     {
-        if(this->size() == this->capacity())
-            this->grow();
+        STDROMANO_ASSERT(this->_data != nullptr, "Vector has not been allocated");
+        STDROMANO_ASSERT(position <= this->size(), "Position must be lower than the vector size");
 
-        if(this->_data && position <= this->size())
+        if(this->size() == this->capacity())
         {
-            std::memmove(this->at(position + 1), this->at(position), (this->size() - position) * sizeof(T));
-            ::new(this->at(position)) T(element);
-            this->incr_size();
+            this->grow();
         }
+
+        std::memmove(this->at(position + 1), this->at(position), (this->size() - position) * sizeof(T));
+        ::new(this->at(position)) T(element);
+        this->incr_size();
     }
 
     iterator insert(const_iterator pos, uint32_t count, const T& value) noexcept
     {
-        if(count == 0 || !this->_data)
-            return iterator(this, pos.index);
+        STDROMANO_ASSERT(this->_data != nullptr, "Vector has not been allocated");
 
         const uint32_t position = pos.index;
+
         if(position > this->size())
+        {
             return this->end();
+        }
 
         const uint32_t new_size = this->size() + count;
-        while(this->capacity() < new_size)
-            this->grow();
 
-        if(this->_data)
+        while(this->capacity() < new_size)
         {
-            std::memmove(this->at(position + count), this->at(position), (this->size() - position) * sizeof(T));
-            for(uint32_t i = 0; i < count; ++i)
-            {
-                ::new(this->at(position + i)) T(value);
-            }
-            this->set_size(new_size);
-            return iterator(this, position);
+            this->grow();
         }
-        return iterator(this, pos.index);
+
+        std::memmove(this->at(position + count), this->at(position), (this->size() - position) * sizeof(T));
+
+        for(uint32_t i = 0; i < count; ++i)
+        {
+            ::new(this->at(position + i)) T(value);
+        }
+
+        this->set_size(new_size);
+
+        return iterator(this, position);
     }
 
     template <class InputIt>
     iterator insert(const_iterator pos, InputIt first, InputIt last) noexcept
     {
-        if(first == last || !this->_data)
+        STDROMANO_ASSERT(this->_data != nullptr, "Vector has not been allocated");
+
+        if(first == last)
+        {
             return iterator(this, pos.index);
+        }
 
         const uint32_t position = pos.index;
+
         if(position > this->size())
+        {
             return this->end();
+        }
 
         const uint32_t count = static_cast<uint32_t>(std::distance(first, last));
         const uint32_t new_size = this->size() + count;
-        while(this->capacity() < new_size)
-            this->grow();
 
-        if(this->_data)
+        while(this->capacity() < new_size)
         {
-            std::memmove(this->at(position + count), this->at(position), (this->size() - position) * sizeof(T));
-            uint32_t offset = 0;
-            for(auto it = first; it != last; ++it, ++offset)
-            {
-                ::new(this->at(position + offset)) T(*it);
-            }
-            this->set_size(new_size);
-            return iterator(this, position);
+            this->grow();
         }
-        return iterator(this, pos.index);
+
+        std::memmove(this->at(position + count), this->at(position), (this->size() - position) * sizeof(T));
+        uint32_t offset = 0;
+
+        for(auto it = first; it != last; ++it, ++offset)
+        {
+            ::new(this->at(position + offset)) T(*it);
+        }
+
+        this->set_size(new_size);
+
+        return iterator(this, position);
     }
 
     iterator erase(const_iterator pos) noexcept
     {
-        if(this->_data && pos.index < this->size())
-        {
-            const uint32_t position = pos.index;
-            this->at(position)->~T();
-            std::memmove(this->at(position), this->at(position + 1), (this->size() - position - 1) * sizeof(T));
-            this->decr_size();
-            return iterator(this, position);
-        }
-        return this->end();
+        STDROMANO_ASSERT(this->_data != nullptr, "Vector has not been allocated");
+        STDROMANO_ASSERT(pos.index < this->size(), "Iterator position must be lower than vector size");
+
+        const uint32_t position = pos.index;
+
+        this->at(position)->~T();
+        std::memmove(this->at(position), this->at(position + 1), (this->size() - position - 1) * sizeof(T));
+        this->decr_size();
+
+        return iterator(this, position);
     }
 
     iterator erase(iterator first, iterator last) noexcept
     {
-        if(this->_data && first.index <= this->size() && first.index < last.index && last.index <= this->size())
+        STDROMANO_ASSERT(this->_data != nullptr, "Vector has not been allocated");
+
+        if(first.index <= this->size() && first.index < last.index && last.index <= this->size())
         {
             const uint32_t start_pos = first.index;
             const uint32_t count = last.index - first.index;
@@ -587,84 +609,92 @@ public:
                          this->at(start_pos + count),
                          (this->size() - start_pos - count) * sizeof(T));
             this->set_size(this->size() - count);
+
             return iterator(this, start_pos);
         }
+
         return this->end();
     }
 
     void remove(const uint32_t position) noexcept
     {
-        if(this->_data && position < this->size())
-        {
-            this->at(position)->~T();
-            std::memmove(this->at(position), this->at(position + 1), (this->size() - position - 1) * sizeof(T));
-            this->decr_size();
-        }
+        STDROMANO_ASSERT(this->_data != nullptr, "Vector has not been allocated");
+        STDROMANO_ASSERT(this->size() > 0, "No elements present in the vector");
+        STDROMANO_ASSERT(position < this->size(), "Position must be lower than the vector size");
+
+        this->at(position)->~T();
+        std::memmove(this->at(position), this->at(position + 1), (this->size() - position - 1) * sizeof(T));
+        this->decr_size();
     }
 
     T pop_back() noexcept
     {
-        if(this->_data && this->size() > 0)
-        {
-            this->decr_size();
-            T object = std::move((*this)[this->size()]);
-            (*this)[this->size()].~T();
-            return object;
-        }
-        return T{};
+        STDROMANO_ASSERT(this->_data != nullptr, "Vector has not been allocated");
+        STDROMANO_ASSERT(this->size() > 0, "No elements present in the vector");
+
+        T object = std::move_if_noexcept((*this)[this->size() - 1]);
+
+        (*this)[this->size() - 1].~T();
+
+        this->decr_size();
+
+        return object;
     }
 
     iterator find(const T& other) noexcept
     {
-        if(this->_data)
+        STDROMANO_ASSERT(this->_data != nullptr, "Vector has not been allocated");
+
+        for(uint32_t i = 0; i < this->size(); i++)
         {
-            for(uint32_t i = 0; i < this->size(); i++)
-            {
-                if(other == this->operator[](i))
-                    return iterator(this, i);
-            }
+            if(other == this->operator[](i))
+                return iterator(this, i);
         }
+
         return this->end();
     }
 
     const_iterator cfind(const T& other) const noexcept
     {
-        if(this->_data)
+        STDROMANO_ASSERT(this->_data != nullptr, "Vector has not been allocated");
+
+        for(uint32_t i = 0; i < this->size(); i++)
         {
-            for(uint32_t i = 0; i < this->size(); i++)
-            {
-                if(other == this->operator[](i))
-                    return const_iterator(this, i);
-            }
+            if(other == this->operator[](i))
+                return const_iterator(this, i);
         }
+
         return this->cend();
     }
 
     STDROMANO_FORCE_INLINE void shrink_to_fit() noexcept
     {
+        STDROMANO_ASSERT(this->_data != nullptr, "Vector has not been allocated");
+
         if(this->_capacity > this->_size)
+        {
             this->resize(this->size());
+        }
     }
 
     void clear() noexcept
     {
-        if(this->_data != nullptr)
+        STDROMANO_ASSERT(this->_data != nullptr, "Vector has not been allocated");
+
+        for(uint32_t i = 0; i < this->size(); i++)
         {
-            for(uint32_t i = 0; i < this->size(); i++)
-            {
-                this->operator[](i).~T();
-            }
-            this->set_size(0);
+            this->operator[](i).~T();
         }
+        this->set_size(0);
     }
 
     template <typename F = std::less<T> >
     STDROMANO_FORCE_INLINE void sort(F&& cmp = F()) noexcept
     {
-        if(this->_data && this->size() > 1)
-        {
-            std::qsort(this->data(), this->size(), sizeof(T), std::forward<F&&>(cmp));
-        }
+        STDROMANO_ASSERT(this->_data != nullptr, "Vector has not been allocated");
+        STDROMANO_ASSERT(this->size() > 1, "Size must be greater than one");
+
+        std::qsort(this->data(), this->size(), sizeof(T), std::forward<F&&>(cmp));
     }
 
     STDROMANO_FORCE_INLINE size_t memory_usage() const noexcept

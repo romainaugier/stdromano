@@ -63,6 +63,22 @@ log_error()
 
 log_info "Building stdromano"
 
+if [[ ! -d "vcpkg" ]]; then
+    log_info "Vcpkg can't be found, cloning and preparing it"
+    git clone https://github.com/microsoft/vcpkg.git
+    cd vcpkg
+    source bootstrap-vcpkg.sh
+    cd ..
+fi
+
+VCPKG_ROOT=$CD/vcpkg
+CMAKE_TOOL_FILE=$VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake
+
+if [[ $PATH != *$VCPKG_ROOT* ]]; then
+    log_info "Can't find vcpkg root in PATH, appending it"
+    PATH=$PATH:$VCPKG_ROOT
+fi
+
 for arg in "$@"
 do
     parse_args "$arg"

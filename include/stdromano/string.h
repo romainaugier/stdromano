@@ -43,7 +43,7 @@ private:
 
     void reallocate(size_t new_capacity) noexcept
     {
-        STDROMANO_ASSERT(!this->_is_ref && "Cannot modify a reference string");
+        STDROMANO_ASSERT(!this->_is_ref, "Cannot modify a reference string");
 
         char* new_data = (char*)mem_aligned_alloc((new_capacity + 1) * sizeof(char), STRING_ALIGNMENT);
         std::memcpy(new_data, this->data(), this->_size);
@@ -300,7 +300,7 @@ public:
 
     void push_back(char c)
     {
-        STDROMANO_ASSERT(!this->_is_ref && "Cannot modify a reference string");
+        STDROMANO_ASSERT(!this->_is_ref, "Cannot modify a reference string");
 
         if(this->_size >= this->_capacity)
         {
@@ -313,7 +313,7 @@ public:
 
     void appendc(const char* c, const size_t n = 0) noexcept
     {
-        STDROMANO_ASSERT(!this->_is_ref && "Cannot modify a reference string");
+        STDROMANO_ASSERT(!this->_is_ref, "Cannot modify a reference string");
 
         const size_t size = n == 0 ? std::strlen(c) : n;
 
@@ -328,7 +328,7 @@ public:
 
     void appends(const String& other) noexcept
     {
-        STDROMANO_ASSERT(!this->_is_ref && "Cannot modify a reference string");
+        STDROMANO_ASSERT(!this->_is_ref, "Cannot modify a reference string");
 
         if((this->_size + other._size + 1) > this->_capacity)
         {
@@ -342,14 +342,14 @@ public:
     template <typename... Args>
     void appendf(fmt::format_string<Args...> fmt, Args&&... args) noexcept
     {
-        STDROMANO_ASSERT(!this->_is_ref && "Cannot modify a reference string");
+        STDROMANO_ASSERT(!this->_is_ref, "Cannot modify a reference string");
 
         fmt::format_to(std::back_inserter(*this), fmt, std::forward<Args>(args)...);
     }
 
     void prependc(const char* c, const size_t n = 0) noexcept
     {
-        STDROMANO_ASSERT(!this->_is_ref && "Cannot modify a reference string");
+        STDROMANO_ASSERT(!this->_is_ref, "Cannot modify a reference string");
 
         const size_t size = n == 0 ? std::strlen(c) : n;
 
@@ -366,7 +366,7 @@ public:
 
     void prepends(const String& other) noexcept
     {
-        STDROMANO_ASSERT(!this->_is_ref && "Cannot modify a reference string");
+        STDROMANO_ASSERT(!this->_is_ref, "Cannot modify a reference string");
 
         if((this->_size + other._size + 1) > this->_capacity)
         {
@@ -382,7 +382,7 @@ public:
     template <typename... Args>
     void prependf(fmt::format_string<Args...> fmt, Args&&... args) noexcept
     {
-        STDROMANO_ASSERT(!this->_is_ref && "Cannot modify a reference string");
+        STDROMANO_ASSERT(!this->_is_ref, "Cannot modify a reference string");
 
         String tmp(fmt, std::forward<Args>(args)...);
 

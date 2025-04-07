@@ -422,6 +422,7 @@ int main()
     runner.add_test("MoveAssignment", TestMoveAssignment);
     runner.add_test("ZeroedString", TestZeroedString);
     runner.add_test("Replace", TestReplace);
+    runner.add_test("ZFill", TestZFill);
 
     runner.run_all();
 

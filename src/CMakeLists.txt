@@ -28,6 +28,8 @@ elseif(WIN32)
     target_link_libraries(${PROJECT_NAME} PUBLIC wsock32 ws2_32 Shlwapi Pathcch PowrProf)
 endif()
 
+target_link_libraries(${PROJECT_NAME} PRIVATE jemalloc_wrapper)
+
 target_include_directories(${PROJECT_NAME}
                            PUBLIC
                            $<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}/include>

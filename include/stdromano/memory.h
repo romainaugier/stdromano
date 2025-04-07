@@ -14,31 +14,23 @@
 #include <cstring>
 #include <immintrin.h>
 
-
 #if defined(STDROMANO_GCC)
 #include <alloca.h>
 #endif /* defined(STDROMANO_GCC) */
 
 STDROMANO_NAMESPACE_BEGIN
 
-static STDROMANO_FORCE_INLINE void* mem_alloc(const size_t size) { return std::malloc(size); }
+/* jemalloc wrappers */
 
-static STDROMANO_FORCE_INLINE void* mem_calloc(const size_t count, const size_t size)
-{
-    return std::calloc(count, size);
-}
+STDROMANO_API void* mem_alloc(const size_t size) noexcept;
 
-static STDROMANO_FORCE_INLINE void* mem_realloc(void* ptr, const size_t size) { return std::realloc(ptr, size); }
+STDROMANO_API void* mem_calloc(const size_t count, const size_t size) noexcept;
 
-static STDROMANO_FORCE_INLINE void* mem_crealloc(void* ptr, const size_t size)
-{
-    void* new_ptr = std::realloc(ptr, size);
-    if(new_ptr != nullptr)
-        std::memset(new_ptr, 0, size);
-    return new_ptr;
-}
+STDROMANO_API void* mem_realloc(void* ptr, const size_t size) noexcept;
 
-static STDROMANO_FORCE_INLINE void mem_free(void* ptr) { std::free(ptr); }
+STDROMANO_API void* mem_crealloc(void* ptr, const size_t size) noexcept;
+
+STDROMANO_API void mem_free(void* ptr) noexcept;
 
 #if defined(STDROMANO_MSVC)
 #define mem_alloca(size) _malloca(size)
@@ -46,12 +38,9 @@ static STDROMANO_FORCE_INLINE void mem_free(void* ptr) { std::free(ptr); }
 #define mem_alloca(size) __builtin_alloca(size)
 #endif /* defined(STDROMANO_MSVC) */
 
-static STDROMANO_FORCE_INLINE void* mem_aligned_alloc(const size_t size, const size_t alignment)
-{
-    return _mm_malloc(size, alignment);
-}
+STDROMANO_API void* mem_aligned_alloc(const size_t size, const size_t alignment) noexcept;
 
-static STDROMANO_FORCE_INLINE void mem_aligned_free(void* ptr) { _mm_free(ptr); }
+STDROMANO_API void mem_aligned_free(void* ptr) noexcept;
 
 static STDROMANO_FORCE_INLINE void mem_swap(void* a, void* b, const size_t size) noexcept
 {

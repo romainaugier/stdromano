@@ -44,7 +44,11 @@ Logger::Logger() : _logger("null")
 
     if(log_file == nullptr)
     {
+#if defined(STDROMANO_WIN)
         const char* temp = std::getenv("TEMP");
+#elif defined(STDROMANO_LINUX)
+        const char* temp = std::getenv("TMPDIR");
+#endif /* defined(STROMANO_WIN) */
 
         size_t buf_size = std::snprintf(NULL, 0, "%s/stdromano_log.txt", temp) + 1;
         log_file = static_cast<char*>(mem_alloca(buf_size * sizeof(char)));

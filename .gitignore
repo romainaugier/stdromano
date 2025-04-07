@@ -64,3 +64,6 @@ install
 # CMake generated files
 cmake/stdromano*
 stdromanoConfigVersion.cmake
+
+# vcpkg repository
+vcpkg

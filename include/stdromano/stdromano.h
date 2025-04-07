@@ -129,11 +129,17 @@
 #define CONCAT_(prefix, suffix) prefix##suffix
 #define CONCAT(prefix, suffix) CONCAT_(prefix, suffix)
 
-#define STDROMANO_ASSERT(expression) assert(expression)
+#define STDROMANO_ASSERT(expr, message)                                                                  \
+    if(!(expr))                                                                                          \
+    {                                                                                                    \
+        std::fprintf(stderr, "Assertion failed in file %s at line %d: %s", __FILE__, __LINE__, message); \
+        std::abort();                                                                                    \
+    }
+
 #define STDROMANO_STATIC_ASSERT(expr, message) static_assert(expr, message)
-#define STDROMANO_NOT_IMPLEMENTED                                                                                      \
-    std::fprintf(stderr, "Function " STDROMANO_FUNCTION " not implemented");                                           \
-    std::exit(1);
+#define STDROMANO_NOT_IMPLEMENTED                                                                                          \
+    std::fprintf(stderr, "Called function %s that is not implemented (%s:%d)", ROMANORENDER_FUNCTION, __FILE__, __LINE__); \
+    std::exit(1)
 
 #define STDROMANO_NON_COPYABLE(__class__)                                                                              \
     __class__(const __class__&) = delete;                                                                              \

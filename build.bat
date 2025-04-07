@@ -1,4 +1,5 @@
 @echo off
+setlocal enabledelayedexpansion
 
 rem SPDX-License-Identifier: BSD-3-Clause 
 rem Copyright (c) 2025 - Present Romain Augier 
@@ -7,6 +8,24 @@ rem All rights reserved.
 rem Little utility batch script to build the library
 
 call :LogInfo "Building stdromano"
+
+if not exist vcpkg (
+    call :LogInfo "Vcpkg can't be found, cloning and preparing it"
+    git clone https://github.com/microsoft/vcpkg.git
+    cd vcpkg
+    call bootstrap-vcpkg.bat
+    cd ..
+)
+
+set VCPKG_ROOT=%CD%/vcpkg
+set CMAKE_TOOLCHAIN_FILE=%VCPKG_ROOT%/scripts/buildsystems/vcpkg.cmake
+
+echo.!PATH! | findstr /C:"!VCPKG_ROOT!" 1>nul
+
+if %errorlevel% equ 1 (
+    call :LogInfo "Can't find vcpkg root in PATH, appending it"
+    set PATH=!PATH!;!VCPKG_ROOT!
+)
 
 set BUILDTYPE=Release
 set RUNTESTS=0

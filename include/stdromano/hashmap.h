@@ -68,7 +68,7 @@ private:
         alignas(value_type) unsigned char _storage[sizeof(value_type)];
 
     public:
-        Bucket() noexcept : _hash(0), _probe_length(EMPTY_BUCKET_MARKER) { STDROMANO_ASSERT(this->is_empty()); }
+        Bucket() noexcept : _hash(0), _probe_length(EMPTY_BUCKET_MARKER) { STDROMANO_ASSERT(this->is_empty(), "Bucket is not empty"); }
 
         Bucket(const Bucket& other) noexcept(std::is_nothrow_copy_constructible<value_type>::value)
         {
@@ -80,7 +80,7 @@ private:
                 this->_probe_length = other._probe_length;
             }
 
-            STDROMANO_ASSERT(this->is_empty() == other.is_empty());
+            STDROMANO_ASSERT(this->is_empty() == other.is_empty(), "Both buckets should have the same value for empty");
         }
 
         Bucket(Bucket&& other) noexcept(std::is_nothrow_move_constructible<value_type>::value)
@@ -93,7 +93,7 @@ private:
                 this->_probe_length = other._probe_length;
             }
 
-            STDROMANO_ASSERT(this->is_empty() == other.is_empty());
+            STDROMANO_ASSERT(this->is_empty() == other.is_empty(), "Both buckets should have the same value for empty");
         }
 
         Bucket& operator=(const Bucket& other) noexcept(std::is_nothrow_copy_assignable<value_type>::value)
@@ -126,8 +126,8 @@ private:
 
         void swap_bucket_content(value_type& value, uint32_t& hash, int16_t& probe_length)
         {
-            STDROMANO_ASSERT(!this->is_empty() && "Cannot swap an empty bucket");
-            STDROMANO_ASSERT(probe_length > this->_probe_length && "Cannot swap a bucket with a lower probe_length");
+            STDROMANO_ASSERT(!this->is_empty(), "Cannot swap an empty bucket");
+            STDROMANO_ASSERT(probe_length > this->_probe_length, "Cannot swap a bucket with a lower probe_length");
 
             std::swap(value, this->value());
             std::swap(hash, this->_hash);
@@ -137,15 +137,15 @@ private:
         template <typename... Args>
         void set_bucket_content(const uint32_t hash, const int16_t probe_length, Args&&... value_args)
         {
-            STDROMANO_ASSERT(this->is_empty() && "Cannot set content of non empty bucket");
-            STDROMANO_ASSERT(probe_length >= 0 && "Cannot set content of bucket with uninitialized probe_length");
+            STDROMANO_ASSERT(this->is_empty(), "Cannot set content of non empty bucket");
+            STDROMANO_ASSERT(probe_length >= 0, "Cannot set content of bucket with uninitialized probe_length");
 
             ::new(static_cast<void*>(std::addressof(this->_storage))) value_type(std::forward<Args>(value_args)...);
 
             this->_hash = hash;
             this->_probe_length = probe_length;
 
-            STDROMANO_ASSERT(!this->is_empty() && "Set bucket content failed");
+            STDROMANO_ASSERT(!this->is_empty(), "Set bucket content failed");
         }
 
         STDROMANO_FORCE_INLINE value_type& value() noexcept { return *reinterpret_cast<value_type*>(this->_storage); }
