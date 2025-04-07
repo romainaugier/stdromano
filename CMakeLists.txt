@@ -40,26 +40,22 @@ endif()
 if(UNIX)
     find_package(PkgConfig)
 
-    pkg_search_module(jemalloc REQUIRED)
+    pkg_search_module(JEMALLOC REQUIRED jemalloc)
 else()
     set(JEMALLOC_FOUND 0)
 endif()
 
 if(JEMALLOC_FOUND)
-  message(STATUS "Found jemalloc via pkg-config")
-  message(STATUS "jemalloc include dirs: ${JEMALLOC_INCLUDE_DIRS}")
-  message(STATUS "jemalloc library dirs: ${JEMALLOC_LIBRARY_DIRS}")
-  message(STATUS "jemalloc libraries: ${JEMALLOC_LIBRARIES}")
-  
-  add_library(jemalloc_wrapper INTERFACE)
-  target_include_directories(jemalloc_wrapper INTERFACE ${JEMALLOC_INCLUDE_DIRS})
-  target_link_directories(jemalloc_wrapper INTERFACE ${JEMALLOC_LIBRARY_DIRS})
-  target_link_libraries(jemalloc_wrapper INTERFACE ${JEMALLOC_LIBRARIES})
-  target_compile_definitions(jemalloc_wrapper INTERFACE HAVE_JEMALLOC=1)
-  
-  add_library(your_library src/your_library.cpp)
-  target_link_libraries(your_library PRIVATE jemalloc_wrapper)
-  
+    message(STATUS "Found jemalloc via pkg-config")
+    message(STATUS "jemalloc include dirs: ${JEMALLOC_INCLUDE_DIRS}")
+    message(STATUS "jemalloc library dirs: ${JEMALLOC_LIBRARY_DIRS}")
+    message(STATUS "jemalloc libraries: ${JEMALLOC_LIBRARIES}")
+    
+    add_library(jemalloc_wrapper INTERFACE)
+    target_include_directories(jemalloc_wrapper INTERFACE ${JEMALLOC_INCLUDE_DIRS})
+    target_link_directories(jemalloc_wrapper INTERFACE ${JEMALLOC_LIBRARY_DIRS})
+    target_link_libraries(jemalloc_wrapper INTERFACE ${JEMALLOC_LIBRARIES})
+    target_compile_definitions(jemalloc_wrapper INTERFACE HAVE_JEMALLOC=1)
 else()
     find_path(JEMALLOC_INCLUDE_DIR jemalloc/jemalloc.h
         PATHS

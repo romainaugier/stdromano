@@ -11,7 +11,7 @@ call :LogInfo "Building stdromano"
 
 if not exist vcpkg (
     call :LogInfo "Vcpkg can't be found, cloning and preparing it"
-    git clone https://github.com/microsoft/vcpkg.git
+    git clone https://github.com/romainaugier/vcpkg.git
     cd vcpkg
     call bootstrap-vcpkg.bat
     cd ..

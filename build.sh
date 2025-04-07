@@ -61,28 +61,35 @@ log_error()
     echo "[ERROR] : $1"
 }
 
-log_info "Building stdromano"
+# Wrap to avoid command line args propagation
 
-if [[ ! -d "vcpkg" ]]; then
-    log_info "Vcpkg can't be found, cloning and preparing it"
-    git clone https://github.com/microsoft/vcpkg.git
-    cd vcpkg
+source_vcpkg_bootstrap()
+{
     source bootstrap-vcpkg.sh
-    cd ..
-fi
+}
 
-VCPKG_ROOT=$CD/vcpkg
-CMAKE_TOOL_FILE=$VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake
-
-if [[ $PATH != *$VCPKG_ROOT* ]]; then
-    log_info "Can't find vcpkg root in PATH, appending it"
-    PATH=$PATH:$VCPKG_ROOT
-fi
+log_info "Building stdromano"
 
 for arg in "$@"
 do
     parse_args "$arg"
 done
+
+if [[ ! -d "vcpkg" ]]; then
+    log_info "Vcpkg can't be found, cloning and preparing it"
+    git clone https://github.com/romainaugier/vcpkg.git
+    cd vcpkg
+    source_vcpkg_bootstrap
+    cd ..
+fi
+
+export VCPKG_ROOT=$PWD/vcpkg
+export CMAKE_TOOLCHAIN_FILE=$VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake
+
+if [[ $PATH != *$VCPKG_ROOT* ]]; then
+    log_info "Can't find vcpkg root in PATH, appending it"
+    export PATH=$PATH:$VCPKG_ROOT
+fi
 
 log_info "Build type: $BUILDTYPE"
 log_info "Build version: $VERSION"
