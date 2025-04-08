@@ -3,6 +3,8 @@
 // All rights reserved.
 
 #include "stdromano/cpu.h"
+#include "stdromano/simd.h"
+#include "stdromano/logger.h"
 
 #include <cstdio>
 
@@ -24,6 +26,9 @@ void STDROMANO_LIB_ENTRY lib_entry(void)
     std::printf("stdromano entry\n");
 #endif // STDROMANO_DEBUG
     stdromano::cpu_check();
+    stdromano::simd_check_vectorization();
+
+    stdromano::log_debug("stdromano vectorization mode: {}\n", stdromano::simd_get_vectorization_mode_as_string());
 }
 
 void STDROMANO_LIB_EXIT lib_exit(void)

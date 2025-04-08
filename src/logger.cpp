@@ -40,6 +40,10 @@ Logger::Logger() : _logger("null")
         console_sink->set_level(spdlog::level::debug);
     }
 
+#if STDROMANO_DEBUG
+    console_sink->set_level(spdlog::level::debug);
+#endif /* STDROMANO_DEBUG */
+
     char* log_file = std::getenv("STDROMANO_LOG_FILE");
 
     if(log_file == nullptr)

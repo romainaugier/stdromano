@@ -17,12 +17,17 @@ STDROMANO_NAMESPACE_BEGIN
 
 #if defined(STDROMANO_MSVC)
 #include <intrin.h>
-#define cpuid(__regs, __mode) __cpuid(__regs, __mode)
+#define cpuid(__regs, __eax) __cpuid(__regs, __eax)
+#define cpuidex(__regs, __eax, __ecx) __cpuidex(__regs, __eax, __ecx)
 #else
-#define cpuid(__regs, __mode)                                                                                          \
-    asm volatile("cpuid"                                                                                               \
-                 : "=a"((__regs)[0]), "=b"((__regs)[1]), "=c"((__regs)[2]), "=d"((__regs)[3])                          \
-                 : "a"(__mode), "c"(0))
+#define cpuid(__regs, __eax)                                                                               \
+    asm volatile("cpuid"                                                                                   \
+                 : "=a"((__regs)[0]), "=b"((__regs)[1]), "=c"((__regs)[2]), "=d"((__regs)[3])              \
+                 : "a"(__eax), "c"(0))
+#define cpuidex(__regs, __eax, __ecx)                                                                      \
+    asm volatile("cpuid"                                                                                   \
+                 : "=a"((__regs)[0]), "=b"((__regs)[1]), "=c"((__regs)[2]), "=d"((__regs)[3])              \
+                 : "a"(__eax), "c"(__ecx))
 #endif /* defined(STDROMANO_MSVC) */
 
 STDROMANO_FORCE_INLINE uint64_t cpu_rdtsc() noexcept { return __rdtsc(); }

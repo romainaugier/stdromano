@@ -72,6 +72,11 @@ public:
         this->_logger.sinks()[0]->set_level(static_cast<spdlog::level::level_enum>(log_level));
     }
 
+    void flush() _NOEXCEPT_FNPTR
+    {
+        this->_logger.flush();
+    }
+
 private:
     Logger();
     ~Logger();
@@ -86,6 +91,7 @@ private:
 #define log_trace(...) Logger::get_instance().trace(__VA_ARGS__)
 #define log_critical(...) Logger::get_instance().critical(__VA_ARGS__)
 #define set_log_level(level) Logger::get_instance().set_level(level)
+#define log_flush() Logger::get_instance().flush()
 
 STDROMANO_NAMESPACE_END
 

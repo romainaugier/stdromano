@@ -9,7 +9,8 @@
 #define __STDROMANO_VECTOR
 
 #include "stdromano/memory.h"
-#include <algorithm> // For std::sort
+
+#include <algorithm>
 #include <cstdint>
 #include <functional>
 

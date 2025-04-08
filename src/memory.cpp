@@ -6,6 +6,8 @@
 
 #include "jemalloc/jemalloc.h"
 
+#include <algorithm>
+
 STDROMANO_NAMESPACE_BEGIN
 
 void* mem_alloc(const size_t size) noexcept 
@@ -75,5 +77,59 @@ void format_byte_size(float size, char* buffer) noexcept
     std::snprintf(buffer, 16, "%.02f %s", size, units[unit]);
 }
 
+Arena::Arena(const size_t initial_size)
+{
+    this->_data = mem_alloc(initial_size);
+    this->_offset = 0;
+    this->_capacity = initial_size;
+}
+
+void Arena::grow(const size_t min_size) noexcept
+{
+    const size_t min_capacity = this->_capacity + min_size;
+    const size_t new_capacity = std::max(static_cast<size_t>(static_cast<float>(this->_capacity) * ARENA_GROWTH_RATE),
+                                         min_capacity);
+
+    this->resize(new_capacity);
+}
+
+void Arena::clear() noexcept
+{
+    Destructor* destructor = this->_destructors;
+
+    while(destructor != nullptr)
+    {
+        destructor->destroy_func(destructor->object_ptr);
+        destructor = destructor->next;
+    }
+
+    this->_destructors = nullptr;
+    this->_offset = 0;
+}
+
+void Arena::resize(const size_t new_capacity) noexcept
+{
+    if(new_capacity <= this->_capacity)
+    {
+        return;
+    }
+
+    void* new_data_ptr = mem_realloc(this->_data, new_capacity);
+
+    if(new_data_ptr == nullptr)
+    {
+        return;
+    }
+
+    this->_data = new_data_ptr;
+    this->_capacity = new_capacity;
+}
+
+Arena::~Arena()
+{
+    this->clear();
+
+    mem_free(this->_data);
+}
 
 STDROMANO_NAMESPACE_END

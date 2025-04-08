@@ -211,6 +211,13 @@ public:
         {
             mem_aligned_free(this->_heap_data);
         }
+
+        this->_size = 0;
+        this->_capacity = 0;
+        this->_heap_data = nullptr;
+        this->_local_data[0] = '\0';
+        this->_is_local = 1;
+        this->_is_ref = 0;
     }
 
     STDROMANO_FORCE_INLINE char& operator[](const size_t i) noexcept

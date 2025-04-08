@@ -301,6 +301,8 @@ TEST_CASE(test_stress_emplace_vs_find_existing)
 
 int main()
 {
+    stdromano::set_log_level(stdromano::LogLevel::Debug);
+
     TestRunner runner;
 
     runner.add_test("Basic Operations", test_basic_operations);
