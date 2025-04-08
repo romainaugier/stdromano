@@ -50,4 +50,30 @@ void mem_aligned_free(void* ptr) noexcept
     je_free(ptr);
 }
 
+constexpr const char* units[4] = {"Bytes", "Gb", "Mb", "Kb"};
+
+void format_byte_size(float size, char* buffer) noexcept
+{
+    size_t unit = 0;
+
+    if(size > 1000000000)
+    {
+        unit = 1;
+        size = size / 1000000000;
+    }
+    else if(size > 1000000)
+    {
+        unit = 2;
+        size = size / 1000000;
+    }
+    else if(size > 1e3)
+    {
+        unit = 3;
+        size = size / 1000;
+    }
+
+    std::snprintf(buffer, 16, "%.02f %s", size, units[unit]);
+}
+
+
 STDROMANO_NAMESPACE_END
