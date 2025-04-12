@@ -72,7 +72,7 @@ public:
         this->_logger.sinks()[0]->set_level(static_cast<spdlog::level::level_enum>(log_level));
     }
 
-    void flush() _NOEXCEPT_FNPTR
+    void flush() noexcept
     {
         this->_logger.flush();
     }
