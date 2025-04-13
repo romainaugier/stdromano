@@ -10,7 +10,12 @@
 #include "Shlwapi.h"
 #include "commdlg.h"
 #elif defined(STDROMANO_LINUX)
+#if defined(STDROMANO_GCC)
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
 #include <gtk/gtk.h>
+#pragma GCC diagnostic pop
+#endif /* defined(STDROMANO_GCC) */
 #include <limits.h>
 #include <pwd.h>
 #include <sys/stat.h>
@@ -108,7 +113,7 @@ String<> load_file_content(const String<>& file_path, const char* mode) noexcept
     std::fread(file_content.data(), sizeof(char), file_size, file_handle);
     std::fclose(file_handle);
 
-    return std::move(file_content);
+    return file_content;
 }
 
 ListDirIterator::~ListDirIterator()
@@ -448,7 +453,8 @@ String<> open_file_dialog(FileDialogMode_ mode,
     {
         gtk_main_iteration();
     }
-    return std::move(result);
+
+    return result;
 #endif /* defined(STDROMANO_WIN) */
 }
 

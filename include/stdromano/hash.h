@@ -17,8 +17,8 @@ static STDROMANO_FORCE_INLINE uint32_t hash_fnv1a(char* data, const size_t n)
 {
     uint32_t result = static_cast<uint32_t>(0x811c9dc5UL);
 
-#if defined(STDROMANO_CLANG) || defined(STDROMANO_GCC)
-#pragma nounroll
+#if defined(STDROMANO_GCC)
+#pragma GCC unroll 0
 #endif /* defined(ROMANO_CLANG) || defined(ROMANO_GCC) */
     for(size_t i = 0; i < n; i++)
     {
@@ -33,8 +33,8 @@ static STDROMANO_FORCE_INLINE uint32_t hash_fnv1a(const char* data)
 {
     uint32_t result = static_cast<uint32_t>(0x811c9dc5UL);
 
-#if defined(STDROMANO_CLANG) || defined(STDROMANO_GCC)
-#pragma nounroll
+#if defined(STDROMANO_GCC)
+#pragma GCC unroll 0
 #endif /* defined(ROMANO_CLANG) || defined(ROMANO_GCC) */
     while(*data != '\0')
     {
@@ -74,8 +74,8 @@ static STDROMANO_FORCE_INLINE uint32_t hash_fnv1a_pippip(const char* str, size_t
         cycles = ((n - 1) >> 4) + 1;
         nd_head = n - (cycles << 3);
 
-#if defined(STDROMANO_CLANG) || defined(STDROMANO_GCC)
-#pragma nounroll
+#if defined(STDROMANO_GCC)
+#pragma GCC unroll 0
 #endif /* defined(STDROMANO_CLANG) || defined(STDROMANO_GCC) */
 
         for(; cycles--; _str_ptr += 8)

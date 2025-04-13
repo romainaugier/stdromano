@@ -17,7 +17,7 @@ function(set_target_options target_name)
         set(CMAKE_C_FLAGS "-D_FORTIFY_SOURCES=2 -pipe -Wall -pedantic-errors")
         set(CMAKE_CXX_FLAGS "-D_FORTIFY_SOURCES=2 -pipe -Wall -pedantic-errors")
 
-        set(COMPILE_OPTIONS -D_FORTIFY_SOURCES=2 -pipe -Wall -pedantic-errors $<$<CONFIG:Debug>:-fsanitize=leak -fsanitize=address> $<$<CONFIG:Release,RelWithDebInfo>:-O3 -ftree-vectorizer-verbose=2> -mveclibabi=svml -mavx2 -mfma)
+        set(COMPILE_OPTIONS -D_FORTIFY_SOURCES=2 -pipe -Wall -pedantic-errors $<$<CONFIG:Debug,RelwithDebInfo>:-fsanitize=leak -fsanitize=address> $<$<CONFIG:Release,RelWithDebInfo>:-O3 -ftree-vectorizer-verbose=2> -mveclibabi=svml -mavx2 -mfma)
 
         target_compile_options(${target_name} PRIVATE $<$<COMPILE_LANGUAGE:CXX>:${COMPILE_OPTIONS}>)
 

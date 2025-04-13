@@ -12,6 +12,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <type_traits>
 #include <immintrin.h>
 
 #if defined(STDROMANO_GCC)
@@ -97,7 +98,7 @@ class STDROMANO_API Arena
     template<typename T>
     static void dtor_func(void* ptr)
     {
-        static_cast<T*>(ptr)->~T();
+        reinterpret_cast<T*>(ptr)->~T();
     }
 
 public: 
@@ -112,7 +113,7 @@ public:
     template<typename T, typename... Args>
     T* emplace(Args... args) noexcept
     {
-        constexpr bool needs_destructor = !__has_trivial_destructor(T);
+        constexpr bool needs_destructor = !std::is_trivially_destructible<T>::value;
         constexpr size_t object_size = sizeof(T);
         constexpr size_t dtor_size = needs_destructor ? sizeof(Destructor) : 0;
         constexpr size_t total_size = object_size + dtor_size;

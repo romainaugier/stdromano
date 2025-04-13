@@ -215,7 +215,6 @@ public:
         this->_size = 0;
         this->_capacity = 0;
         this->_heap_data = nullptr;
-        this->_local_data[0] = '\0';
         this->_is_local = 1;
         this->_is_ref = 0;
     }
@@ -261,7 +260,8 @@ public:
         s._capacity = static_cast<uint32_t>(size);
         s._is_local = 0;
         s._is_ref = 1;
-        return std::move(s);
+
+        return s;
     }
 
     static String make_ref(const String& str) noexcept { return String::make_ref(str.data(), str.size()); }
@@ -274,10 +274,10 @@ public:
         std::memset(s.data(), 0, s.size() + 1);
         s._size = size;
 
-        return std::move(s);
+        return s;
     }
 
-    String copy() const noexcept { return std::move(String("{}", fmt::string_view(this->c_str(), this->size()))); }
+    String copy() const noexcept { return String("{}", fmt::string_view(this->c_str(), this->size())); }
 
     STDROMANO_FORCE_INLINE const char* data() const noexcept
     {
@@ -411,7 +411,7 @@ public:
             }
         }
 
-        return std::move(result);
+        return result;
     }
 
     String lower() const noexcept
@@ -429,7 +429,7 @@ public:
             }
         }
 
-        return std::move(result);
+        return result;
     }
 
     String capitalize() const noexcept
@@ -449,7 +449,7 @@ public:
 
         result[0] = to_upper(result[0]);
 
-        return std::move(result);
+        return result;
     }
 
     String lstrip(char c = ' ') const noexcept
