@@ -121,7 +121,9 @@ static STDROMANO_FORCE_INLINE int64_t hash_murmur_64(int64_t x)
     return x;
 }
 
-STDROMANO_API uint32_t hash_murmur3(const void* key, const size_t len, const uint32_t seed) noexcept;
+STDROMANO_API uint32_t hash_murmur3(const void* key,
+                                    const size_t len,
+                                    const uint32_t seed) noexcept;
 
 STDROMANO_NAMESPACE_END
 

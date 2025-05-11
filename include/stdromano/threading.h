@@ -13,7 +13,6 @@
 #include <functional>
 #include <mutex>
 
-
 #if defined(STDROMANO_WIN)
 #include "Windows.h"
 #elif defined(STDROMANO_LINUX)
@@ -47,8 +46,11 @@ class Mutex
 {
     std::atomic<bool> _flag;
 
-public:
-    Mutex() { this->_flag.store(false); }
+  public:
+    Mutex()
+    {
+        this->_flag.store(false);
+    }
 
     STDROMANO_FORCE_INLINE void lock() noexcept
     {
@@ -70,7 +72,7 @@ class ScopedLock
 
 class STDROMANO_API Thread
 {
-private:
+  private:
     thread_handle _handle;
     std::function<void()> _task;
 
@@ -96,7 +98,7 @@ private:
 
     bool _running = false;
 
-public:
+  public:
     Thread(std::function<void()> func, bool daemon = false, bool detached = false)
     {
         this->_task = std::move(func);
@@ -157,10 +159,14 @@ STDROMANO_FORCE_INLINE void thread_sleep(const size_t sleep_duration_ms) noexcep
 
 class STDROMANO_API ThreadPoolWork
 {
-public:
-    ThreadPoolWork() {}
+  public:
+    ThreadPoolWork()
+    {
+    }
 
-    virtual ~ThreadPoolWork() {}
+    virtual ~ThreadPoolWork()
+    {
+    }
 
     virtual void execute() = 0;
 };
@@ -171,8 +177,11 @@ class STDROMANO_API ThreadPool
     {
         std::function<void()> _func;
 
-    public:
-        explicit LambdaWork(std::function<void()> func) : _func(std::move(func)) {}
+      public:
+        explicit LambdaWork(std::function<void()> func)
+            : _func(std::move(func))
+        {
+        }
 
         ~LambdaWork() override = default;
 
@@ -185,7 +194,7 @@ class STDROMANO_API ThreadPool
         }
     };
 
-public:
+  public:
     ThreadPool(const int64_t workers_count = -1);
 
     ~ThreadPool();
@@ -200,11 +209,17 @@ public:
 
     void wait() const noexcept;
 
-    bool is_started() const noexcept { return this->_started.load(); }
+    bool is_started() const noexcept
+    {
+        return this->_started.load();
+    }
 
-    bool is_stopped() const noexcept { return this->_stop.load(); }
+    bool is_stopped() const noexcept
+    {
+        return this->_stop.load();
+    }
 
-private:
+  private:
     moodycamel::ConcurrentQueue<ThreadPoolWork*> _work_queue;
     Thread* _workers;
 
@@ -220,7 +235,7 @@ private:
 
 class STDROMANO_API GlobalThreadPool
 {
-public:
+  public:
     static GlobalThreadPool& get_instance() noexcept
     {
         static GlobalThreadPool tp;
@@ -230,32 +245,34 @@ public:
     GlobalThreadPool(const GlobalThreadPool&) = delete;
     GlobalThreadPool& operator=(const GlobalThreadPool&) = delete;
 
-    bool add_work(ThreadPoolWork* work) noexcept { return this->_tp->add_work(std::forward<ThreadPoolWork*>(work)); }
+    bool add_work(ThreadPoolWork* work) noexcept
+    {
+        return this->_tp->add_work(std::forward<ThreadPoolWork*>(work));
+    }
 
     bool add_work(std::function<void()>&& work) noexcept
     {
-        return this->_tp->add_work(std::forward<std::function<void()>&&>(work));
+        return this->_tp->add_work(std::forward<std::function<void()>>(work));
     }
 
-    void wait() const noexcept { return this->_tp->wait(); }
+    void wait() const noexcept
+    {
+        return this->_tp->wait();
+    }
 
     void stop() noexcept
     {
-        this->_stopped = true;
         this->~GlobalThreadPool();
     }
 
-private:
+  private:
     GlobalThreadPool();
     ~GlobalThreadPool();
 
     ThreadPool* _tp = nullptr;
-
-    bool _started = false;
-    bool _stopped = false;
 };
 
-/* Macro to make the code more undestandable and readable */
+/* Macro to make the code more understandable and readable */
 #define global_threadpool GlobalThreadPool::get_instance()
 
 STDROMANO_API void atexit_handler_global_threadpool() noexcept;

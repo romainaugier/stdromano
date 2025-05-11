@@ -36,15 +36,14 @@
 #define STDROMANO_VERSION_REVISION 0
 #endif /* !defined(STDROMANO_VERSION_REVISION) */
 
-#define STDROMANO_VERSION_STR                                                                                          \
-    STDROMANO_STRIFY_MACRO(STDROMANO_VERSION_MAJOR)                                                                    \
-    "." STDROMANO_STRIFY_MACRO(STDROMANO_VERSION_MINOR) "." STDROMANO_STRIFY_MACRO(                                    \
-        STDROMANO_VERSION_PATCH) "." STDROMANO_STRIFY_MACRO(STDROMANO_VERSION_REVISION)
+#define STDROMANO_VERSION_STR                                                                      \
+    STDROMANO_STRIFY_MACRO(STDROMANO_VERSION_MAJOR)                                                \
+    "." STDROMANO_STRIFY_MACRO(STDROMANO_VERSION_MINOR) "." STDROMANO_STRIFY_MACRO(                \
+                   STDROMANO_VERSION_PATCH) "." STDROMANO_STRIFY_MACRO(STDROMANO_VERSION_REVISION)
 
 #include <cassert>
 #include <cstddef>
 #include <cstdint>
-
 
 #if INTPTR_MAX == INT64_MAX || defined(__x86_64__)
 #define STDROMANO_X64
@@ -107,8 +106,8 @@
 #endif /* defined(STDROMANO_BUILD_SHARED) */
 
 #if defined __cplusplus
-#define STDROMANO_CPP_ENTER                                                                                            \
-    extern "C"                                                                                                         \
+#define STDROMANO_CPP_ENTER                                                                        \
+    extern "C"                                                                                     \
     {
 #define STDROMANO_CPP_END }
 #else
@@ -129,22 +128,30 @@
 #define CONCAT_(prefix, suffix) prefix##suffix
 #define CONCAT(prefix, suffix) CONCAT_(prefix, suffix)
 
-#define STDROMANO_ASSERT(expr, message)                                                                  \
-    if(!(expr))                                                                                          \
-    {                                                                                                    \
-        std::fprintf(stderr, "Assertion failed in file %s at line %d: %s", __FILE__, __LINE__, message); \
-        std::abort();                                                                                    \
+#define STDROMANO_ASSERT(expr, message)                                                            \
+    if(!(expr))                                                                                    \
+    {                                                                                              \
+        std::fprintf(stderr,                                                                       \
+                     "Assertion failed in file %s at line %d: %s",                                 \
+                     __FILE__,                                                                     \
+                     __LINE__,                                                                     \
+                     message);                                                                     \
+        std::abort();                                                                              \
     }
 
 #define STDROMANO_STATIC_ASSERT(expr, message) static_assert(expr, message)
-#define STDROMANO_NOT_IMPLEMENTED                                                                                          \
-    std::fprintf(stderr, "Called function %s that is not implemented (%s:%d)", ROMANORENDER_FUNCTION, __FILE__, __LINE__); \
+#define STDROMANO_NOT_IMPLEMENTED                                                                  \
+    std::fprintf(stderr,                                                                           \
+                 "Called function %s that is not implemented (%s:%d)",                             \
+                 ROMANORENDER_FUNCTION,                                                            \
+                 __FILE__,                                                                         \
+                 __LINE__);                                                                        \
     std::exit(1)
 
-#define STDROMANO_NON_COPYABLE(__class__)                                                                              \
-    __class__(const __class__&) = delete;                                                                              \
-    __class__(__class__&&) = delete;                                                                                   \
-    const __class__& operator=(const __class__&) = delete;                                                             \
+#define STDROMANO_NON_COPYABLE(__class__)                                                          \
+    __class__(const __class__&) = delete;                                                          \
+    __class__(__class__&&) = delete;                                                               \
+    const __class__& operator=(const __class__&) = delete;                                         \
     void operator=(__class__&&) = delete;
 
 #if defined(STDROMANO_MSVC)
@@ -169,18 +176,18 @@
 #define STDROMANO_DEBUG 0
 #endif /* defined(DEBUG_BUILD) */
 
-#define STDROMANO_NAMESPACE_BEGIN                                                                                      \
-    namespace stdromano                                                                                                \
+#define STDROMANO_NAMESPACE_BEGIN                                                                  \
+    namespace stdromano                                                                            \
     {
 #define STDROMANO_NAMESPACE_END }
 
-#define STDROMANO_ATEXIT_REGISTER(func, do_exit)                                                                       \
-    int res_##func = std::atexit(func);                                                                                \
-    if(res_##func != 0)                                                                                                \
-    {                                                                                                                  \
-        std::fprintf(stderr, "Cannot register function \"" #func "\" in atexit");                                      \
-        if(do_exit)                                                                                                    \
-            std::exit(1);                                                                                              \
+#define STDROMANO_ATEXIT_REGISTER(func, do_exit)                                                   \
+    int res_##func = std::atexit(func);                                                            \
+    if(res_##func != 0)                                                                            \
+    {                                                                                              \
+        std::fprintf(stderr, "Cannot register function \"" #func "\" in atexit");                  \
+        if(do_exit)                                                                                \
+            std::exit(1);                                                                          \
     }
 
 #endif /* !defined(__STDROMANO) */

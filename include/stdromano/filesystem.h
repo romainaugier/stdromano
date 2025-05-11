@@ -25,7 +25,8 @@ STDROMANO_API String<> fs_filename(const String<>& path) noexcept;
 
 STDROMANO_API String<> expand_from_executable_dir(const String<>& path_to_expand) noexcept;
 
-STDROMANO_API String<> load_file_content(const String<>& file_path, const char* mode = "rb") noexcept;
+STDROMANO_API String<> load_file_content(const String<>& file_path,
+                                         const char* mode = "rb") noexcept;
 
 enum ListDirFlags : uint32_t
 {
@@ -37,10 +38,12 @@ enum ListDirFlags : uint32_t
 
 class STDROMANO_API ListDirIterator
 {
-public:
-    friend STDROMANO_API bool fs_list_dir(ListDirIterator&, const String<>&, const uint32_t) noexcept;
+  public:
+    friend STDROMANO_API bool fs_list_dir(ListDirIterator&,
+                                          const String<>&,
+                                          const uint32_t) noexcept;
 
-private:
+  private:
     String<> _directory_path;
 
 #if defined(STDROMANO_WIN)
@@ -51,7 +54,7 @@ private:
     struct dirent* _entry = nullptr;
 #endif /* defined(STDROMANO_WIN) */
 
-public:
+  public:
     ListDirIterator() = default;
 
     ~ListDirIterator();
@@ -63,7 +66,9 @@ public:
     bool is_directory() const noexcept;
 };
 
-STDROMANO_API bool fs_list_dir(ListDirIterator& it, const String<>& directory_path, const uint32_t flags) noexcept;
+STDROMANO_API bool fs_list_dir(ListDirIterator& it,
+                               const String<>& directory_path,
+                               const uint32_t flags) noexcept;
 
 enum FileDialogMode_ : uint32_t
 {
@@ -74,7 +79,7 @@ enum FileDialogMode_ : uint32_t
 
 // filter should be formatted like: *.h|*.cpp
 
-STDROMANO_API String<> open_file_dialog(FileDialogMode_ mode, 
+STDROMANO_API String<> open_file_dialog(FileDialogMode_ mode,
                                         const String<>& title,
                                         const String<>& initial_path,
                                         const String<>& filter) noexcept;

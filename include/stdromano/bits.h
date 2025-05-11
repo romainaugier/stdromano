@@ -11,7 +11,7 @@
 
 STDROMANO_NAMESPACE_BEGIN
 
-static STDROMANO_FORCE_INLINE size_t bit_ceil(size_t n)
+static STDROMANO_FORCE_INLINE size_t bit_ceil(size_t n) noexcept
 {
     if(n <= 1)
     {

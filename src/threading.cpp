@@ -103,54 +103,57 @@ ThreadPool::~ThreadPool()
 
 void ThreadPool::init(const int64_t workers_count) noexcept
 {
-    const size_t num_workers = workers_count < 1 ? get_num_procs() : static_cast<size_t>(workers_count);
+    const size_t num_workers =
+                   workers_count < 1 ? get_num_procs() : static_cast<size_t>(workers_count);
 
     this->_workers = static_cast<Thread*>(mem_alloc(num_workers * sizeof(Thread)));
 
     for(size_t i = 0; i < num_workers; i++)
     {
         ::new(std::addressof(this->_workers[i])) Thread(
-            [&]()
-            {
-                ThreadPool* tp = this;
+                       [&]()
+                       {
+                           ThreadPool* tp = this;
 
-                while(true)
-                {
-                    const bool stop = tp->_stop.load();
+                           while(true)
+                           {
+                               const bool stop = tp->_stop.load();
 
-                    if(stop)
-                    {
-                        break;
-                    }
+                               if(stop)
+                               {
+                                   break;
+                               }
 
-                    if(tp->_work_queue.size_approx() > 0)
-                    {
-                        ThreadPoolWork* work = nullptr;
+                               if(tp->_work_queue.size_approx() > 0)
+                               {
+                                   ThreadPoolWork* work = nullptr;
 
-                        if(tp->_work_queue.try_dequeue(work))
-                        {
-                            tp->_num_active_workers++;
+                                   if(tp->_work_queue.try_dequeue(work))
+                                   {
+                                       tp->_num_active_workers++;
 
-                            try
-                            {
-                                if(work != nullptr)
-                                {
-                                    work->execute();
-                                    delete work;
-                                }
-                            }
-                            catch(const std::exception& e)
-                            {
-                                std::fprintf(stderr, "Error caught while executing threadpool work");
-                            }
+                                       try
+                                       {
+                                           if(work != nullptr)
+                                           {
+                                               work->execute();
+                                               delete work;
+                                           }
+                                       }
+                                       catch(const std::exception& e)
+                                       {
+                                           std::fprintf(stderr,
+                                                        "Error caught while executing "
+                                                        "threadpool work");
+                                       }
 
-                            tp->_num_active_workers--;
-                        }
-                    }
-                }
+                                       tp->_num_active_workers--;
+                                   }
+                               }
+                           }
 
-                tp->_num_workers--;
-            });
+                           tp->_num_workers--;
+                       });
 
         this->_workers[i].start();
         this->_num_workers++;
@@ -159,7 +162,10 @@ void ThreadPool::init(const int64_t workers_count) noexcept
     this->_started.store(true);
 }
 
-bool ThreadPool::add_work(ThreadPoolWork* work) noexcept { return this->_work_queue.enqueue(work); }
+bool ThreadPool::add_work(ThreadPoolWork* work) noexcept
+{
+    return this->_work_queue.enqueue(work);
+}
 
 void ThreadPool::wait() const noexcept
 {
@@ -169,26 +175,32 @@ void ThreadPool::wait() const noexcept
     }
 }
 
+static bool g_global_threadpool_started = false;
+
 GlobalThreadPool::GlobalThreadPool()
 {
-    if(this->_tp == nullptr && !this->_stopped)
+    if(this->_tp == nullptr)
     {
         this->_tp = new ThreadPool();
-        this->_started = true;
+        g_global_threadpool_started = true;
     }
 }
 
 GlobalThreadPool::~GlobalThreadPool()
 {
-    if(this->_tp != nullptr && !this->_stopped)
+    if(this->_tp != nullptr)
     {
         delete this->_tp;
         this->_tp = nullptr;
-
-        this->_stopped = true;
     }
 }
 
-void atexit_handler_global_threadpool() noexcept { global_threadpool.stop(); }
+void atexit_handler_global_threadpool() noexcept
+{
+    if(g_global_threadpool_started)
+    {
+        global_threadpool.stop();
+    }
+}
 
 STDROMANO_NAMESPACE_END

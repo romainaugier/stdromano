@@ -135,7 +135,8 @@ String<> ListDirIterator::get_current_path() const noexcept
 {
 #if defined(STDROMANO_WIN)
     return String<>("{}{}",
-                    fmt::string_view(this->_directory_path.c_str(), this->_directory_path.size() - 1),
+                    fmt::string_view(this->_directory_path.c_str(),
+                                     this->_directory_path.size() - 1),
                     this->_find_data.cFileName);
 #elif defined(STDROMANO_LINUX)
     return String<>("{}/{}",
@@ -194,7 +195,8 @@ bool fs_list_dir(ListDirIterator& it, const String<>& directory_path, const uint
         {
             const size_t c_file_name_size = std::strlen(it._find_data.cFileName);
 
-            if((it._find_data.cFileName[0] != '.' || c_file_name_size > 2) && (flags & ListDirFlags_ListDirs))
+            if((it._find_data.cFileName[0] != '.' || c_file_name_size > 2) &&
+               (flags & ListDirFlags_ListDirs))
             {
                 return true;
             }
@@ -213,7 +215,8 @@ bool fs_list_dir(ListDirIterator& it, const String<>& directory_path, const uint
             {
                 const size_t c_file_name_size = std::strlen(it._find_data.cFileName);
 
-                if((it._find_data.cFileName[0] != '.' || c_file_name_size > 2) && (flags & ListDirFlags_ListDirs))
+                if((it._find_data.cFileName[0] != '.' || c_file_name_size > 2) &&
+                   (flags & ListDirFlags_ListDirs))
                 {
                     return true;
                 }
@@ -273,7 +276,8 @@ bool fs_list_dir(ListDirIterator& it, const String<>& directory_path, const uint
             is_dir = (it._entry->d_type == DT_DIR);
         }
 
-        return (is_file && (flags & ListDirFlags_ListFiles)) || (is_dir && (flags & ListDirFlags_ListDirs));
+        return (is_file && (flags & ListDirFlags_ListFiles)) ||
+               (is_dir && (flags & ListDirFlags_ListDirs));
     }
 
     return false;
@@ -337,9 +341,15 @@ String<> open_file_dialog(FileDialogMode_ mode,
 
         if(!initial_path.empty())
         {
-            WCHAR* initial_path_wide = static_cast<WCHAR*>(mem_alloca((initial_path.size() + 1) * sizeof(WCHAR)));
+            WCHAR* initial_path_wide = static_cast<WCHAR*>(
+                           mem_alloca((initial_path.size() + 1) * sizeof(WCHAR)));
             std::memset(initial_path_wide, 0, (initial_path.size() + 1) * sizeof(WCHAR));
-            MultiByteToWideChar(CP_UTF8, 0, initial_path.c_str(), initial_path.size(), initial_path_wide, initial_path.size());
+            MultiByteToWideChar(CP_UTF8,
+                                0,
+                                initial_path.c_str(),
+                                initial_path.size(),
+                                initial_path_wide,
+                                initial_path.size());
 
             PIDLIST_ABSOLUTE pidl = NULL;
             ULONG sfgao_out = 0;
@@ -382,37 +392,37 @@ String<> open_file_dialog(FileDialogMode_ mode,
 
     switch(mode)
     {
-    case FileDialogMode_OpenFile:
-        dialog = gtk_file_chooser_dialog_new(title.c_str(),
-                                             nullptr,
-                                             GTK_FILE_CHOOSER_ACTION_OPEN,
-                                             "_Cancel",
-                                             GTK_RESPONSE_CANCEL,
-                                             "_Open",
-                                             GTK_RESPONSE_ACCEPT,
-                                             nullptr);
-        break;
-    case FileDialogMode_SaveFile:
-        dialog = gtk_file_chooser_dialog_new(title.c_str(),
-                                             nullptr,
-                                             GTK_FILE_CHOOSER_ACTION_SAVE,
-                                             "_Cancel",
-                                             GTK_RESPONSE_CANCEL,
-                                             "_Save",
-                                             GTK_RESPONSE_ACCEPT,
-                                             nullptr);
-        gtk_file_chooser_set_do_overwrite_confirmation(GTK_FILE_CHOOSER(dialog), TRUE);
-        break;
-    case FileDialogMode_OpenDir:
-        dialog = gtk_file_chooser_dialog_new(title.c_str(),
-                                             nullptr,
-                                             GTK_FILE_CHOOSER_ACTION_SELECT_FOLDER,
-                                             "_Cancel",
-                                             GTK_RESPONSE_CANCEL,
-                                             "_Select",
-                                             GTK_RESPONSE_ACCEPT,
-                                             nullptr);
-        break;
+        case FileDialogMode_OpenFile:
+            dialog = gtk_file_chooser_dialog_new(title.c_str(),
+                                                 nullptr,
+                                                 GTK_FILE_CHOOSER_ACTION_OPEN,
+                                                 "_Cancel",
+                                                 GTK_RESPONSE_CANCEL,
+                                                 "_Open",
+                                                 GTK_RESPONSE_ACCEPT,
+                                                 nullptr);
+            break;
+        case FileDialogMode_SaveFile:
+            dialog = gtk_file_chooser_dialog_new(title.c_str(),
+                                                 nullptr,
+                                                 GTK_FILE_CHOOSER_ACTION_SAVE,
+                                                 "_Cancel",
+                                                 GTK_RESPONSE_CANCEL,
+                                                 "_Save",
+                                                 GTK_RESPONSE_ACCEPT,
+                                                 nullptr);
+            gtk_file_chooser_set_do_overwrite_confirmation(GTK_FILE_CHOOSER(dialog), TRUE);
+            break;
+        case FileDialogMode_OpenDir:
+            dialog = gtk_file_chooser_dialog_new(title.c_str(),
+                                                 nullptr,
+                                                 GTK_FILE_CHOOSER_ACTION_SELECT_FOLDER,
+                                                 "_Cancel",
+                                                 GTK_RESPONSE_CANCEL,
+                                                 "_Select",
+                                                 GTK_RESPONSE_ACCEPT,
+                                                 nullptr);
+            break;
     }
 
     if(!initial_path.empty())

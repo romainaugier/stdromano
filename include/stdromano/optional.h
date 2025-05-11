@@ -12,24 +12,35 @@
 #include <stdexcept>
 #include <type_traits>
 
-
 STDROMANO_NAMESPACE_BEGIN
 
 template <typename T>
 class Optional
 {
-private:
+  private:
     typename std::aligned_storage<sizeof(T), alignof(T)>::type _data;
     bool _has_value;
 
-public:
-    Optional() : _has_value(false) {}
+  public:
+    Optional()
+        : _has_value(false)
+    {
+    }
 
-    Optional(const T& value) : _has_value(false) { this->construct(value); }
+    Optional(const T& value)
+        : _has_value(false)
+    {
+        this->construct(value);
+    }
 
-    Optional(T&& value) noexcept : _has_value(false) { this->construct(std::move(value)); }
+    Optional(T&& value) noexcept
+        : _has_value(false)
+    {
+        this->construct(std::move(value));
+    }
 
-    Optional(const Optional& other) : _has_value(false)
+    Optional(const Optional& other)
+        : _has_value(false)
     {
         if(other._has_value)
         {
@@ -37,7 +48,8 @@ public:
         }
     }
 
-    Optional(Optional&& other) noexcept : _has_value(false)
+    Optional(Optional&& other) noexcept
+        : _has_value(false)
     {
         if(other._has_value)
         {
@@ -87,9 +99,15 @@ public:
         return *this;
     }
 
-    ~Optional() { this->reset(); }
+    ~Optional()
+    {
+        this->reset();
+    }
 
-    STDROMANO_FORCE_INLINE bool has_value() const { return this->_has_value; }
+    STDROMANO_FORCE_INLINE bool has_value() const
+    {
+        return this->_has_value;
+    }
 
     template <typename... Args>
     void emplace(Args&&... args)
@@ -108,13 +126,25 @@ public:
         }
     }
 
-    T& operator*() & { return *this->get_pointer(); }
+    T& operator*() &
+    {
+        return *this->get_pointer();
+    }
 
-    const T& operator*() const& { return *this->get_pointer(); }
+    const T& operator*() const&
+    {
+        return *this->get_pointer();
+    }
 
-    T* operator->() { return this->get_pointer(); }
+    T* operator->()
+    {
+        return this->get_pointer();
+    }
 
-    const T* operator->() const { return this->get_pointer(); }
+    const T* operator->() const
+    {
+        return this->get_pointer();
+    }
 
     T& value() &
     {
@@ -136,12 +166,21 @@ public:
         return **this;
     }
 
-private:
-    T* get_pointer() { return reinterpret_cast<T*>(&this->_data); }
+  private:
+    T* get_pointer()
+    {
+        return reinterpret_cast<T*>(&this->_data);
+    }
 
-    const T* get_pointer() const { return reinterpret_cast<const T*>(&this->_data); }
+    const T* get_pointer() const
+    {
+        return reinterpret_cast<const T*>(&this->_data);
+    }
 
-    void* get_storage() { return &this->_data; }
+    void* get_storage()
+    {
+        return &this->_data;
+    }
 
     template <typename U>
     void construct(U&& value)

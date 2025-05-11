@@ -11,7 +11,6 @@
 #include "stdromano/hash.h"
 #include "stdromano/memory.h"
 
-
 #include "spdlog/fmt/fmt.h"
 
 STDROMANO_NAMESPACE_BEGIN
@@ -25,11 +24,11 @@ class String
     static constexpr float STRING_GROWTH_RATE = 1.61f;
     static constexpr size_t STRING_ALIGNMENT = 32;
 
-public:
+  public:
     using value_type = char;
     using split_iterator = size_t;
 
-private:
+  private:
     union
     {
         char* _heap_data;
@@ -45,7 +44,8 @@ private:
     {
         STDROMANO_ASSERT(!this->_is_ref, "Cannot modify a reference string");
 
-        char* new_data = (char*)mem_aligned_alloc((new_capacity + 1) * sizeof(char), STRING_ALIGNMENT);
+        char* new_data = (char*)mem_aligned_alloc((new_capacity + 1) * sizeof(char),
+                                                  STRING_ALIGNMENT);
         std::memcpy(new_data, this->data(), this->_size);
         new_data[this->_size] = '\0';
 
@@ -59,10 +59,18 @@ private:
         this->_is_local = 0;
     }
 
-public:
-    String() noexcept : _size(0), _capacity(LocalCapacity), _is_local(1), _is_ref(0) { this->_local_data[0] = '\0'; }
+  public:
+    String() noexcept
+        : _size(0),
+          _capacity(LocalCapacity),
+          _is_local(1),
+          _is_ref(0)
+    {
+        this->_local_data[0] = '\0';
+    }
 
-    String(const char* str) : String()
+    String(const char* str)
+        : String()
     {
         const size_t size = std::strlen(str);
 
@@ -76,16 +84,18 @@ public:
     }
 
     template <typename... Args>
-    String(fmt::format_string<Args...> fmt, Args&&... args) : String()
+    String(fmt::format_string<Args...> fmt, Args&&... args)
+        : String()
     {
         fmt::format_to(std::back_inserter(*this), fmt, std::forward<Args>(args)...);
         this->data()[this->_size] = '\0';
     }
 
-    String(const String& other) noexcept : _size(other._size),
-                                           _capacity(other._is_local ? LocalCapacity : other._capacity),
-                                           _is_local(other._is_local),
-                                           _is_ref(0)
+    String(const String& other) noexcept
+        : _size(other._size),
+          _capacity(other._is_local ? LocalCapacity : other._capacity),
+          _is_local(other._is_local),
+          _is_ref(0)
     {
         if(other._is_ref)
         {
@@ -98,7 +108,8 @@ public:
         }
         else
         {
-            this->_heap_data = (char*)mem_aligned_alloc((this->_capacity + 1) * sizeof(char), STRING_ALIGNMENT);
+            this->_heap_data = (char*)mem_aligned_alloc((this->_capacity + 1) * sizeof(char),
+                                                        STRING_ALIGNMENT);
             std::memcpy(this->_heap_data, other._heap_data, this->_size + 1);
         }
     }
@@ -131,17 +142,19 @@ public:
         }
         else
         {
-            this->_heap_data = (char*)mem_aligned_alloc((this->_capacity + 1) * sizeof(char), STRING_ALIGNMENT);
+            this->_heap_data = (char*)mem_aligned_alloc((this->_capacity + 1) * sizeof(char),
+                                                        STRING_ALIGNMENT);
             std::memcpy(this->_heap_data, other._heap_data, this->_size + 1);
         }
 
         return *this;
     }
 
-    String(String&& other) noexcept : _size(other._size),
-                                      _capacity(other._is_local ? LocalCapacity : other._capacity),
-                                      _is_local(other._is_local),
-                                      _is_ref(0)
+    String(String&& other) noexcept
+        : _size(other._size),
+          _capacity(other._is_local ? LocalCapacity : other._capacity),
+          _is_local(other._is_local),
+          _is_ref(0)
     {
         if(other._is_ref)
         {
@@ -242,10 +255,14 @@ public:
             return false;
         }
 
-        return this->size() == other.size() && std::memcmp(this->c_str(), other.c_str(), this->size()) == 0;
+        return this->size() == other.size() &&
+               std::memcmp(this->c_str(), other.c_str(), this->size()) == 0;
     }
 
-    bool operator!=(const String<>& other) const { return !this->operator==(other); }
+    bool operator!=(const String<>& other) const
+    {
+        return !this->operator==(other);
+    }
 
     static String make_ref(const char* str, size_t size = 0) noexcept
     {
@@ -264,7 +281,10 @@ public:
         return s;
     }
 
-    static String make_ref(const String& str) noexcept { return String::make_ref(str.data(), str.size()); }
+    static String make_ref(const String& str) noexcept
+    {
+        return String::make_ref(str.data(), str.size());
+    }
 
     static String make_zeroed(const size_t size) noexcept
     {
@@ -277,33 +297,60 @@ public:
         return s;
     }
 
-    String copy() const noexcept { return String("{}", fmt::string_view(this->c_str(), this->size())); }
+    String copy() const noexcept
+    {
+        return String("{}", fmt::string_view(this->c_str(), this->size()));
+    }
 
     STDROMANO_FORCE_INLINE const char* data() const noexcept
     {
         return this->_is_local ? this->_local_data : this->_heap_data;
     }
 
-    STDROMANO_FORCE_INLINE char* data() noexcept { return this->_is_local ? this->_local_data : this->_heap_data; }
+    STDROMANO_FORCE_INLINE char* data() noexcept
+    {
+        return this->_is_local ? this->_local_data : this->_heap_data;
+    }
 
     STDROMANO_FORCE_INLINE const char* c_str() const noexcept
     {
         return this->_is_local ? this->_local_data : this->_heap_data;
     }
 
-    STDROMANO_FORCE_INLINE char* c_str() noexcept { return this->_is_local ? this->_local_data : this->_heap_data; }
+    STDROMANO_FORCE_INLINE char* c_str() noexcept
+    {
+        return this->_is_local ? this->_local_data : this->_heap_data;
+    }
 
-    STDROMANO_FORCE_INLINE const char* back() const noexcept { return this->c_str() + this->_size; }
+    STDROMANO_FORCE_INLINE const char* back() const noexcept
+    {
+        return this->c_str() + this->_size;
+    }
 
-    STDROMANO_FORCE_INLINE char* back() noexcept { return this->c_str() + this->_size; }
+    STDROMANO_FORCE_INLINE char* back() noexcept
+    {
+        return this->c_str() + this->_size;
+    }
 
-    STDROMANO_FORCE_INLINE size_t size() const noexcept { return this->_size; }
+    STDROMANO_FORCE_INLINE size_t size() const noexcept
+    {
+        return this->_size;
+    }
 
-    STDROMANO_FORCE_INLINE size_t capacity() const noexcept { return this->_capacity; }
+    STDROMANO_FORCE_INLINE size_t capacity() const noexcept
+    {
+        return this->_capacity;
+    }
 
-    STDROMANO_FORCE_INLINE bool empty() const noexcept { return this->_size == 0; }
+    STDROMANO_FORCE_INLINE bool empty() const noexcept
+    {
+        return this->_size == 0;
+    }
 
-    STDROMANO_FORCE_INLINE bool is_ref() const noexcept { return this->_is_ref; }
+    STDROMANO_FORCE_INLINE bool is_ref() const noexcept
+    {
+        return this->_is_ref;
+    }
 
     void push_back(char c)
     {
@@ -595,7 +642,7 @@ public:
 
             return String::make_ref(this->data(), lsplit_size);
         }
-        
+
         return String::make_ref(*this);
     }
 
@@ -634,9 +681,12 @@ public:
 STDROMANO_NAMESPACE_END
 
 template <>
-struct fmt::formatter<stdromano::String<> >
+struct fmt::formatter<stdromano::String<>>
 {
-    constexpr auto parse(format_parse_context& ctx) { return ctx.begin(); }
+    constexpr auto parse(format_parse_context& ctx)
+    {
+        return ctx.begin();
+    }
 
     auto format(const stdromano::String<>& s, format_context& ctx) const
     {
@@ -646,11 +696,11 @@ struct fmt::formatter<stdromano::String<> >
 };
 
 template <>
-struct std::hash<stdromano::String<> >
+struct std::hash<stdromano::String<>>
 {
     std::size_t operator()(const stdromano::String<>& s) const
     {
-        return static_cast<std::size_t>(stdromano::hash_murmur3(static_cast<const void*>(s.c_str()), 
+        return static_cast<std::size_t>(stdromano::hash_murmur3(static_cast<const void*>(s.c_str()),
                                                                 s.size(),
                                                                 483910));
     }

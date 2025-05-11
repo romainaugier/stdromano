@@ -36,21 +36,29 @@ void* t2_func()
 
 class TPoolWork : public stdromano::ThreadPoolWork
 {
-public:
-    TPoolWork(const size_t job_id) { this->_job_id = job_id; }
+  public:
+    TPoolWork(const size_t job_id)
+    {
+        this->_job_id = job_id;
+    }
 
-    virtual ~TPoolWork() override {}
+    virtual ~TPoolWork() override
+    {
+    }
 
     virtual void execute() override
     {
         std::printf("Hello with job: %zu (tid: %zu)\n", this->_job_id, stdromano::thread_get_id());
     }
 
-private:
+  private:
     size_t _job_id;
 };
 
-void atexit_handler_stdromano_global_threadpool() { stdromano::atexit_handler_global_threadpool(); }
+void atexit_handler_stdromano_global_threadpool()
+{
+    stdromano::atexit_handler_global_threadpool();
+}
 
 #define NUM_WORKS 100
 
@@ -62,7 +70,11 @@ int main()
 
     stdromano::Thread t1(t1_func);
     stdromano::Thread t2(t2_func);
-    stdromano::Thread t3([]() { std::printf("Hello from t3 lambda: (tid: %zu)\n", stdromano::thread_get_id()); });
+    stdromano::Thread t3(
+                   []() {
+                       std::printf("Hello from t3 lambda: (tid: %zu)\n",
+                                   stdromano::thread_get_id());
+                   });
 
     t1.start();
     t2.start();

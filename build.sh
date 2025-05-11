@@ -10,6 +10,7 @@ REMOVEOLDDIR=0
 EXPORTCOMPILECOMMANDS=0
 VERSION="0.0.0"
 INSTALLDIR="$PWD/install"
+INSTALL=0
 
 # Little function to parse command line arguments
 parse_args()
@@ -21,6 +22,8 @@ parse_args()
     [ "$1" == "--tests" ] && RUNTESTS=1
 
     [ "$1" == "--clean" ] && REMOVEOLDDIR=1
+
+    [ "$1" == "--install" ] && INSTALL=1
 
     [ "$1" == "--export-compile-commands" ] && EXPORTCOMPILECOMMANDS=1
 
@@ -62,11 +65,12 @@ log_error()
 }
 
 # Wrap to avoid command line args propagation
-
 source_vcpkg_bootstrap()
 {
     source bootstrap-vcpkg.sh
 }
+
+# Entry point
 
 log_info "Building stdromano"
 
@@ -131,12 +135,14 @@ if [[ $RUNTESTS -eq 1 ]]; then
     fi
 fi
 
-cmake --install . --config %BUILDTYPE% --prefix $INSTALLDIR
+if [[ $INSTALL -eq 1 ]]; then
+    cmake --install . --config %BUILDTYPE% --prefix $INSTALLDIR
 
-if [[ $? -ne 0 ]]; then
-    log_error "Error during CMake installation"
-    cd ..
-    exit 1
+    if [[ $? -ne 0 ]]; then
+        log_error "Error during CMake installation"
+        cd ..
+        exit 1
+    fi
 fi
 
 cd ..

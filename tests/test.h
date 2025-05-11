@@ -9,54 +9,56 @@
 #include <string>
 #include <vector>
 
-
 #define TEST_CASE(name) void name()
 
-#define ASSERT(condition)                                                                                              \
-    do                                                                                                                 \
-    {                                                                                                                  \
-        if(!(condition))                                                                                               \
-        {                                                                                                              \
-            std::printf("Assertion failed: %s\nFile: %s\nLine: %d\n", #condition, __FILE__, __LINE__);                 \
-            std::abort();                                                                                              \
-        }                                                                                                              \
+#define ASSERT(condition)                                                                          \
+    do                                                                                             \
+    {                                                                                              \
+        if(!(condition))                                                                           \
+        {                                                                                          \
+            std::printf("Assertion failed: %s\nFile: %s\nLine: %d\n",                              \
+                        #condition,                                                                \
+                        __FILE__,                                                                  \
+                        __LINE__);                                                                 \
+            std::abort();                                                                          \
+        }                                                                                          \
     } while(0)
 
-#define ASSERT_THROWS(expression, exception_type)                                                                      \
-    do                                                                                                                 \
-    {                                                                                                                  \
-        bool caught = false;                                                                                           \
-        try                                                                                                            \
-        {                                                                                                              \
-            expression;                                                                                                \
-        }                                                                                                              \
-        catch(const exception_type&)                                                                                   \
-        {                                                                                                              \
-            caught = true;                                                                                             \
-        }                                                                                                              \
-        catch(...)                                                                                                     \
-        {                                                                                                              \
-            throw std::runtime_error("Wrong exception type caught");                                                   \
-        }                                                                                                              \
-        if(!caught)                                                                                                    \
-        {                                                                                                              \
-            throw std::runtime_error("Expected exception not thrown");                                                 \
-        }                                                                                                              \
+#define ASSERT_THROWS(expression, exception_type)                                                  \
+    do                                                                                             \
+    {                                                                                              \
+        bool caught = false;                                                                       \
+        try                                                                                        \
+        {                                                                                          \
+            expression;                                                                            \
+        }                                                                                          \
+        catch(const exception_type&)                                                               \
+        {                                                                                          \
+            caught = true;                                                                         \
+        }                                                                                          \
+        catch(...)                                                                                 \
+        {                                                                                          \
+            throw std::runtime_error("Wrong exception type caught");                               \
+        }                                                                                          \
+        if(!caught)                                                                                \
+        {                                                                                          \
+            throw std::runtime_error("Expected exception not thrown");                             \
+        }                                                                                          \
     } while(0)
 
-#define ASSERT_EQUAL(expected, actual)                                                                                 \
-    do                                                                                                                 \
-    {                                                                                                                  \
-        if(!((expected) == (actual)))                                                                                  \
-        {                                                                                                              \
-            std::printf("Assertion failed\nExpected: %sActual: "                                                       \
-                        "%s\nFile: %s\nLine: %d\n",                                                                    \
-                        #expected,                                                                                     \
-                        #actual,                                                                                       \
-                        __FILE__,                                                                                      \
-                        __LINE__);                                                                                     \
-            std::abort();                                                                                              \
-        }                                                                                                              \
+#define ASSERT_EQUAL(expected, actual)                                                             \
+    do                                                                                             \
+    {                                                                                              \
+        if(!((expected) == (actual)))                                                              \
+        {                                                                                          \
+            std::printf("Assertion failed\nExpected: %sActual: "                                   \
+                        "%s\nFile: %s\nLine: %d\n",                                                \
+                        #expected,                                                                 \
+                        #actual,                                                                   \
+                        __FILE__,                                                                  \
+                        __LINE__);                                                                 \
+            std::abort();                                                                          \
+        }                                                                                          \
     } while(0)
 
 class TestRunner
@@ -71,8 +73,11 @@ class TestRunner
     int passed = 0;
     int failed = 0;
 
-public:
-    void add_test(const char* name, std::function<void()> test) { tests.push_back({name, test}); }
+  public:
+    void add_test(const char* name, std::function<void()> test)
+    {
+        tests.push_back({name, test});
+    }
 
     void run_all()
     {
@@ -93,31 +98,41 @@ public:
             }
         }
 
-        std::printf("Test Summary:\nPassed: %d\nFailed: %d\nTotal: %zu\n", passed, failed, tests.size());
+        std::printf("Test Summary:\nPassed: %d\nFailed: %d\nTotal: %zu\n",
+                    passed,
+                    failed,
+                    tests.size());
     }
 };
 
 class TestObject
 {
-private:
+  private:
     std::string* data;
     size_t ref_count;
     static size_t total_instances;
 
-public:
-    TestObject(const std::string& str = "") : ref_count(0)
+  public:
+    TestObject(const std::string& str = "")
+        : ref_count(0)
     {
         this->data = new std::string(str);
         ++TestObject::total_instances;
     }
 
-    TestObject(const TestObject& other) : ref_count(other.ref_count)
+    TestObject(const TestObject& other)
+        : ref_count(other.ref_count)
     {
         this->data = new std::string(*other.data);
         ++TestObject::total_instances;
     }
 
-    TestObject(TestObject&& other) noexcept : data(other.data), ref_count(other.ref_count) { other.data = nullptr; }
+    TestObject(TestObject&& other) noexcept
+        : data(other.data),
+          ref_count(other.ref_count)
+    {
+        other.data = nullptr;
+    }
 
     TestObject& operator=(const TestObject& other)
     {
@@ -160,11 +175,20 @@ public:
         return *this->data == *other.data;
     }
 
-    bool operator!=(const TestObject& other) const { return !(*this == other); }
+    bool operator!=(const TestObject& other) const
+    {
+        return !(*this == other);
+    }
 
-    std::string get_data() const { return this->data ? *this->data : ""; }
+    std::string get_data() const
+    {
+        return this->data ? *this->data : "";
+    }
 
-    static size_t get_total_instances() { return TestObject::total_instances; }
+    static size_t get_total_instances()
+    {
+        return TestObject::total_instances;
+    }
 };
 
 #define INIT_TEST_OBJECT size_t TestObject::total_instances = 0;

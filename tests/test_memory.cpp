@@ -2,8 +2,8 @@
 // Copyright (c) 2025 - Present Romain Augier
 // All rights reserved.
 
-#include "stdromano/memory.h"
 #include "stdromano/logger.h"
+#include "stdromano/memory.h"
 #include "stdromano/string.h"
 #include "test.h"
 
@@ -17,9 +17,12 @@ TEST_CASE(test_memory_arena)
     stdromano::String<> my_string_alloced("this is a string{}", " alloced");
 
     stdromano::String<>* my_string_ref_ptr = arena.emplace<stdromano::String<>>(my_string_ref);
-    stdromano::String<>* my_string_alloced_ptr = arena.emplace<stdromano::String<>>(my_string_alloced);
-    stdromano::String<>* my_string_alloced_another_ptr = arena.emplace<stdromano::String<>>(my_string_alloced);
-    stdromano::String<>* my_string_emplaced_ptr = arena.emplace<stdromano::String<>>("this is a string emplaced");
+    stdromano::String<>* my_string_alloced_ptr =
+                   arena.emplace<stdromano::String<>>(my_string_alloced);
+    stdromano::String<>* my_string_alloced_another_ptr =
+                   arena.emplace<stdromano::String<>>(my_string_alloced);
+    stdromano::String<>* my_string_emplaced_ptr =
+                   arena.emplace<stdromano::String<>>("this is a string emplaced");
 
     ASSERT(std::strcmp(my_string_ref_ptr->c_str(), "this is a string ref") == 0);
     ASSERT(std::strcmp(my_string_alloced_ptr->c_str(), "this is a string alloced") == 0);
@@ -29,7 +32,8 @@ TEST_CASE(test_memory_arena)
     arena.clear();
 
     /*
-        GCC optimizes so well that the dtor is bypassed and the following assertions are false in release mode
+        GCC optimizes so well that the dtor is bypassed and the following assertions are false in
+       release mode
     */
 #if !defined(STDROMANO_GCC) && !DEBUG_BUILD
     ASSERT(my_string_ref_ptr->empty());

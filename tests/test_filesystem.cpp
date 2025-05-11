@@ -6,7 +6,10 @@
 #include "stdromano/logger.h"
 #include "test.h"
 
-TEST_CASE(test_expand_executable) { stdromano::log_info(stdromano::expand_from_executable_dir("test/expand/file.c")); }
+TEST_CASE(test_expand_executable)
+{
+    stdromano::log_info(stdromano::expand_from_executable_dir("test/expand/file.c"));
+}
 
 TEST_CASE(test_load_file_content)
 {
@@ -20,7 +23,7 @@ TEST_CASE(test_load_file_content)
 TEST_CASE(test_list_dir)
 {
     const stdromano::String<> directory_path = stdromano::fs_parent_dir(
-        stdromano::String<>::make_ref(__FILE__, std::strlen(__FILE__)));
+                   stdromano::String<>::make_ref(__FILE__, std::strlen(__FILE__)));
     stdromano::log_debug("Listing directory: {}", directory_path);
 
     stdromano::ListDirIterator it;
@@ -35,17 +38,19 @@ TEST_CASE(test_list_dir)
 
 TEST_CASE(test_file_dialog)
 {
-    const stdromano::String<> file_path = stdromano::open_file_dialog(stdromano::FileDialogMode_OpenFile,
-                                                                      "Open A File",
-                                                                      stdromano::expand_from_executable_dir(""),
-                                                                      "*.cpp|*.h|*.txt");
+    const stdromano::String<> file_path =
+                   stdromano::open_file_dialog(stdromano::FileDialogMode_OpenFile,
+                                               "Open A File",
+                                               stdromano::expand_from_executable_dir(""),
+                                               "*.cpp|*.h|*.txt");
 
     stdromano::log_debug("Chosen file: {}", file_path.empty() ? "None" : file_path.c_str());
 
-    const stdromano::String<> dir_path = stdromano::open_file_dialog(stdromano::FileDialogMode_OpenDir,
-                                                                     "Select A Directory",
-                                                                     stdromano::expand_from_executable_dir(""),
-                                                                     "");
+    const stdromano::String<> dir_path =
+                   stdromano::open_file_dialog(stdromano::FileDialogMode_OpenDir,
+                                               "Select A Directory",
+                                               stdromano::expand_from_executable_dir(""),
+                                               "");
 
     stdromano::log_debug("Chosen directory: {}", dir_path.empty() ? "None" : dir_path.c_str());
 }

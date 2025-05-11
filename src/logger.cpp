@@ -7,7 +7,8 @@
 
 STDROMANO_NAMESPACE_BEGIN
 
-Logger::Logger() : _logger("null")
+Logger::Logger()
+    : _logger("null")
 {
 #if defined(STDROMANO_WIN)
     SetConsoleCP(65001);
@@ -69,6 +70,9 @@ Logger::Logger() : _logger("null")
     spdlog::flush_on(spdlog::level::info);
 }
 
-Logger::~Logger() { this->_logger.flush(); }
+Logger::~Logger()
+{
+    this->_logger.flush();
+}
 
 STDROMANO_NAMESPACE_END

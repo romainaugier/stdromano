@@ -37,7 +37,8 @@ STDROMANO_API bool simd_force_vectorization_mode(const VectorizationMode mode) n
 /* SIMD helper functions */
 
 /* Horizontal sums (sum the entire vector to a single element) */
-/* https://stackoverflow.com/questions/6996764/fastest-way-to-do-horizontal-sse-vector-sum-or-other-reduction */
+/* https://stackoverflow.com/questions/6996764/fastest-way-to-do-horizontal-sse-vector-sum-or-other-reduction
+ */
 
 STDROMANO_FORCE_INLINE float _mm_hsum_ps(const __m128 x) noexcept
 {

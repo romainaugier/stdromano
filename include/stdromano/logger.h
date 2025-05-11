@@ -7,7 +7,6 @@
 #include "spdlog/sinks/stdout_color_sinks.h"
 #include "spdlog/spdlog.h"
 
-
 STDROMANO_NAMESPACE_BEGIN
 
 enum LogLevel : uint8_t
@@ -20,7 +19,7 @@ enum LogLevel : uint8_t
 
 class STDROMANO_API Logger
 {
-public:
+  public:
     static Logger& get_instance() noexcept
     {
         static Logger c;
@@ -77,7 +76,7 @@ public:
         this->_logger.flush();
     }
 
-private:
+  private:
     Logger();
     ~Logger();
 

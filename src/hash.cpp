@@ -65,18 +65,18 @@ uint32_t hash_murmur3(const void* key, const size_t len, const uint32_t seed) no
 
     switch(len2)
     {
-    case 3:
-        k ^= data[2] << 16;
-        /* FALLTHROUGH */
-    case 2:
-        k ^= data[1] << 8;
-        /* FALLTHROUGH */
-    case 1:
-        k ^= data[0];
-        k *= 0xcc9e2d51;
-        k = (k << 15) | (k >> 17);
-        k *= 0x1b873593;
-        h ^= k;
+        case 3:
+            k ^= data[2] << 16;
+            /* FALLTHROUGH */
+        case 2:
+            k ^= data[1] << 8;
+            /* FALLTHROUGH */
+        case 1:
+            k ^= data[0];
+            k *= 0xcc9e2d51;
+            k = (k << 15) | (k >> 17);
+            k *= 0x1b873593;
+            h ^= k;
     }
 
     /*

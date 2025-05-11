@@ -14,13 +14,15 @@
 #include <string>
 #include <vector>
 
-
 struct ComplexKey
 {
     int id;
     std::string name;
 
-    bool operator==(const ComplexKey& other) const { return id == other.id && name == other.name; }
+    bool operator==(const ComplexKey& other) const
+    {
+        return id == other.id && name == other.name;
+    }
 };
 
 struct ComplexKeyHash
@@ -141,7 +143,10 @@ TEST_CASE(test_collisions)
 {
     struct CollisionHash
     {
-        size_t operator()(int) const { return 1; }
+        size_t operator()(int) const
+        {
+            return 1;
+        }
     };
 
     stdromano::HashMap<int, std::string, CollisionHash> map;

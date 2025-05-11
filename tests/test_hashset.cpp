@@ -1,6 +1,5 @@
 
 
-
 #include "stdromano/hashset.h"
 
 #define STDROMANO_ENABLE_PROFILING
@@ -19,7 +18,10 @@ struct ComplexKey
     int id;
     std::string name;
 
-    bool operator==(const ComplexKey& other) const { return id == other.id && name == other.name; }
+    bool operator==(const ComplexKey& other) const
+    {
+        return id == other.id && name == other.name;
+    }
 
     bool operator<(const ComplexKey& other) const
     {
@@ -70,7 +72,6 @@ TEST_CASE(test_set_basic_operations)
     ASSERT_EQUAL(0u, my_set.size());
     ASSERT(my_set.empty());
     ASSERT(!my_set.contains(1));
-
 
     erased_count = my_set.erase(1);
     ASSERT_EQUAL(0u, erased_count);
@@ -139,7 +140,6 @@ TEST_CASE(test_set_iterator)
     }
     ASSERT_EQUAL(static_cast<size_t>(TEST_SIZE), count);
 
-
     count = 0;
     for(const auto& key : set)
     {
@@ -147,7 +147,6 @@ TEST_CASE(test_set_iterator)
         count++;
     }
     ASSERT_EQUAL(static_cast<size_t>(TEST_SIZE), count);
-
 
     const stdromano::HashSet<int>& const_set = set;
     count = 0;
@@ -177,7 +176,6 @@ TEST_CASE(test_set_load_factor_and_rehashing)
     ASSERT_EQUAL(static_cast<size_t>(INSERT_COUNT), set.size());
     ASSERT(set.capacity() > initial_capacity);
 
-
     for(int i = 0; i < INSERT_COUNT; ++i)
     {
         ASSERT(set.contains(i));
@@ -189,7 +187,10 @@ TEST_CASE(test_set_collisions)
 
     struct CollisionHash
     {
-        size_t operator()(int) const { return 1; }
+        size_t operator()(int) const
+        {
+            return 1;
+        }
     };
 
     stdromano::HashSet<int, CollisionHash> set;
@@ -364,7 +365,6 @@ TEST_CASE(test_set_stress_lookup_and_failed_insert)
     }
     ASSERT_EQUAL(static_cast<size_t>(TEST_SIZE), set.size());
 
-
     SCOPED_PROFILE_START(stdromano::ProfileUnit::MilliSeconds, set_find_existing);
     for(int i = 0; i < TEST_SIZE; ++i)
     {
@@ -401,7 +401,8 @@ int main()
     runner.add_test("HashSet Clear and Reserve", test_set_clear_and_reserve);
     runner.add_test("HashSet Edge Cases", test_set_edge_cases);
     runner.add_test("HashSet Stress Test", test_set_stress);
-    runner.add_test("HashSet Stress Lookup/Failed Insert", test_set_stress_lookup_and_failed_insert);
+    runner.add_test("HashSet Stress Lookup/Failed Insert",
+                    test_set_stress_lookup_and_failed_insert);
 
     runner.run_all();
 

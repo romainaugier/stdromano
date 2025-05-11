@@ -12,8 +12,8 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
-#include <type_traits>
 #include <immintrin.h>
+#include <type_traits>
 
 #if defined(STDROMANO_GCC)
 #include <alloca.h>
@@ -49,7 +49,8 @@ static STDROMANO_FORCE_INLINE void mem_swap(void* a, void* b, const size_t size)
     unsigned char* q;
     unsigned char* const sentry = (unsigned char*)a + size;
 
-    for(p = static_cast<unsigned char*>(a), q = static_cast<unsigned char*>(b); p < sentry; ++p, ++q)
+    for(p = static_cast<unsigned char*>(a), q = static_cast<unsigned char*>(b); p < sentry;
+        ++p, ++q)
     {
         const unsigned char t = *p;
         *p = *q;
@@ -63,9 +64,9 @@ class STDROMANO_API Arena
 {
     static constexpr float ARENA_GROWTH_RATE = 1.6180339887f;
 
-    struct Destructor 
+    struct Destructor
     {
-        void(*destroy_func)(void*);
+        void (*destroy_func)(void*);
         void* object_ptr;
         Destructor* next;
     };
@@ -76,14 +77,15 @@ class STDROMANO_API Arena
 
     Destructor* _destructors = nullptr;
 
-    STDROMANO_FORCE_INLINE bool check_resize(const size_t new_size) const noexcept 
-    { 
+    STDROMANO_FORCE_INLINE bool check_resize(const size_t new_size) const noexcept
+    {
         return (this->_offset + new_size) >= this->_capacity;
     }
 
     STDROMANO_FORCE_INLINE size_t align_offset(const size_t alignment) const noexcept
     {
-        const uintptr_t current_addr = reinterpret_cast<uintptr_t>(static_cast<char*>(this->_data) + this->_offset);
+        const uintptr_t current_addr =
+                       reinterpret_cast<uintptr_t>(static_cast<char*>(this->_data) + this->_offset);
         const uintptr_t aligned_addr = (current_addr + alignment - 1) & ~(alignment - 1);
         return this->_offset + (aligned_addr - current_addr);
     }
@@ -95,13 +97,13 @@ class STDROMANO_API Arena
 
     void grow(const size_t min_size) noexcept;
 
-    template<typename T>
+    template <typename T>
     static void dtor_func(void* ptr)
     {
         reinterpret_cast<T*>(ptr)->~T();
     }
 
-public: 
+  public:
     Arena(const size_t initial_size);
 
     ~Arena();
@@ -110,7 +112,7 @@ public:
 
     void resize(const size_t new_capacity) noexcept;
 
-    template<typename T, typename... Args>
+    template <typename T, typename... Args>
     T* emplace(Args... args) noexcept
     {
         constexpr bool needs_destructor = !std::is_trivially_destructible<T>::value;
@@ -150,7 +152,9 @@ public:
     {
         STDROMANO_ASSERT(offset < this->_capacity, "Out of bounds access");
 
-        return offset >= this->_capacity ? nullptr : static_cast<void*>(static_cast<char*>(this->_data) + offset);
+        return offset >= this->_capacity
+                              ? nullptr
+                              : static_cast<void*>(static_cast<char*>(this->_data) + offset);
     }
 };
 

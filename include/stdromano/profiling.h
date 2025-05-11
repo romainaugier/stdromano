@@ -4,19 +4,22 @@
 #include "stdromano/cpu.h"
 #include "stdromano/logger.h"
 
-
 #include <chrono>
 #include <ratio>
 #include <type_traits>
 
-
 STDROMANO_NAMESPACE_BEGIN
 
-static STDROMANO_FORCE_INLINE uint64_t get_timestamp() noexcept { return cpu_rdtsc(); }
-
-static STDROMANO_FORCE_INLINE double get_elapsed_time(const uint64_t start, const double unit_multiplier) noexcept
+static STDROMANO_FORCE_INLINE uint64_t get_timestamp() noexcept
 {
-    return ((double)(cpu_rdtsc() - start) / ((double)cpu_get_current_frequency() * 1000000.0) * unit_multiplier);
+    return cpu_rdtsc();
+}
+
+static STDROMANO_FORCE_INLINE double get_elapsed_time(const uint64_t start,
+                                                      const double unit_multiplier) noexcept
+{
+    return ((double)(cpu_rdtsc() - start) / ((double)cpu_get_current_frequency() * 1000000.0) *
+            unit_multiplier);
 }
 
 namespace ProfileUnit
@@ -26,24 +29,33 @@ using MilliSeconds = std::milli;
 using MicroSeconds = std::micro;
 using NanoSeconds = std::nano;
 using Cycles = std::ratio<1, 3000000000>;
-}
+} // namespace ProfileUnit
 
 template <typename T>
 struct TypeName
 {
-    static constexpr const char* get_name() { return typeid(T).name(); }
+    static constexpr const char* get_name()
+    {
+        return typeid(T).name();
+    }
 };
 
 template <>
 struct TypeName<ProfileUnit::Seconds>
 {
-    static const char* get_name() { return "seconds"; }
+    static const char* get_name()
+    {
+        return "seconds";
+    }
 };
 
 template <>
 struct TypeName<ProfileUnit::MilliSeconds>
 {
-    static const char* get_name() { return "ms"; }
+    static const char* get_name()
+    {
+        return "ms";
+    }
 };
 
 template <>
@@ -62,13 +74,19 @@ struct TypeName<ProfileUnit::MicroSeconds>
 template <>
 struct TypeName<ProfileUnit::NanoSeconds>
 {
-    static const char* get_name() { return "ns"; }
+    static const char* get_name()
+    {
+        return "ns";
+    }
 };
 
 template <>
 struct TypeName<ProfileUnit::Cycles>
 {
-    static const char* get_name() { return "cycles"; }
+    static const char* get_name()
+    {
+        return "cycles";
+    }
 };
 
 /* Scoped profile */
@@ -80,7 +98,7 @@ class ScopedProfile
     std::chrono::steady_clock::time_point _start;
     bool stopped = false;
 
-public:
+  public:
     ScopedProfile(const char* name)
     {
         this->_name = const_cast<char*>(name);
@@ -102,9 +120,9 @@ public:
         {
             log_debug("Scoped profile \"{}\" -> {} {}",
                       this->_name,
-                      std::chrono::duration_cast<std::chrono::duration<float, Unit> >(std::chrono::steady_clock::now()
-                                                                                      - this->_start)
-                          .count(),
+                      std::chrono::duration_cast<std::chrono::duration<float, Unit>>(
+                                     std::chrono::steady_clock::now() - this->_start)
+                                     .count(),
                       TypeName<Unit>().get_name());
             this->stopped = true;
         }
@@ -118,7 +136,7 @@ class ScopedProfile<ProfileUnit::Cycles>
     uint64_t _start = 0;
     bool stopped = false;
 
-public:
+  public:
     ScopedProfile(const char* name)
     {
         this->_name = const_cast<char*>(name);
@@ -157,8 +175,9 @@ static auto __chrono_func_timer(const char* func_name, F&& func, Args&&... args)
 
     log_debug("Func profile \"{}\" -> {} {}",
               func_name,
-              std::chrono::duration_cast<std::chrono::duration<float, Unit> >(std::chrono::steady_clock::now() - start)
-                  .count(),
+              std::chrono::duration_cast<std::chrono::duration<float, Unit>>(
+                             std::chrono::steady_clock::now() - start)
+                             .count(),
               TypeName<Unit>().get_name());
 
     return ret;
@@ -194,33 +213,37 @@ static auto __func_timer(std::false_type, const char* func_name, F&& func, Args&
 template <typename Unit, typename F, typename... Args>
 static auto _func_timer(const char* func_name, F&& func, Args&&... args)
 {
-    return __func_timer<Unit>(std::integral_constant<bool, std::is_same<Unit, ProfileUnit::Cycles>::value>{},
-                              func_name,
-                              std::forward<F>(func),
-                              std::forward<Args>(args)...);
+    return __func_timer<Unit>(
+                   std::integral_constant<bool, std::is_same<Unit, ProfileUnit::Cycles>::value>{},
+                   func_name,
+                   std::forward<F>(func),
+                   std::forward<Args>(args)...);
 }
 
 STDROMANO_NAMESPACE_END
 
 #if defined(STDROMANO_ENABLE_PROFILING)
-#define SCOPED_PROFILE_START(profile_unit, name) stdromano::ScopedProfile<profile_unit> __profile_##name(#name)
+#define SCOPED_PROFILE_START(profile_unit, name)                                                   \
+    stdromano::ScopedProfile<profile_unit> __profile_##name(#name)
 #define SCOPED_PROFILE_STOP(name) __profile_##name.stop()
 
-#define PROFILE_FUNC(profile_unit, func, ...) stdromano::_func_timer<profile_unit>(#func, func, ##__VA_ARGS__)
+#define PROFILE_FUNC(profile_unit, func, ...)                                                      \
+    stdromano::_func_timer<profile_unit>(#func, func, ##__VA_ARGS__)
 
-#define ___LERP_MEAN(X, Y, t)                                                                                          \
-    (static_cast<double>(X) + (static_cast<double>(Y) - static_cast<double>(X)) * static_cast<double>(t))
-#define MEAN_PROFILE_INIT(name)                                                                                        \
-    const char* ___mean_##name = #name;                                                                                \
-    double ___mean_accum_##name = 0;                                                                                   \
+#define ___LERP_MEAN(X, Y, t)                                                                      \
+    (static_cast<double>(X) +                                                                      \
+     (static_cast<double>(Y) - static_cast<double>(X)) * static_cast<double>(t))
+#define MEAN_PROFILE_INIT(name)                                                                    \
+    const char* ___mean_##name = #name;                                                            \
+    double ___mean_accum_##name = 0;                                                               \
     uint64_t ___mean_counter_##name = 0;
 #define MEAN_PROFILE_START(name) uint64_t ___mean_start_##name = stdromano::get_timestamp();
-#define MEAN_PROFILE_STOP(name)                                                                                        \
-    const double ___time_##name = stdromano::get_elapsed_time(___mean_start_##name, 1e9);                              \
-    ___mean_counter_##name++;                                                                                          \
-    const double ___t_##name = 1.0 / (double)___mean_counter_##name;                                                   \
+#define MEAN_PROFILE_STOP(name)                                                                    \
+    const double ___time_##name = stdromano::get_elapsed_time(___mean_start_##name, 1e9);          \
+    ___mean_counter_##name++;                                                                      \
+    const double ___t_##name = 1.0 / (double)___mean_counter_##name;                               \
     ___mean_accum_##name = ___LERP_MEAN(___mean_accum_##name, ___time_##name, ___t_##name);
-#define MEAN_PROFILE_RELEASE(name)                                                                                     \
+#define MEAN_PROFILE_RELEASE(name)                                                                 \
     stdromano::log_debug("Mean profile \"{}\" -> {:.4} ns", ___mean_##name, ___mean_accum_##name);
 #else
 #define SCOPED_PROFILE_START(profile_unit, name)

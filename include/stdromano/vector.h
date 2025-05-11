@@ -22,18 +22,30 @@ class Vector
     static constexpr float GROW_RATE = 1.61803398875f;
     static constexpr uint32_t MIN_SIZE = 128;
 
-private:
+  private:
     T* _data = nullptr;
     uint32_t _capacity = 0;
     uint32_t _size = 0;
 
-    STDROMANO_FORCE_INLINE void set_capacity(const uint32_t capacity) noexcept { this->_capacity = capacity; }
+    STDROMANO_FORCE_INLINE void set_capacity(const uint32_t capacity) noexcept
+    {
+        this->_capacity = capacity;
+    }
 
-    STDROMANO_FORCE_INLINE void set_size(const uint32_t size) noexcept { this->_size = size; }
+    STDROMANO_FORCE_INLINE void set_size(const uint32_t size) noexcept
+    {
+        this->_size = size;
+    }
 
-    STDROMANO_FORCE_INLINE void incr_size() noexcept { this->_size++; }
+    STDROMANO_FORCE_INLINE void incr_size() noexcept
+    {
+        this->_size++;
+    }
 
-    STDROMANO_FORCE_INLINE void decr_size() noexcept { this->_size--; }
+    STDROMANO_FORCE_INLINE void decr_size() noexcept
+    {
+        this->_size--;
+    }
 
     static T* allocate(const uint32_t capacity)
     {
@@ -72,7 +84,7 @@ private:
         }
     }
 
-public:
+  public:
     using value_type = T;
     using size_type = uint32_t;
     using difference_type = int32_t;
@@ -81,7 +93,12 @@ public:
     using pointer = value_type*;
     using const_pointer = const value_type*;
 
-    Vector() : _data(nullptr), _capacity(0), _size(0) {}
+    Vector()
+        : _data(nullptr),
+          _capacity(0),
+          _size(0)
+    {
+    }
 
     Vector(const uint32_t initial_capacity)
     {
@@ -217,11 +234,20 @@ public:
         return *this;
     }
 
-    STDROMANO_FORCE_INLINE uint32_t capacity() const noexcept { return this->_capacity; }
+    STDROMANO_FORCE_INLINE uint32_t capacity() const noexcept
+    {
+        return this->_capacity;
+    }
 
-    STDROMANO_FORCE_INLINE uint32_t size() const noexcept { return this->_size; }
+    STDROMANO_FORCE_INLINE uint32_t size() const noexcept
+    {
+        return this->_size;
+    }
 
-    STDROMANO_FORCE_INLINE bool empty() const noexcept { return this->size() == 0; }
+    STDROMANO_FORCE_INLINE bool empty() const noexcept
+    {
+        return this->size() == 0;
+    }
 
     class iterator
     {
@@ -235,14 +261,19 @@ public:
                 this->index = this->vector->size();
         }
 
-    public:
+      public:
         using iterator_category = std::random_access_iterator_tag;
         using value_type = T;
         using difference_type = int32_t;
         using pointer = T*;
         using reference = T&;
 
-        iterator(Vector* v, uint32_t i) : vector(v), index(i) { this->advance(); }
+        iterator(Vector* v, uint32_t i)
+            : vector(v),
+              index(i)
+        {
+            this->advance();
+        }
 
         iterator& operator++()
         {
@@ -256,15 +287,30 @@ public:
             return this->index == other.index && this->vector == other.vector;
         }
 
-        bool operator!=(const iterator& other) const { return !(*this == other); }
+        bool operator!=(const iterator& other) const
+        {
+            return !(*this == other);
+        }
 
-        reference operator*() { return (*this->vector)[this->index]; }
-        
-        const reference operator*() const { return (*this->vector)[this->index]; }
+        reference operator*()
+        {
+            return (*this->vector)[this->index];
+        }
 
-        pointer operator->() { return &(*this->vector)[this->index]; }
+        const reference operator*() const
+        {
+            return (*this->vector)[this->index];
+        }
 
-        const pointer operator->() const { return &(*this->vector)[this->index]; }
+        pointer operator->()
+        {
+            return &(*this->vector)[this->index];
+        }
+
+        const pointer operator->() const
+        {
+            return &(*this->vector)[this->index];
+        }
 
         iterator& operator--()
         {
@@ -272,9 +318,15 @@ public:
             return *this;
         }
 
-        iterator operator+(difference_type n) const { return iterator(this->vector, this->index + n); }
+        iterator operator+(difference_type n) const
+        {
+            return iterator(this->vector, this->index + n);
+        }
 
-        iterator operator-(difference_type n) const { return iterator(this->vector, this->index - n); }
+        iterator operator-(difference_type n) const
+        {
+            return iterator(this->vector, this->index - n);
+        }
 
         difference_type operator-(const iterator& other) const
         {
@@ -295,15 +347,30 @@ public:
             return *this;
         }
 
-        reference operator[](difference_type n) { return (*this->vector)[this->index + n]; }
+        reference operator[](difference_type n)
+        {
+            return (*this->vector)[this->index + n];
+        }
 
-        bool operator<(const iterator& other) const { return this->index < other.index; }
+        bool operator<(const iterator& other) const
+        {
+            return this->index < other.index;
+        }
 
-        bool operator>(const iterator& other) const { return this->index > other.index; }
+        bool operator>(const iterator& other) const
+        {
+            return this->index > other.index;
+        }
 
-        bool operator<=(const iterator& other) const { return this->index <= other.index; }
+        bool operator<=(const iterator& other) const
+        {
+            return this->index <= other.index;
+        }
 
-        bool operator>=(const iterator& other) const { return this->index >= other.index; }
+        bool operator>=(const iterator& other) const
+        {
+            return this->index >= other.index;
+        }
     };
 
     class const_iterator
@@ -318,14 +385,19 @@ public:
                 this->index = this->vector->size();
         }
 
-    public:
+      public:
         using iterator_category = std::random_access_iterator_tag;
         using value_type = T;
         using difference_type = int32_t;
         using pointer = const T*;
         using reference = const T&;
 
-        const_iterator(const Vector* v, uint32_t i) : vector(v), index(i) { this->advance(); }
+        const_iterator(const Vector* v, uint32_t i)
+            : vector(v),
+              index(i)
+        {
+            this->advance();
+        }
 
         const_iterator& operator++()
         {
@@ -339,11 +411,20 @@ public:
             return this->index == other.index && this->vector == other.vector;
         }
 
-        bool operator!=(const const_iterator& other) const { return !(*this == other); }
+        bool operator!=(const const_iterator& other) const
+        {
+            return !(*this == other);
+        }
 
-        reference operator*() const { return (*this->vector)[this->index]; }
+        reference operator*() const
+        {
+            return (*this->vector)[this->index];
+        }
 
-        pointer operator->() const { return &(*this->vector)[this->index]; }
+        pointer operator->() const
+        {
+            return &(*this->vector)[this->index];
+        }
 
         const_iterator& operator--()
         {
@@ -351,9 +432,15 @@ public:
             return *this;
         }
 
-        const_iterator operator+(difference_type n) const { return const_iterator(this->vector, this->index + n); }
+        const_iterator operator+(difference_type n) const
+        {
+            return const_iterator(this->vector, this->index + n);
+        }
 
-        const_iterator operator-(difference_type n) const { return const_iterator(this->vector, this->index - n); }
+        const_iterator operator-(difference_type n) const
+        {
+            return const_iterator(this->vector, this->index - n);
+        }
 
         difference_type operator-(const const_iterator& other) const
         {
@@ -374,48 +461,113 @@ public:
             return *this;
         }
 
-        reference operator[](difference_type n) const { return (*this->vector)[this->index + n]; }
+        reference operator[](difference_type n) const
+        {
+            return (*this->vector)[this->index + n];
+        }
 
-        bool operator<(const const_iterator& other) const { return this->index < other.index; }
+        bool operator<(const const_iterator& other) const
+        {
+            return this->index < other.index;
+        }
 
-        bool operator>(const const_iterator& other) const { return this->index > other.index; }
+        bool operator>(const const_iterator& other) const
+        {
+            return this->index > other.index;
+        }
 
-        bool operator<=(const const_iterator& other) const { return this->index <= other.index; }
+        bool operator<=(const const_iterator& other) const
+        {
+            return this->index <= other.index;
+        }
 
-        bool operator>=(const const_iterator& other) const { return this->index >= other.index; }
+        bool operator>=(const const_iterator& other) const
+        {
+            return this->index >= other.index;
+        }
     };
 
-    iterator begin() { return iterator(this, 0); }
+    iterator begin()
+    {
+        return iterator(this, 0);
+    }
 
-    iterator end() { return iterator(this, this->size()); }
+    iterator end()
+    {
+        return iterator(this, this->size());
+    }
 
-    const_iterator begin() const { return const_iterator(this, 0); }
+    const_iterator begin() const
+    {
+        return const_iterator(this, 0);
+    }
 
-    const_iterator end() const { return const_iterator(this, this->size()); }
+    const_iterator end() const
+    {
+        return const_iterator(this, this->size());
+    }
 
-    const_iterator cbegin() const { return const_iterator(this, 0); }
+    const_iterator cbegin() const
+    {
+        return const_iterator(this, 0);
+    }
 
-    const_iterator cend() const { return const_iterator(this, this->size()); }
+    const_iterator cend() const
+    {
+        return const_iterator(this, this->size());
+    }
 
-    STDROMANO_FORCE_INLINE T* data() noexcept { return this->_data; }
+    STDROMANO_FORCE_INLINE T* data() noexcept
+    {
+        return this->_data;
+    }
 
-    STDROMANO_FORCE_INLINE const T* data() const noexcept { return this->_data; }
+    STDROMANO_FORCE_INLINE const T* data() const noexcept
+    {
+        return this->_data;
+    }
 
-    STDROMANO_FORCE_INLINE T* at(const uint32_t index) noexcept { STDROMANO_ASSERT(index < this->size(), "Out of bounds access"); return this->data() + index; }
+    STDROMANO_FORCE_INLINE T* at(const uint32_t index) noexcept
+    {
+        STDROMANO_ASSERT(index < this->size(), "Out of bounds access");
+        return this->data() + index;
+    }
 
-    STDROMANO_FORCE_INLINE const T* at(const uint32_t index) const noexcept { STDROMANO_ASSERT(index < this->size(), "Out of bounds access"); return this->data() + index; }
+    STDROMANO_FORCE_INLINE const T* at(const uint32_t index) const noexcept
+    {
+        STDROMANO_ASSERT(index < this->size(), "Out of bounds access");
+        return this->data() + index;
+    }
 
-    STDROMANO_FORCE_INLINE T& operator[](const uint32_t i) noexcept { return *this->at(i); }
+    STDROMANO_FORCE_INLINE T& operator[](const uint32_t i) noexcept
+    {
+        return *this->at(i);
+    }
 
-    STDROMANO_FORCE_INLINE const T& operator[](const uint32_t i) const noexcept { return *this->at(i); }
+    STDROMANO_FORCE_INLINE const T& operator[](const uint32_t i) const noexcept
+    {
+        return *this->at(i);
+    }
 
-    STDROMANO_FORCE_INLINE T& front() { return this->operator[](0); }
+    STDROMANO_FORCE_INLINE T& front()
+    {
+        return this->operator[](0);
+    }
 
-    STDROMANO_FORCE_INLINE const T& front() const { return this->operator[](0); }
+    STDROMANO_FORCE_INLINE const T& front() const
+    {
+        return this->operator[](0);
+    }
 
-    STDROMANO_FORCE_INLINE T& back() { return this->operator[](this->size() - 1); }
+    STDROMANO_FORCE_INLINE T& back()
+    {
+        return this->operator[](this->size() - 1);
+    }
 
-    STDROMANO_FORCE_INLINE const T& back() const { return this->operator[](this->size() - 1); }
+    STDROMANO_FORCE_INLINE const T& back() const
+    {
+        return this->operator[](this->size() - 1);
+    }
 
     void resize(const uint32_t new_capacity) noexcept
     {
@@ -491,7 +643,7 @@ public:
             this->grow();
         }
 
-        T* ptr = ::new(this->data() + this->size()) T(std::forward<Args&&>(args)...);
+        T* ptr = ::new(this->data() + this->size()) T(std::forward<Args>(args)...);
         this->incr_size();
     }
 
@@ -505,7 +657,9 @@ public:
             this->grow();
         }
 
-        std::memmove(this->at(position + 1), this->at(position), (this->size() - position) * sizeof(T));
+        std::memmove(this->at(position + 1),
+                     this->at(position),
+                     (this->size() - position) * sizeof(T));
         ::new(this->at(position)) T(element);
         this->incr_size();
     }
@@ -528,7 +682,9 @@ public:
             this->grow();
         }
 
-        std::memmove(this->at(position + count), this->at(position), (this->size() - position) * sizeof(T));
+        std::memmove(this->at(position + count),
+                     this->at(position),
+                     (this->size() - position) * sizeof(T));
 
         for(uint32_t i = 0; i < count; ++i)
         {
@@ -565,7 +721,9 @@ public:
             this->grow();
         }
 
-        std::memmove(this->at(position + count), this->at(position), (this->size() - position) * sizeof(T));
+        std::memmove(this->at(position + count),
+                     this->at(position),
+                     (this->size() - position) * sizeof(T));
         uint32_t offset = 0;
 
         for(auto it = first; it != last; ++it, ++offset)
@@ -581,12 +739,15 @@ public:
     iterator erase(const_iterator pos) noexcept
     {
         STDROMANO_ASSERT(this->_data != nullptr, "Vector has not been allocated");
-        STDROMANO_ASSERT(pos.index < this->size(), "Iterator position must be lower than vector size");
+        STDROMANO_ASSERT(pos.index < this->size(),
+                         "Iterator position must be lower than vector size");
 
         const uint32_t position = pos.index;
 
         this->at(position)->~T();
-        std::memmove(this->at(position), this->at(position + 1), (this->size() - position - 1) * sizeof(T));
+        std::memmove(this->at(position),
+                     this->at(position + 1),
+                     (this->size() - position - 1) * sizeof(T));
         this->decr_size();
 
         return iterator(this, position);
@@ -624,7 +785,9 @@ public:
         STDROMANO_ASSERT(position < this->size(), "Position must be lower than the vector size");
 
         this->at(position)->~T();
-        std::memmove(this->at(position), this->at(position + 1), (this->size() - position - 1) * sizeof(T));
+        std::memmove(this->at(position),
+                     this->at(position + 1),
+                     (this->size() - position - 1) * sizeof(T));
         this->decr_size();
     }
 
@@ -689,13 +852,13 @@ public:
         this->set_size(0);
     }
 
-    template <typename F = std::less<T> >
+    template <typename F = std::less<T>>
     STDROMANO_FORCE_INLINE void sort(F&& cmp = F()) noexcept
     {
         STDROMANO_ASSERT(this->_data != nullptr, "Vector has not been allocated");
         STDROMANO_ASSERT(this->size() > 1, "Size must be greater than one");
 
-        std::qsort(this->data(), this->size(), sizeof(T), std::forward<F&&>(cmp));
+        std::qsort(this->data(), this->size(), sizeof(T), std::forward<F>(cmp));
     }
 
     STDROMANO_FORCE_INLINE size_t memory_usage() const noexcept

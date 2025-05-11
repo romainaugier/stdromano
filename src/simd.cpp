@@ -21,20 +21,20 @@ void simd_check_vectorization() noexcept
 
     const bool has_sse = (regs[3] & (1 << 25)) != 0;
     const bool has_avx = (regs[2] & (1 << 28)) != 0;
-    
+
     bool has_avx2 = false;
 
-    if(has_avx) 
+    if(has_avx)
     {
         cpuidex(regs, 7, 0);
         has_avx2 = (regs[1] & (1 << 5)) != 0;
     }
-    
-    if(has_avx2) 
+
+    if(has_avx2)
     {
         g_max_vectorization_mode = VectorizationMode_AVX2;
     }
-    else if(has_avx) 
+    else if(has_avx)
     {
         g_max_vectorization_mode = VectorizationMode_AVX;
     }
@@ -52,7 +52,7 @@ void simd_check_vectorization() noexcept
         if(std::strcmp(env_val, "SCALAR") == 0)
         {
             return;
-        } 
+        }
         else if(std::strcmp(env_val, "SSE") == 0 && has_sse)
         {
             g_vectorization_mode = VectorizationMode_SSE;

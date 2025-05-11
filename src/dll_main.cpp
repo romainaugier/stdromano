@@ -3,8 +3,8 @@
 // All rights reserved.
 
 #include "stdromano/cpu.h"
-#include "stdromano/simd.h"
 #include "stdromano/logger.h"
+#include "stdromano/simd.h"
 
 #include <cstdio>
 
@@ -28,7 +28,8 @@ void STDROMANO_LIB_ENTRY lib_entry(void)
     stdromano::cpu_check();
     stdromano::simd_check_vectorization();
 
-    stdromano::log_debug("stdromano vectorization mode: {}\n", stdromano::simd_get_vectorization_mode_as_string());
+    stdromano::log_debug("stdromano vectorization mode: {}\n",
+                         stdromano::simd_get_vectorization_mode_as_string());
 }
 
 void STDROMANO_LIB_EXIT lib_exit(void)
@@ -43,18 +44,18 @@ BOOL APIENTRY DllMain(HMODULE hModule, DWORD ul_reason_for_call, LPVOID lpReserv
 {
     switch(ul_reason_for_call)
     {
-    case DLL_PROCESS_ATTACH:
-        /* Code to run when the DLL is loaded */
-        lib_entry();
-        break;
-    case DLL_THREAD_ATTACH:
-        break;
-    case DLL_THREAD_DETACH:
-        break;
-    case DLL_PROCESS_DETACH:
-        /* Code to run when the DLL is unloaded */
-        lib_exit();
-        break;
+        case DLL_PROCESS_ATTACH:
+            /* Code to run when the DLL is loaded */
+            lib_entry();
+            break;
+        case DLL_THREAD_ATTACH:
+            break;
+        case DLL_THREAD_DETACH:
+            break;
+        case DLL_PROCESS_DETACH:
+            /* Code to run when the DLL is unloaded */
+            lib_exit();
+            break;
     }
 
     return TRUE;

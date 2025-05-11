@@ -10,9 +10,9 @@
 
 STDROMANO_NAMESPACE_BEGIN
 
-void* mem_alloc(const size_t size) noexcept 
-{ 
-    return je_malloc(size); 
+void* mem_alloc(const size_t size) noexcept
+{
+    return je_malloc(size);
 }
 
 void* mem_calloc(const size_t count, const size_t size) noexcept
@@ -20,8 +20,8 @@ void* mem_calloc(const size_t count, const size_t size) noexcept
     return je_calloc(count, size);
 }
 
-void* mem_realloc(void* ptr, const size_t size) noexcept 
-{ 
+void* mem_realloc(void* ptr, const size_t size) noexcept
+{
     return je_realloc(ptr, size);
 }
 
@@ -38,7 +38,7 @@ void* mem_crealloc(void* ptr, const size_t size) noexcept
 }
 
 void mem_free(void* ptr) noexcept
-{ 
+{
     je_free(ptr);
 }
 
@@ -47,8 +47,8 @@ void* mem_aligned_alloc(const size_t size, const size_t alignment) noexcept
     return je_aligned_alloc(alignment, size);
 }
 
-void mem_aligned_free(void* ptr) noexcept 
-{ 
+void mem_aligned_free(void* ptr) noexcept
+{
     je_free(ptr);
 }
 
@@ -87,8 +87,9 @@ Arena::Arena(const size_t initial_size)
 void Arena::grow(const size_t min_size) noexcept
 {
     const size_t min_capacity = this->_capacity + min_size;
-    const size_t new_capacity = std::max(static_cast<size_t>(static_cast<float>(this->_capacity) * ARENA_GROWTH_RATE),
-                                         min_capacity);
+    const size_t new_capacity = std::max(
+                   static_cast<size_t>(static_cast<float>(this->_capacity) * ARENA_GROWTH_RATE),
+                   min_capacity);
 
     this->resize(new_capacity);
 }

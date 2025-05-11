@@ -53,10 +53,22 @@ STDROMANO_FORCE_INLINE float wang_hash_float(uint32_t state) noexcept
     return static_cast<float>(x) * reinterpret_cast<const float&>(tofloat);
 }
 
-STDROMANO_FORCE_INLINE uint32_t random_int_range(const uint32_t state, const uint32_t low, const uint32_t high) noexcept
+STDROMANO_FORCE_INLINE uint32_t random_int_range(const uint32_t state,
+                                                 const uint32_t low,
+                                                 const uint32_t high) noexcept
 {
-    return static_cast<uint32_t>(wang_hash_float(state) * (static_cast<float>(high) - static_cast<float>(low))) + low;
+    return static_cast<uint32_t>(wang_hash_float(state) *
+                                 (static_cast<float>(high) - static_cast<float>(low))) +
+           low;
 }
+
+STDROMANO_API uint64_t xoshiro_random_uint64(const uint64_t seed) noexcept;
+
+STDROMANO_API void seed_xoshiro(uint64_t seed) noexcept;
+
+STDROMANO_API uint64_t xoshiro_next_uint64() noexcept;
+
+STDROMANO_API float xoshiro_next_float() noexcept;
 
 /* Thread safe random generators */
 
@@ -76,7 +88,8 @@ STDROMANO_FORCE_INLINE float next_random_float_01() noexcept
     return wang_hash_float(state);
 }
 
-STDROMANO_FORCE_INLINE uint32_t next_random_int_range(const uint32_t low, const uint32_t high) noexcept
+STDROMANO_FORCE_INLINE uint32_t next_random_int_range(const uint32_t low,
+                                                      const uint32_t high) noexcept
 {
     const uint32_t state = ++_state;
 
