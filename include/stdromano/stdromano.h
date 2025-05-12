@@ -11,6 +11,7 @@
 #define STDROMANO_MSVC
 #pragma warning(disable : 4711) /* function selected for automatic inline expansion */
 #define _SILENCE_ALL_MS_EXT_DEPRECATION_WARNINGS
+#define _CRT_SECURE_NO_WARNINGS
 #elif defined(__GNUC__)
 #define STDROMANO_GCC
 #elif defined(__clang__)
@@ -39,7 +40,7 @@
 #define STDROMANO_VERSION_STR                                                                      \
     STDROMANO_STRIFY_MACRO(STDROMANO_VERSION_MAJOR)                                                \
     "." STDROMANO_STRIFY_MACRO(STDROMANO_VERSION_MINOR) "." STDROMANO_STRIFY_MACRO(                \
-                   STDROMANO_VERSION_PATCH) "." STDROMANO_STRIFY_MACRO(STDROMANO_VERSION_REVISION)
+        STDROMANO_VERSION_PATCH) "." STDROMANO_STRIFY_MACRO(STDROMANO_VERSION_REVISION)
 
 #include <cassert>
 #include <cstddef>
@@ -98,6 +99,12 @@
 #define STDROMANO_LIB_ENTRY __attribute__((constructor))
 #define STDROMANO_LIB_EXIT __attribute__((destructor))
 #endif /* defined(STDROMANO_MSVC) */
+
+#if __cplusplus > 201703
+#define STDROMANO_MAYBE_UNUSED [[maybe_unused]]
+#else
+#define STDROMANO_MAYBE_UNUSED
+#endif /* */
 
 #if defined(STDROMANO_BUILD_SHARED)
 #define STDROMANO_API STDROMANO_EXPORT

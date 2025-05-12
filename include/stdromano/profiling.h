@@ -98,7 +98,7 @@ class ScopedProfile
     std::chrono::steady_clock::time_point _start;
     bool stopped = false;
 
-  public:
+public:
     ScopedProfile(const char* name)
     {
         this->_name = const_cast<char*>(name);
@@ -121,8 +121,8 @@ class ScopedProfile
             log_debug("Scoped profile \"{}\" -> {} {}",
                       this->_name,
                       std::chrono::duration_cast<std::chrono::duration<float, Unit>>(
-                                     std::chrono::steady_clock::now() - this->_start)
-                                     .count(),
+                          std::chrono::steady_clock::now() - this->_start)
+                          .count(),
                       TypeName<Unit>().get_name());
             this->stopped = true;
         }
@@ -136,7 +136,7 @@ class ScopedProfile<ProfileUnit::Cycles>
     uint64_t _start = 0;
     bool stopped = false;
 
-  public:
+public:
     ScopedProfile(const char* name)
     {
         this->_name = const_cast<char*>(name);
@@ -176,8 +176,8 @@ static auto __chrono_func_timer(const char* func_name, F&& func, Args&&... args)
     log_debug("Func profile \"{}\" -> {} {}",
               func_name,
               std::chrono::duration_cast<std::chrono::duration<float, Unit>>(
-                             std::chrono::steady_clock::now() - start)
-                             .count(),
+                  std::chrono::steady_clock::now() - start)
+                  .count(),
               TypeName<Unit>().get_name());
 
     return ret;
@@ -214,10 +214,10 @@ template <typename Unit, typename F, typename... Args>
 static auto _func_timer(const char* func_name, F&& func, Args&&... args)
 {
     return __func_timer<Unit>(
-                   std::integral_constant<bool, std::is_same<Unit, ProfileUnit::Cycles>::value>{},
-                   func_name,
-                   std::forward<F>(func),
-                   std::forward<Args>(args)...);
+        std::integral_constant<bool, std::is_same<Unit, ProfileUnit::Cycles>::value>{},
+        func_name,
+        std::forward<F>(func),
+        std::forward<Args>(args)...);
 }
 
 STDROMANO_NAMESPACE_END

@@ -46,7 +46,7 @@ class Mutex
 {
     std::atomic<bool> _flag;
 
-  public:
+public:
     Mutex()
     {
         this->_flag.store(false);
@@ -72,7 +72,7 @@ class ScopedLock
 
 class STDROMANO_API Thread
 {
-  private:
+private:
     thread_handle _handle;
     std::function<void()> _task;
 
@@ -98,7 +98,7 @@ class STDROMANO_API Thread
 
     bool _running = false;
 
-  public:
+public:
     Thread(std::function<void()> func, bool daemon = false, bool detached = false)
     {
         this->_task = std::move(func);
@@ -159,7 +159,7 @@ STDROMANO_FORCE_INLINE void thread_sleep(const size_t sleep_duration_ms) noexcep
 
 class STDROMANO_API ThreadPoolWork
 {
-  public:
+public:
     ThreadPoolWork()
     {
     }
@@ -177,7 +177,7 @@ class STDROMANO_API ThreadPool
     {
         std::function<void()> _func;
 
-      public:
+    public:
         explicit LambdaWork(std::function<void()> func)
             : _func(std::move(func))
         {
@@ -194,7 +194,7 @@ class STDROMANO_API ThreadPool
         }
     };
 
-  public:
+public:
     ThreadPool(const int64_t workers_count = -1);
 
     ~ThreadPool();
@@ -219,7 +219,7 @@ class STDROMANO_API ThreadPool
         return this->_stop.load();
     }
 
-  private:
+private:
     moodycamel::ConcurrentQueue<ThreadPoolWork*> _work_queue;
     Thread* _workers;
 
@@ -235,7 +235,7 @@ class STDROMANO_API ThreadPool
 
 class STDROMANO_API GlobalThreadPool
 {
-  public:
+public:
     static GlobalThreadPool& get_instance() noexcept
     {
         static GlobalThreadPool tp;
@@ -265,7 +265,7 @@ class STDROMANO_API GlobalThreadPool
         this->~GlobalThreadPool();
     }
 
-  private:
+private:
     GlobalThreadPool();
     ~GlobalThreadPool();
 

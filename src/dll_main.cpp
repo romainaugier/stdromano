@@ -40,7 +40,9 @@ void STDROMANO_LIB_EXIT lib_exit(void)
 }
 
 #if defined(STDROMANO_WIN)
-BOOL APIENTRY DllMain(HMODULE hModule, DWORD ul_reason_for_call, LPVOID lpReserved)
+BOOL APIENTRY DllMain(STDROMANO_MAYBE_UNUSED HMODULE hModule, 
+                      DWORD ul_reason_for_call,
+                      STDROMANO_MAYBE_UNUSED LPVOID lpReserved)
 {
     switch(ul_reason_for_call)
     {

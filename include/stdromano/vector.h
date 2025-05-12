@@ -22,7 +22,7 @@ class Vector
     static constexpr float GROW_RATE = 1.61803398875f;
     static constexpr uint32_t MIN_SIZE = 128;
 
-  private:
+private:
     T* _data = nullptr;
     uint32_t _capacity = 0;
     uint32_t _size = 0;
@@ -84,7 +84,7 @@ class Vector
         }
     }
 
-  public:
+public:
     using value_type = T;
     using size_type = uint32_t;
     using difference_type = int32_t;
@@ -261,7 +261,7 @@ class Vector
                 this->index = this->vector->size();
         }
 
-      public:
+    public:
         using iterator_category = std::random_access_iterator_tag;
         using value_type = T;
         using difference_type = int32_t;
@@ -385,7 +385,7 @@ class Vector
                 this->index = this->vector->size();
         }
 
-      public:
+    public:
         using iterator_category = std::random_access_iterator_tag;
         using value_type = T;
         using difference_type = int32_t;
@@ -643,7 +643,7 @@ class Vector
             this->grow();
         }
 
-        T* ptr = ::new(this->data() + this->size()) T(std::forward<Args>(args)...);
+        ::new(this->data() + this->size()) T(std::forward<Args>(args)...);
         this->incr_size();
     }
 
@@ -660,6 +660,7 @@ class Vector
         std::memmove(this->at(position + 1),
                      this->at(position),
                      (this->size() - position) * sizeof(T));
+
         ::new(this->at(position)) T(element);
         this->incr_size();
     }
@@ -849,6 +850,7 @@ class Vector
         {
             this->operator[](i).~T();
         }
+
         this->set_size(0);
     }
 

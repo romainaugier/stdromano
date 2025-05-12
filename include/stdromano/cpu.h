@@ -48,7 +48,7 @@ STDROMANO_API uint32_t cpu_get_frequency() noexcept;
 STDROMANO_API uint32_t cpu_get_current_frequency() noexcept;
 
 STDROMANO_API void cpu_get_current_frequency_set_refresh_frequency(
-               const uint32_t refresh_frequency) noexcept;
+    const uint32_t refresh_frequency) noexcept;
 
 STDROMANO_NAMESPACE_END
 

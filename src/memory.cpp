@@ -87,9 +87,9 @@ Arena::Arena(const size_t initial_size)
 void Arena::grow(const size_t min_size) noexcept
 {
     const size_t min_capacity = this->_capacity + min_size;
-    const size_t new_capacity = std::max(
-                   static_cast<size_t>(static_cast<float>(this->_capacity) * ARENA_GROWTH_RATE),
-                   min_capacity);
+    const size_t new_capacity =
+        std::max(static_cast<size_t>(static_cast<float>(this->_capacity) * ARENA_GROWTH_RATE),
+                 min_capacity);
 
     this->resize(new_capacity);
 }

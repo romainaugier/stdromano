@@ -19,7 +19,7 @@ enum LogLevel : uint8_t
 
 class STDROMANO_API Logger
 {
-  public:
+public:
     static Logger& get_instance() noexcept
     {
         static Logger c;
@@ -76,7 +76,7 @@ class STDROMANO_API Logger
         this->_logger.flush();
     }
 
-  private:
+private:
     Logger();
     ~Logger();
 

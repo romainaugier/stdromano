@@ -17,11 +17,11 @@ STDROMANO_NAMESPACE_BEGIN
 template <typename T>
 class Optional
 {
-  private:
+private:
     typename std::aligned_storage<sizeof(T), alignof(T)>::type _data;
     bool _has_value;
 
-  public:
+public:
     Optional()
         : _has_value(false)
     {
@@ -166,7 +166,7 @@ class Optional
         return **this;
     }
 
-  private:
+private:
     T* get_pointer()
     {
         return reinterpret_cast<T*>(&this->_data);

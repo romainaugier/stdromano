@@ -38,12 +38,12 @@ enum ListDirFlags : uint32_t
 
 class STDROMANO_API ListDirIterator
 {
-  public:
+public:
     friend STDROMANO_API bool fs_list_dir(ListDirIterator&,
                                           const String<>&,
                                           const uint32_t) noexcept;
 
-  private:
+private:
     String<> _directory_path;
 
 #if defined(STDROMANO_WIN)
@@ -54,7 +54,7 @@ class STDROMANO_API ListDirIterator
     struct dirent* _entry = nullptr;
 #endif /* defined(STDROMANO_WIN) */
 
-  public:
+public:
     ListDirIterator() = default;
 
     ~ListDirIterator();

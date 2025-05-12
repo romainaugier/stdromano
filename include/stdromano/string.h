@@ -24,11 +24,11 @@ class String
     static constexpr float STRING_GROWTH_RATE = 1.61f;
     static constexpr size_t STRING_ALIGNMENT = 32;
 
-  public:
+public:
     using value_type = char;
     using split_iterator = size_t;
 
-  private:
+private:
     union
     {
         char* _heap_data;
@@ -44,8 +44,8 @@ class String
     {
         STDROMANO_ASSERT(!this->_is_ref, "Cannot modify a reference string");
 
-        char* new_data = (char*)mem_aligned_alloc((new_capacity + 1) * sizeof(char),
-                                                  STRING_ALIGNMENT);
+        char* new_data =
+            (char*)mem_aligned_alloc((new_capacity + 1) * sizeof(char), STRING_ALIGNMENT);
         std::memcpy(new_data, this->data(), this->_size);
         new_data[this->_size] = '\0';
 
@@ -59,7 +59,7 @@ class String
         this->_is_local = 0;
     }
 
-  public:
+public:
     String() noexcept
         : _size(0),
           _capacity(LocalCapacity),
@@ -108,8 +108,8 @@ class String
         }
         else
         {
-            this->_heap_data = (char*)mem_aligned_alloc((this->_capacity + 1) * sizeof(char),
-                                                        STRING_ALIGNMENT);
+            this->_heap_data =
+                (char*)mem_aligned_alloc((this->_capacity + 1) * sizeof(char), STRING_ALIGNMENT);
             std::memcpy(this->_heap_data, other._heap_data, this->_size + 1);
         }
     }
@@ -142,8 +142,8 @@ class String
         }
         else
         {
-            this->_heap_data = (char*)mem_aligned_alloc((this->_capacity + 1) * sizeof(char),
-                                                        STRING_ALIGNMENT);
+            this->_heap_data =
+                (char*)mem_aligned_alloc((this->_capacity + 1) * sizeof(char), STRING_ALIGNMENT);
             std::memcpy(this->_heap_data, other._heap_data, this->_size + 1);
         }
 
@@ -358,7 +358,7 @@ class String
 
         if(this->_size >= this->_capacity)
         {
-            this->reallocate(this->_capacity * STRING_GROWTH_RATE);
+            this->reallocate(static_cast<size_t>(static_cast<float>(this->_capacity) * STRING_GROWTH_RATE));
         }
 
         this->data()[this->_size++] = c;
@@ -700,9 +700,8 @@ struct std::hash<stdromano::String<>>
 {
     std::size_t operator()(const stdromano::String<>& s) const
     {
-        return static_cast<std::size_t>(stdromano::hash_murmur3(static_cast<const void*>(s.c_str()),
-                                                                s.size(),
-                                                                483910));
+        return static_cast<std::size_t>(
+            stdromano::hash_murmur3(static_cast<const void*>(s.c_str()), s.size(), 483910));
     }
 };
 

@@ -134,10 +134,10 @@ ListDirIterator::~ListDirIterator()
 String<> ListDirIterator::get_current_path() const noexcept
 {
 #if defined(STDROMANO_WIN)
-    return String<>("{}{}",
-                    fmt::string_view(this->_directory_path.c_str(),
-                                     this->_directory_path.size() - 1),
-                    this->_find_data.cFileName);
+    return String<>(
+        "{}{}",
+        fmt::string_view(this->_directory_path.c_str(), this->_directory_path.size() - 1),
+        this->_find_data.cFileName);
 #elif defined(STDROMANO_LINUX)
     return String<>("{}/{}",
                     fmt::string_view(this->_directory_path.c_str(), this->_directory_path.size()),
@@ -341,8 +341,8 @@ String<> open_file_dialog(FileDialogMode_ mode,
 
         if(!initial_path.empty())
         {
-            WCHAR* initial_path_wide = static_cast<WCHAR*>(
-                           mem_alloca((initial_path.size() + 1) * sizeof(WCHAR)));
+            WCHAR* initial_path_wide =
+                static_cast<WCHAR*>(mem_alloca((initial_path.size() + 1) * sizeof(WCHAR)));
             std::memset(initial_path_wide, 0, (initial_path.size() + 1) * sizeof(WCHAR));
             MultiByteToWideChar(CP_UTF8,
                                 0,

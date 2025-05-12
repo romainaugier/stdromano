@@ -85,7 +85,7 @@ class STDROMANO_API Arena
     STDROMANO_FORCE_INLINE size_t align_offset(const size_t alignment) const noexcept
     {
         const uintptr_t current_addr =
-                       reinterpret_cast<uintptr_t>(static_cast<char*>(this->_data) + this->_offset);
+            reinterpret_cast<uintptr_t>(static_cast<char*>(this->_data) + this->_offset);
         const uintptr_t aligned_addr = (current_addr + alignment - 1) & ~(alignment - 1);
         return this->_offset + (aligned_addr - current_addr);
     }
@@ -103,7 +103,7 @@ class STDROMANO_API Arena
         reinterpret_cast<T*>(ptr)->~T();
     }
 
-  public:
+public:
     Arena(const size_t initial_size);
 
     ~Arena();
@@ -153,8 +153,8 @@ class STDROMANO_API Arena
         STDROMANO_ASSERT(offset < this->_capacity, "Out of bounds access");
 
         return offset >= this->_capacity
-                              ? nullptr
-                              : static_cast<void*>(static_cast<char*>(this->_data) + offset);
+                   ? nullptr
+                   : static_cast<void*>(static_cast<char*>(this->_data) + offset);
     }
 };
 

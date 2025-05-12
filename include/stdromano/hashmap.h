@@ -23,13 +23,13 @@ STDROMANO_NAMESPACE_BEGIN
 template <class Key, class Value, class Hash = std::hash<Key>>
 class HashMap
 {
-  public:
+public:
     static constexpr float MAX_LOAD_FACTOR = 0.9f;
     static constexpr size_t INITIAL_CAPACITY = 8;
 
     class KeySelect
     {
-      public:
+    public:
         using key_type = Key;
 
         const key_type& operator()(const std::pair<Key, Value>& key_value) const noexcept
@@ -45,7 +45,7 @@ class HashMap
 
     class ValueSelect
     {
-      public:
+    public:
         using value_type = Value;
 
         const value_type& operator()(const std::pair<Key, Value>& key_value) const noexcept
@@ -65,20 +65,20 @@ class HashMap
     using size_type = std::size_t;
     using hasher = Hash;
 
-  private:
+private:
     struct Bucket
     {
         static constexpr int16_t EMPTY_BUCKET_MARKER = -1;
 
         using value_type = std::pair<Key, Value>;
 
-      private:
+    private:
         uint32_t _hash;
         int16_t _probe_length;
 
         alignas(value_type) unsigned char _storage[sizeof(value_type)];
 
-      public:
+    public:
         Bucket() noexcept
             : _hash(0),
               _probe_length(EMPTY_BUCKET_MARKER)
@@ -104,7 +104,7 @@ class HashMap
             if(!other.is_empty())
             {
                 ::new(static_cast<void*>(std::addressof(this->_storage)))
-                               value_type(std::move(other.value()));
+                    value_type(std::move(other.value()));
 
                 this->_hash = other._hash;
                 this->_probe_length = other._probe_length;
@@ -115,7 +115,7 @@ class HashMap
         }
 
         Bucket& operator=(const Bucket& other) noexcept(
-                       std::is_nothrow_copy_assignable<value_type>::value)
+            std::is_nothrow_copy_assignable<value_type>::value)
         {
             if(this != &other)
             {
@@ -124,7 +124,7 @@ class HashMap
                 if(!other.is_empty())
                 {
                     ::new(static_cast<void*>(std::addressof(this->_storage)))
-                                   value_type(other.value());
+                        value_type(other.value());
                 }
 
                 this->_hash = other._hash;
@@ -145,7 +145,7 @@ class HashMap
         void construct(Args&&... args)
         {
             ::new(static_cast<void*>(std::addressof(this->_storage)))
-                           value_type(std::forward<Args>(args)...);
+                value_type(std::forward<Args>(args)...);
         }
 
         void swap_bucket_content(value_type& value, uint32_t& hash, int16_t& probe_length)
@@ -169,7 +169,7 @@ class HashMap
                              "Cannot set content of bucket with uninitialized probe_length");
 
             ::new(static_cast<void*>(std::addressof(this->_storage)))
-                           value_type(std::forward<Args>(value_args)...);
+                value_type(std::forward<Args>(value_args)...);
 
             this->_hash = hash;
             this->_probe_length = probe_length;
@@ -245,7 +245,7 @@ class HashMap
 
     KeySelect _key_select;
 
-  public:
+public:
     class iterator
     {
         friend class HashMap;
@@ -260,7 +260,7 @@ class HashMap
             }
         }
 
-      public:
+    public:
         using iterator_category = std::forward_iterator_tag;
         using value_type = std::pair<Key, Value>;
         using difference_type = std::ptrdiff_t;
@@ -326,7 +326,7 @@ class HashMap
             }
         }
 
-      public:
+    public:
         using iterator_category = std::forward_iterator_tag;
         using value_type = std::pair<Key, Value>;
         using difference_type = std::ptrdiff_t;
@@ -384,7 +384,7 @@ class HashMap
         }
     };
 
-  private:
+private:
     STDROMANO_FORCE_INLINE uint32_t get_hash(const key_type& key) const
     {
         return Hash{}(key) ^ this->_hash_key;
@@ -522,7 +522,7 @@ class HashMap
         }
     }
 
-  public:
+public:
     iterator begin()
     {
         return iterator(this, 0);

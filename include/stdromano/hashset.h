@@ -23,18 +23,18 @@ struct EmptyValue
 template <class Key, class Hash = std::hash<Key>>
 class HashSet : private HashMap<Key, detail::EmptyValue, Hash>
 {
-  private:
+private:
     using Base = HashMap<Key, detail::EmptyValue, Hash>;
     using DummyValue = detail::EmptyValue;
 
-    using BaseKeySelect = typename Base::KeySelect;
+    using BaseKeySelect = Base::KeySelect;
 
-  public:
+public:
     using key_type = Key;
     using value_type = Key;
-    using size_type = typename Base::size_type;
+    using size_type = Base::size_type;
     using difference_type = std::ptrdiff_t;
-    using hasher = typename Base::hasher;
+    using hasher = Base::hasher;
     using reference = const value_type&;
     using const_reference = const value_type&;
     using pointer = const value_type*;
@@ -50,7 +50,7 @@ class HashSet : private HashMap<Key, detail::EmptyValue, Hash>
         {
         }
 
-      public:
+    public:
         using iterator_category = std::forward_iterator_tag;
         using value_type = const Key;
         using difference_type = std::ptrdiff_t;

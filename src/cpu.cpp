@@ -42,10 +42,9 @@ uint32_t _get_cpu_frequency() noexcept
 #if defined(STDROMANO_WIN)
         PROCESSOR_POWER_INFORMATION* ppi;
         LONG ret;
-        size_t size;
+        ULONG size;
         LPBYTE p_buffer = NULL;
         ULONG current;
-        ULONG max;
         UINT num_cpus;
         SYSTEM_INFO system_info;
         system_info.dwNumberOfProcessors = 0;
