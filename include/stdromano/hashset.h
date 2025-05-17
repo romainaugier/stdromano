@@ -27,14 +27,14 @@ private:
     using Base = HashMap<Key, detail::EmptyValue, Hash>;
     using DummyValue = detail::EmptyValue;
 
-    using BaseKeySelect = Base::KeySelect;
+    using BaseKeySelect = typename Base::KeySelect;
 
 public:
     using key_type = Key;
     using value_type = Key;
-    using size_type = Base::size_type;
+    using size_type = typename Base::size_type;
     using difference_type = std::ptrdiff_t;
-    using hasher = Base::hasher;
+    using hasher = typename Base::hasher;
     using reference = const value_type&;
     using const_reference = const value_type&;
     using pointer = const value_type*;

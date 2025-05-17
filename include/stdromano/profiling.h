@@ -24,15 +24,15 @@ static STDROMANO_FORCE_INLINE double get_elapsed_time(const uint64_t start,
 
 namespace ProfileUnit
 {
-using Seconds = std::ratio<1, 1>;
-using MilliSeconds = std::milli;
-using MicroSeconds = std::micro;
-using NanoSeconds = std::nano;
-using Cycles = std::ratio<1, 3000000000>;
+    using Seconds = std::ratio<1, 1>;
+    using MilliSeconds = std::milli;
+    using MicroSeconds = std::micro;
+    using NanoSeconds = std::nano;
+    using Cycles = std::ratio<1, 3000000000>;
 } // namespace ProfileUnit
 
 template <typename T>
-struct TypeName
+struct UnitName
 {
     static constexpr const char* get_name()
     {
@@ -41,7 +41,7 @@ struct TypeName
 };
 
 template <>
-struct TypeName<ProfileUnit::Seconds>
+struct UnitName<ProfileUnit::Seconds>
 {
     static const char* get_name()
     {
@@ -50,7 +50,7 @@ struct TypeName<ProfileUnit::Seconds>
 };
 
 template <>
-struct TypeName<ProfileUnit::MilliSeconds>
+struct UnitName<ProfileUnit::MilliSeconds>
 {
     static const char* get_name()
     {
@@ -59,7 +59,7 @@ struct TypeName<ProfileUnit::MilliSeconds>
 };
 
 template <>
-struct TypeName<ProfileUnit::MicroSeconds>
+struct UnitName<ProfileUnit::MicroSeconds>
 {
     static const char* get_name()
     {
@@ -72,7 +72,7 @@ struct TypeName<ProfileUnit::MicroSeconds>
 };
 
 template <>
-struct TypeName<ProfileUnit::NanoSeconds>
+struct UnitName<ProfileUnit::NanoSeconds>
 {
     static const char* get_name()
     {
@@ -81,7 +81,7 @@ struct TypeName<ProfileUnit::NanoSeconds>
 };
 
 template <>
-struct TypeName<ProfileUnit::Cycles>
+struct UnitName<ProfileUnit::Cycles>
 {
     static const char* get_name()
     {
@@ -123,7 +123,7 @@ public:
                       std::chrono::duration_cast<std::chrono::duration<float, Unit>>(
                           std::chrono::steady_clock::now() - this->_start)
                           .count(),
-                      TypeName<Unit>().get_name());
+                      UnitName<Unit>().get_name());
             this->stopped = true;
         }
     }
@@ -159,7 +159,7 @@ public:
             log_debug("Scoped profile \"{}\" -> {} {}",
                       this->_name,
                       (uint64_t)(cpu_rdtsc() - this->_start),
-                      TypeName<ProfileUnit::Cycles>().get_name());
+                      UnitName<ProfileUnit::Cycles>().get_name());
             this->stopped = true;
         }
     }
@@ -178,7 +178,7 @@ static auto __chrono_func_timer(const char* func_name, F&& func, Args&&... args)
               std::chrono::duration_cast<std::chrono::duration<float, Unit>>(
                   std::chrono::steady_clock::now() - start)
                   .count(),
-              TypeName<Unit>().get_name());
+              UnitName<Unit>().get_name());
 
     return ret;
 }
@@ -193,31 +193,22 @@ static auto __cycles_func_timer(const char* func_name, F&& func, Args&&... args)
     log_debug("Func profile \"{}\" -> {} {}",
               func_name,
               (uint64_t)(cpu_rdtsc() - start),
-              TypeName<ProfileUnit::Cycles>().get_name());
+              UnitName<ProfileUnit::Cycles>().get_name());
 
     return ret;
 }
 
 template <typename Unit, typename F, typename... Args>
-static auto __func_timer(std::true_type, const char* func_name, F&& func, Args&&... args)
-{
-    return __cycles_func_timer(func_name, std::forward<F>(func), std::forward<Args>(args)...);
-}
-
-template <typename Unit, typename F, typename... Args>
-static auto __func_timer(std::false_type, const char* func_name, F&& func, Args&&... args)
-{
-    return __chrono_func_timer<Unit>(func_name, std::forward<F>(func), std::forward<Args>(args)...);
-}
-
-template <typename Unit, typename F, typename... Args>
 static auto _func_timer(const char* func_name, F&& func, Args&&... args)
 {
-    return __func_timer<Unit>(
-        std::integral_constant<bool, std::is_same<Unit, ProfileUnit::Cycles>::value>{},
-        func_name,
-        std::forward<F>(func),
-        std::forward<Args>(args)...);
+    if constexpr (std::is_same_v<Unit, ProfileUnit::Cycles>)
+    {
+        return __cycles_func_timer(func_name, std::forward<F>(func), std::forward<Args>(args)...);
+    }
+    else
+    {
+        return __chrono_func_timer<Unit>(func_name, std::forward<F>(func), std::forward<Args>(args)...);
+    }
 }
 
 STDROMANO_NAMESPACE_END

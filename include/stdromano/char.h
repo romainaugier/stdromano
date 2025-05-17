@@ -21,11 +21,6 @@ STDROMANO_FORCE_INLINE bool is_letter(unsigned int c) noexcept
     return ((c & ~0x20) - 65) < 26;
 }
 
-STDROMANO_FORCE_INLINE bool is_letter_or_digit(unsigned int c) noexcept
-{
-    return ((c - 48) < 10) | (((c & ~0x20) - 65) < 26);
-}
-
 STDROMANO_FORCE_INLINE bool is_alnum(unsigned int c) noexcept
 {
     return ((c - 48) < 10) | (((c & ~0x20) - 65) < 26);

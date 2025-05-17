@@ -9,7 +9,7 @@
 
 STDROMANO_NAMESPACE_BEGIN
 
-enum LogLevel : uint8_t
+enum LogLevel : uint32_t
 {
     Error = spdlog::level::err,
     Warning = spdlog::level::warn,
