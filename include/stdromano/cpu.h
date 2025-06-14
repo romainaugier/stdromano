@@ -38,17 +38,16 @@ STDROMANO_FORCE_INLINE uint64_t cpu_rdtsc() noexcept
 STDROMANO_API void cpu_check() noexcept;
 
 /* The string must be allocated before, and should be sizeof(int) * 12 + 1 (49 bytes) */
-STDROMANO_API void cpu_get_name(char* name) noexcept;
+/* Returns false if the name can't be found */
+STDROMANO_API bool cpu_get_name(char* name) noexcept;
 
-/* Returns the cpu frequency in MHz, found during library initialization (via cpuid or system calls)
- */
+/* Returns the cpu frequency in MHz, found during initialization (via cpuid or system calls) */
 STDROMANO_API uint32_t cpu_get_frequency() noexcept;
 
 /* Returns the current cpu frequency in MHz (via system calls) */
 STDROMANO_API uint32_t cpu_get_current_frequency() noexcept;
 
-STDROMANO_API void cpu_get_current_frequency_set_refresh_frequency(
-    const uint32_t refresh_frequency) noexcept;
+STDROMANO_API void cpu_get_current_frequency_set_refresh_rate(uint32_t refresh_rate) noexcept;
 
 STDROMANO_NAMESPACE_END
 

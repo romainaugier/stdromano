@@ -20,11 +20,7 @@ enum LogLevel : uint32_t
 class STDROMANO_API Logger
 {
 public:
-    static Logger& get_instance() noexcept
-    {
-        static Logger c;
-        return c;
-    }
+    static Logger& get_instance() noexcept;
 
     Logger(const Logger&) = delete;
     Logger& operator=(const Logger&) = delete;

@@ -10,8 +10,8 @@
 
 STDROMANO_NAMESPACE_BEGIN
 
-static uint32_t g_max_vectorization_mode = VectorizationMode_Scalar;
-static uint32_t g_vectorization_mode = VectorizationMode_Scalar;
+static uint32_t _g_max_vectorization_mode = VectorizationMode_Scalar;
+static uint32_t _g_vectorization_mode = VectorizationMode_Scalar;
 
 void simd_check_vectorization() noexcept
 {
@@ -32,18 +32,18 @@ void simd_check_vectorization() noexcept
 
     if(has_avx2)
     {
-        g_max_vectorization_mode = VectorizationMode_AVX2;
+        _g_max_vectorization_mode = VectorizationMode_AVX2;
     }
     else if(has_avx)
     {
-        g_max_vectorization_mode = VectorizationMode_AVX;
+        _g_max_vectorization_mode = VectorizationMode_AVX;
     }
     else if(has_sse)
     {
-        g_max_vectorization_mode = VectorizationMode_SSE;
+        _g_max_vectorization_mode = VectorizationMode_SSE;
     }
 
-    g_vectorization_mode = g_max_vectorization_mode;
+    _g_vectorization_mode = _g_max_vectorization_mode;
 
     if(std::getenv("STDROMANO_VECTORIZATION") != nullptr)
     {
@@ -55,42 +55,42 @@ void simd_check_vectorization() noexcept
         }
         else if(std::strcmp(env_val, "SSE") == 0 && has_sse)
         {
-            g_vectorization_mode = VectorizationMode_SSE;
+            _g_vectorization_mode = VectorizationMode_SSE;
         }
         else if(std::strcmp(env_val, "AVX") == 0 && has_avx)
         {
-            g_vectorization_mode = VectorizationMode_AVX;
+            _g_vectorization_mode = VectorizationMode_AVX;
         }
         else if(std::strcmp(env_val, "AVX2") == 0 && has_avx2)
         {
-            g_vectorization_mode = VectorizationMode_AVX2;
+            _g_vectorization_mode = VectorizationMode_AVX2;
         }
     }
 }
 
 bool simd_has_sse() noexcept
 {
-    return g_max_vectorization_mode >= 1;
+    return _g_max_vectorization_mode >= 1;
 }
 
 bool simd_has_avx() noexcept
 {
-    return g_max_vectorization_mode >= 2;
+    return _g_max_vectorization_mode >= 2;
 }
 
 bool simd_has_avx2() noexcept
 {
-    return g_max_vectorization_mode >= 3;
+    return _g_max_vectorization_mode >= 3;
 }
 
 VectorizationMode simd_get_vectorization_mode() noexcept
 {
-    return static_cast<VectorizationMode>(g_vectorization_mode);
+    return static_cast<VectorizationMode>(_g_vectorization_mode);
 }
 
 const char* simd_get_vectorization_mode_as_string() noexcept
 {
-    switch(g_vectorization_mode)
+    switch(_g_vectorization_mode)
     {
         case VectorizationMode_Scalar:
             return "Scalar";
@@ -108,12 +108,12 @@ const char* simd_get_vectorization_mode_as_string() noexcept
 
 bool simd_force_vectorization_mode(const VectorizationMode mode) noexcept
 {
-    if(mode > g_max_vectorization_mode)
+    if(mode > _g_max_vectorization_mode)
     {
         return false;
     }
 
-    g_vectorization_mode = mode;
+    _g_vectorization_mode = mode;
 
     return true;
 }

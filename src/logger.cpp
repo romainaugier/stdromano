@@ -7,8 +7,7 @@
 
 STDROMANO_NAMESPACE_BEGIN
 
-Logger::Logger()
-    : _logger("null")
+Logger::Logger() : _logger("null")
 {
 #if defined(STDROMANO_WIN)
     SetConsoleCP(65001);
@@ -73,6 +72,12 @@ Logger::Logger()
 Logger::~Logger()
 {
     this->_logger.flush();
+}
+
+Logger& Logger::get_instance() noexcept
+{
+    static Logger c;
+    return c;
 }
 
 STDROMANO_NAMESPACE_END
