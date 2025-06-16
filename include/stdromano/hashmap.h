@@ -241,7 +241,7 @@ private:
     std::vector<Bucket> _buckets;
     size_t _items_count = 0;
     uint32_t _hash_key;
-    uint32_t _max_probes;
+    int16_t _max_probes;
 
     KeySelect _key_select;
 
@@ -387,7 +387,7 @@ public:
 private:
     STDROMANO_FORCE_INLINE uint32_t get_hash(const key_type& key) const
     {
-        return Hash{}(key) ^ this->_hash_key;
+        return static_cast<uint32_t>(Hash{}(key) ^ this->_hash_key);
     }
 
     STDROMANO_FORCE_INLINE size_t get_index(const uint32_t hash) const
@@ -511,7 +511,7 @@ private:
             this->_hash_key ^= this->generate_hash_key();
         }
 
-        this->_max_probes = static_cast<uint32_t>(std::log2(static_cast<float>(new_capacity)));
+        this->_max_probes = static_cast<int16_t>(std::log2(static_cast<float>(new_capacity)));
 
         for(auto& bucket : old_buckets)
         {
@@ -566,7 +566,7 @@ public:
         }
 
         this->_buckets.resize(initial_capacity);
-        this->_max_probes = static_cast<uint32_t>(std::log2(static_cast<float>(initial_capacity)));
+        this->_max_probes = static_cast<int16_t>(std::log2(static_cast<float>(initial_capacity)));
     }
 
     template <typename P>

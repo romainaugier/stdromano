@@ -97,6 +97,7 @@ private:
 #endif /* defined(STDROMANO_WIN) */
 
     bool _running = false;
+    bool _daemon = false;
 
 public:
     Thread(std::function<void()> func, bool daemon = false, bool detached = false)
@@ -109,6 +110,7 @@ public:
         this->_handle = 0;
 #endif /* defined(STDROMANO_WIN) */
 
+        this->_daemon = daemon;
         this->_running = false;
 
         if(detached)

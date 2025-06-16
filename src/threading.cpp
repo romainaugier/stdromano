@@ -143,8 +143,8 @@ void ThreadPool::init(const int64_t workers_count) noexcept
                             catch(const std::exception& e)
                             {
                                 std::fprintf(stderr,
-                                             "Error caught while executing "
-                                             "threadpool work");
+                                             "Error caught while executing threadpool work %s",
+                                             e.what());
                             }
 
                             tp->_num_active_workers--;

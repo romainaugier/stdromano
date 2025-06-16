@@ -59,6 +59,9 @@
 #if !defined(WIN32_LEAN_AND_MEAN)
 #define WIN32_LEAN_AND_MEAN
 #endif /* !defined(WIN32_LEAN_AND_MEAN) */
+#if !defined(NOMINMAX)
+#define NOMINMAX 
+#endif /* !defined(NOMINMAX) */
 #if defined(STDROMANO_X64)
 #define STDROMANO_PLATFORM_STR "WIN64"
 #else
@@ -104,7 +107,7 @@
 #define STDROMANO_MAYBE_UNUSED [[maybe_unused]]
 #else
 #define STDROMANO_MAYBE_UNUSED
-#endif /* */
+#endif /* __cplusplus > 201703 */
 
 #if defined(STDROMANO_BUILD_SHARED)
 #define STDROMANO_API STDROMANO_EXPORT

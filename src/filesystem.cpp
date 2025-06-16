@@ -142,8 +142,9 @@ String<> ListDirIterator::get_current_path() const noexcept
     return String<>("{}/{}",
                     fmt::string_view(this->_directory_path.c_str(), this->_directory_path.size()),
                     this->_entry->d_name);
-#endif /* defined(STDROMANO_WIN) */
+#else
     return String<>();
+#endif /* defined(STDROMANO_WIN) */
 }
 
 bool ListDirIterator::is_file() const noexcept
@@ -152,9 +153,9 @@ bool ListDirIterator::is_file() const noexcept
     return this->_find_data.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY;
 #elif defined(STDROMANO_LINUX)
     return this->_entry->d_type == DT_REG;
-#endif /* defined(STDROMANO_WIN) */
-
+#else
     return false;
+#endif /* defined(STDROMANO_WIN) */
 }
 
 bool ListDirIterator::is_directory() const noexcept
@@ -163,9 +164,9 @@ bool ListDirIterator::is_directory() const noexcept
     return this->_find_data.dwFileAttributes & ~FILE_ATTRIBUTE_DIRECTORY;
 #elif defined(STDROMANO_LINUX)
     return this->_entry->d_type == DT_DIR;
-#endif /* defined(STDROMANO_WIN) */
-
+#else
     return false;
+#endif /* defined(STDROMANO_WIN) */
 }
 
 bool fs_list_dir(ListDirIterator& it, const String<>& directory_path, const uint32_t flags) noexcept
@@ -347,9 +348,9 @@ String<> open_file_dialog(FileDialogMode_ mode,
             MultiByteToWideChar(CP_UTF8,
                                 0,
                                 initial_path.c_str(),
-                                initial_path.size(),
+                                static_cast<int>(initial_path.size()),
                                 initial_path_wide,
-                                initial_path.size());
+                                static_cast<int>(initial_path.size()));
 
             PIDLIST_ABSOLUTE pidl = NULL;
             ULONG sfgao_out = 0;
