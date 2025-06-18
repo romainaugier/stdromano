@@ -24,6 +24,9 @@ class String
     static constexpr float STRING_GROWTH_RATE = 1.61f;
     static constexpr size_t STRING_ALIGNMENT = 32;
 
+    template <size_t OtherCapacity>
+    friend class String;
+
 public:
     using value_type = char;
     using split_iterator = size_t;
@@ -44,8 +47,8 @@ private:
     {
         STDROMANO_ASSERT(!this->_is_ref, "Cannot modify a reference string");
 
-        char* new_data =
-            (char*)mem_aligned_alloc((new_capacity + 1) * sizeof(char), STRING_ALIGNMENT);
+        char* new_data = (char*)mem_aligned_alloc((new_capacity + 1) * sizeof(char),
+                                                  STRING_ALIGNMENT);
         std::memcpy(new_data, this->data(), this->_size);
         new_data[this->_size] = '\0';
 
@@ -211,6 +214,169 @@ public:
 
         other._size = 0;
         other._capacity = LocalCapacity;
+        other._is_local = 1;
+        other._is_ref = 0;
+        other._local_data[0] = '\0';
+
+        return *this;
+    }
+
+    template<size_t OtherCapacity>
+    String(const String<OtherCapacity>& other)
+    {
+        this->_size = other._size;
+        this->_capacity = other._is_local ? LocalCapacity : other._capacity;
+        this->_is_local = other._size <= LocalCapacity ? 1 : 0;
+        this->_is_ref = 0;
+
+        if(other._is_ref)
+        {
+            this->_heap_data = other._heap_data;
+            this->_is_ref = 1;
+        }
+        else if(this->_is_local)
+        {
+            std::memcpy(this->_local_data, other.data(), this->_size + 1);
+        }
+        else
+        {
+            this->_heap_data = (char*)mem_aligned_alloc((this->_capacity + 1) * sizeof(char),
+                                                        STRING_ALIGNMENT);
+            std::memcpy(this->_heap_data, other.data(), this->_size + 1);
+        }
+    }
+
+    template<size_t OtherCapacity>
+    String& operator=(const String<OtherCapacity>& other) noexcept
+    {
+        if(this == &other)
+        {
+            return *this;
+        }
+
+        if(!this->_is_ref && !this->_is_local)
+        {
+            mem_aligned_free(this->_heap_data);
+        }
+
+        this->_size = other._size;
+        this->_is_local = (other._size <= LocalCapacity) ? 1 : 0;
+        this->_capacity = this->_is_local ? LocalCapacity : std::max(other._size, other._capacity);
+        this->_is_ref = 0;
+
+        if(this->_is_local)
+        {
+            std::memcpy(this->_local_data, other.data(), this->_size + 1);
+        }
+        else
+        {
+            this->_heap_data = (char*)mem_aligned_alloc((this->_capacity + 1) * sizeof(char),
+                                                        STRING_ALIGNMENT);
+            std::memcpy(this->_heap_data, other.data(), this->_size + 1);
+        }
+
+        return *this;
+    }
+
+    template<size_t OtherCapacity>
+    String(String<OtherCapacity>&& other) noexcept
+    {
+        this->_size = other._size;
+        this->_capacity = other._is_local ? LocalCapacity : other._capacity;
+        this->_is_local = other._size <= LocalCapacity ? 1 : 0;
+        this->_is_ref = 0;
+
+        if(other._is_ref)
+        {
+            this->_heap_data = other._heap_data;
+            this->_is_ref = 1;
+        }
+        else if(other._is_local)
+        {
+            if(this->_is_local)
+            {
+                std::memcpy(this->_local_data, other._local_data, this->_size + 1);
+            }
+            else
+            {
+                this->_heap_data = (char*)mem_aligned_alloc((this->_capacity + 1) * sizeof(char),
+                                                            STRING_ALIGNMENT);
+                std::memcpy(this->_heap_data, other._local_data, this->_size + 1);
+            }
+        }
+        else
+        {
+            if(this->_is_local)
+            {
+                std::memcpy(this->_local_data, other._heap_data, this->_size + 1);
+                mem_aligned_free(other._heap_data);
+            }
+            else
+            {
+                this->_heap_data = other._heap_data;
+                other._heap_data = nullptr;
+            }
+        }
+
+        other._size = 0;
+        other._capacity = OtherCapacity;
+        other._is_local = 1;
+        other._is_ref = 0;
+        other._local_data[0] = '\0';
+    }
+
+    template<size_t OtherCapacity>
+    String& operator=(String<OtherCapacity>&& other) noexcept
+    {
+        if(this == &other)
+        {
+            return *this;
+        }
+
+        if(!this->_is_ref && !this->_is_local)
+        {
+            mem_aligned_free(this->_heap_data);
+        }
+
+        this->_size = other._size;
+        this->_is_local = (other._size <= LocalCapacity) ? 1 : 0;
+        this->_capacity = this->_is_local ? LocalCapacity : std::max(other._size, other._capacity);
+        this->_is_ref = 0;
+
+        if(other._is_ref)
+        {
+            this->_heap_data = other._heap_data;
+            this->_is_ref = 1;
+        }
+        else if(other._is_local)
+        {
+            if(this->_is_local)
+            {
+                std::memcpy(this->_local_data, other._local_data, this->_size + 1);
+            }
+            else
+            {
+                this->_heap_data = (char*)mem_aligned_alloc((this->_capacity + 1) * sizeof(char),
+                                                            STRING_ALIGNMENT);
+                std::memcpy(this->_heap_data, other._local_data, this->_size + 1);
+            }
+        }
+        else
+        {
+            if(this->_is_local)
+            {
+                std::memcpy(this->_local_data, other._heap_data, this->_size + 1);
+                mem_aligned_free(other._heap_data);
+            }
+            else
+            {
+                this->_heap_data = other._heap_data;
+                other._heap_data = nullptr;
+            }
+        }
+
+        other._size = 0;
+        other._capacity = OtherCapacity;
         other._is_local = 1;
         other._is_ref = 0;
         other._local_data[0] = '\0';
@@ -676,7 +842,50 @@ public:
 
         return String("{0:0^{1}}{2}", "", fill_size, *this);
     }
+
+    long long to_long_long() const noexcept
+    {
+        return std::atoll(this->c_str());
+    }
+
+    double to_double() const noexcept
+    {
+        return std::strtod(this->c_str(), nullptr);
+    }
+
+    bool to_bool() const noexcept
+    {
+        if(this->size() >= 1 && (this->data()[0] == '0' || this->data()[0] == '1'))
+        {
+            return static_cast<bool>(this->data()[0] - 0x30);
+        }
+
+        if(this->size() >= 4 && (std::memcmp(this->data(), "true", 4) == 0 || 
+                                 std::memcmp(this->data(), "True", 4) == 0 ||
+                                 std::memcmp(this->data(), "TRUE", 4) == 0))
+        {
+            return true;
+        }
+
+        if(this->size() >= 5 && (std::memcmp(this->data(), "false", 5) == 0 || 
+                                 std::memcmp(this->data(), "False", 5) == 0 ||
+                                 std::memcmp(this->data(), "FALSE", 5) == 0))
+        {
+            return false;
+        }
+
+        return false;
+    }
 };
+
+/* String dynamically sized */
+using StringD = String<>;
+
+/* Fixed size strings */
+using String1024 = String<1024>;
+using String260 = String<260>;
+using String128 = String<128>;
+using String32 = String<32>;
 
 STDROMANO_NAMESPACE_END
 

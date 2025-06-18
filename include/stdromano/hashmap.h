@@ -643,6 +643,16 @@ public:
         }
     }
 
+    const_iterator cfind(const key_type& key) const noexcept
+    {
+        return this->find(key);
+    }
+
+    bool contains(const key_type& key) const noexcept
+    {
+        return this->cfind(key) != this->cend();
+    }
+
     void erase(iterator pos)
     {
         if(pos == this->end())

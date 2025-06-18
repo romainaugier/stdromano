@@ -50,12 +50,15 @@ if(JEMALLOC_FOUND)
     message(STATUS "jemalloc include dirs: ${JEMALLOC_INCLUDE_DIRS}")
     message(STATUS "jemalloc library dirs: ${JEMALLOC_LIBRARY_DIRS}")
     message(STATUS "jemalloc libraries: ${JEMALLOC_LIBRARIES}")
-    
-    add_library(jemalloc_wrapper INTERFACE)
-    target_include_directories(jemalloc_wrapper INTERFACE ${JEMALLOC_INCLUDE_DIRS})
-    target_link_directories(jemalloc_wrapper INTERFACE ${JEMALLOC_LIBRARY_DIRS})
-    target_link_libraries(jemalloc_wrapper INTERFACE ${JEMALLOC_LIBRARIES})
-    target_compile_definitions(jemalloc_wrapper INTERFACE HAVE_JEMALLOC=1)
+
+    list(GET JEMALLOC_LIBRARIES 0 JEMALLOC_LIB)
+
+    add_library(jemalloc SHARED IMPORTED GLOBAL)
+
+    set_target_properties(jemalloc PROPERTIES
+        IMPORTED_LOCATION ${JEMALLOC_LIB}
+        INTERFACE_INCLUDE_DIRECTORIES ${JEMALLOC_INCLUDE_DIR}
+    )
 else()
     find_path(JEMALLOC_INCLUDE_DIR jemalloc/jemalloc.h
         PATHS
@@ -75,16 +78,29 @@ else()
         $ENV{VCPKG_ROOT}/installed/x64-windows/lib
         $ENV{VCPKG_ROOT}/installed/x64-windows-static/lib
     )
+
+    find_file(JEMALLOC_DLL jemalloc.dll
+        PATHS
+        ${CMAKE_PREFIX_PATH}/bin
+        ${CMAKE_INSTALL_PREFIX}/bin
+        $ENV{PROGRAMFILES}/jemalloc/bin
+        $ENV{VCPKG_ROOT}/installed/x64-windows/bin
+        $ENV{VCPKG_ROOT}/installed/x64-windows/debug/bin
+    )
   
-    if(JEMALLOC_INCLUDE_DIR AND JEMALLOC_LIBRARY)
+    if(JEMALLOC_INCLUDE_DIR AND JEMALLOC_LIBRARY AND JEMALLOC_DLL)
         message(STATUS "Found jemalloc")
         message(STATUS "jemalloc include dir: ${JEMALLOC_INCLUDE_DIR}")
         message(STATUS "jemalloc library: ${JEMALLOC_LIBRARY}")
-        
-        add_library(jemalloc_wrapper INTERFACE)
-        target_include_directories(jemalloc_wrapper INTERFACE ${JEMALLOC_INCLUDE_DIR})
-        target_link_libraries(jemalloc_wrapper INTERFACE ${JEMALLOC_LIBRARY})
-        target_compile_definitions(jemalloc_wrapper INTERFACE HAVE_JEMALLOC=1)
+        message(STATUS "jemalloc dll: ${JEMALLOC_DLL}")
+
+        add_library(jemalloc SHARED IMPORTED GLOBAL)
+
+        set_target_properties(jemalloc PROPERTIES
+            IMPORTED_IMPLIB ${JEMALLOC_LIBRARY}
+            IMPORTED_LOCATION ${JEMALLOC_DLL}
+            INTERFACE_INCLUDE_DIRECTORIES ${JEMALLOC_INCLUDE_DIR}
+        )
     else()
         message(FATAL_ERROR "Cannot find jemalloc, exiting")
     endif()

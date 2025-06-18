@@ -1,0 +1,5 @@
+# SPDX-License-Identifier: BSD-3-Clause
+# Copyright (c) 2025 - Present Romain Augier
+# All rights reserved.
+
+set(stdromano_JEMALLOC_RUNTIME "${PACKAGE_PREFIX_DIR}/@CMAKE_INSTALL_BINDIR@/jemalloc@CMAKE_SHARED_LIBRARY_SUFFIX@")

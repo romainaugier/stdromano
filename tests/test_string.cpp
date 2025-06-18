@@ -378,26 +378,61 @@ TEST_CASE(TestMoveAssignment)
 
 TEST_CASE(TestZeroedString)
 {
-    String<> zeroed = String<>::make_zeroed(2048);
+    const String<> zeroed = String<>::make_zeroed(2048);
     ASSERT_EQUAL(2049, zeroed.capacity());
 }
 
 TEST_CASE(TestReplace)
 {
-    String<> s = "this,string,is,sep,by,commas";
+    const String<> s = "this,string,is,sep,by,commas";
 
-    String<> r_without_commas = s.replace(',', ' ');
+    const String<> r_without_commas = s.replace(',', ' ');
 
     ASSERT_EQUAL(-1, r_without_commas.find(","));
 }
 
 TEST_CASE(TestZFill)
 {
-    String<> s = "1";
+    const String<> s = "1";
 
-    String<> zfilled = s.zfill(8);
+    const String<> zfilled = s.zfill(8);
 
     ASSERT_EQUAL(0, std::strcmp(zfilled.c_str(), "00000001"));
+}
+
+TEST_CASE(TestLongLongConversion)
+{
+    const String<> s = "1";
+
+    ASSERT_EQUAL(1, s.to_long_long());
+}
+
+TEST_CASE(TestDoubleConversion)
+{
+    const String<> s = "1.0";
+
+    ASSERT_EQUAL(1.0, s.to_double());
+}
+
+TEST_CASE(TestBoolConversion)
+{
+    const String<> zero = "0";
+    const String<> one = "1";
+    const String<> _true = "true";
+    const String<> _True = "True";
+    const String<> _TRUE = "TRUE";
+    const String<> _false = "false";
+    const String<> _False = "False";
+    const String<> _FALSE = "FALSE";
+
+    ASSERT_EQUAL(false, zero.to_bool());
+    ASSERT_EQUAL(true, one.to_bool());
+    ASSERT_EQUAL(true, _true.to_bool());
+    ASSERT_EQUAL(true, _True.to_bool());
+    ASSERT_EQUAL(true, _TRUE.to_bool());
+    ASSERT_EQUAL(false, _false.to_bool());
+    ASSERT_EQUAL(false, _False.to_bool());
+    ASSERT_EQUAL(false, _FALSE.to_bool());
 }
 
 int main()
@@ -423,6 +458,8 @@ int main()
     runner.add_test("ZeroedString", TestZeroedString);
     runner.add_test("Replace", TestReplace);
     runner.add_test("ZFill", TestZFill);
+    runner.add_test("LongLongConversion", TestLongLongConversion);
+    runner.add_test("DoubleConversion", TestDoubleConversion);
 
     runner.run_all();
 

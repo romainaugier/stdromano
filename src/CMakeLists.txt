@@ -28,7 +28,7 @@ elseif(WIN32)
     target_link_libraries(${PROJECT_NAME} PUBLIC wsock32 ws2_32 Shlwapi Pathcch PowrProf)
 endif()
 
-target_link_libraries(${PROJECT_NAME} PRIVATE jemalloc_wrapper)
+target_link_libraries(${PROJECT_NAME} PRIVATE jemalloc)
 
 target_include_directories(${PROJECT_NAME}
                            PUBLIC
@@ -41,6 +41,11 @@ install(
     RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
     ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
     LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
+)
+
+install(
+    FILES $<TARGET_RUNTIME_DLLS:${PROJECT_NAME}>
+    DESTINATION ${CMAKE_INSTALL_BINDIR}
 )
 
 install(
@@ -71,6 +76,13 @@ install(
 include(CMakePackageConfigHelpers)
 
 configure_package_config_file(
+    "${CMAKE_SOURCE_DIR}/${PROJECT_NAME}Deps.cmake.in"
+    "${CMAKE_CURRENT_BINARY_DIR}/${PROJECT_NAME}Deps.cmake"
+    PATH_VARS CMAKE_INSTALL_INCLUDEDIR CMAKE_INSTALL_BINDIR
+    INSTALL_DESTINATION ${CMAKE_INSTALL_PREFIX}/cmake
+)
+
+configure_package_config_file(
     "${CMAKE_SOURCE_DIR}/${PROJECT_NAME}Config.cmake.in"
     "${CMAKE_CURRENT_BINARY_DIR}/${PROJECT_NAME}Config.cmake"
     PATH_VARS CMAKE_INSTALL_INCLUDEDIR CMAKE_INSTALL_BINDIR
@@ -86,5 +98,6 @@ write_basic_package_version_file(
 install(
     FILES "${CMAKE_CURRENT_BINARY_DIR}/${PROJECT_NAME}Config.cmake"
           "${CMAKE_CURRENT_BINARY_DIR}/${PROJECT_NAME}ConfigVersion.cmake"
+          "${CMAKE_CURRENT_BINARY_DIR}/${PROJECT_NAME}Deps.cmake"
     DESTINATION cmake
 )
