@@ -149,6 +149,14 @@ TEST_CASE(TestStrip)
     String<> str_custom("###Hello###");
     String<> stripped_custom = str_custom.strip('#');
     ASSERT_EQUAL(0, std::strncmp(stripped_custom.c_str(), "Hello", stripped_custom.size()));
+
+    String<> str_custom_ref = String<>::make_ref(str_custom);
+    String<> stripped_custom_ref = str_custom.strip('#');
+    ASSERT_EQUAL(0, std::strncmp(stripped_custom_ref.c_str(), "Hello", stripped_custom_ref.size()));
+
+    String<> str_hello_ref = String<>::make_ref("Hello", 5);
+    String<> stripped_hello_ref = str_hello_ref.strip('#');
+    ASSERT_EQUAL(0, std::strncmp(stripped_hello_ref.c_str(), "Hello", stripped_hello_ref.size()));
 }
 
 TEST_CASE(TestStartsWithEndsWith)

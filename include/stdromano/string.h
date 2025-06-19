@@ -668,7 +668,7 @@ public:
     String lstrip(char c = ' ') const noexcept
     {
         const char* start = this->data();
-        const char* end = this->back();
+        const char* end = this->data() + this->_size;
 
         while(start < end && *start == c)
         {
@@ -680,41 +680,31 @@ public:
 
     String rstrip(char c = ' ') const noexcept
     {
-        if(this->size() == 0)
+        if(this->_size == 0)
         {
             return String::make_ref(this->data(), 0);
         }
 
         const char* start = this->data();
-        const char* end = this->back() - 1;
-
-        if(*end == '\0')
-        {
-            end--;
-        }
+        const char* end = this->data() + this->_size - 1;
 
         while(end > start && *end == c)
         {
             end--;
         }
 
-        return String::make_ref(start, static_cast<size_t>(end - start));
+        return String::make_ref(start, static_cast<size_t>(end - start + 1));
     }
 
     String strip(char c = ' ') const noexcept
     {
-        if(this->size() == 0)
+        if(this->_size == 0)
         {
             return String::make_ref(this->data(), 0);
         }
 
         const char* start = this->data();
-        const char* end = this->back() - 1;
-
-        if(*end == '\0')
-        {
-            end--;
-        }
+        const char* end = this->data() + this->_size - 1;
 
         while(start < end && *start == c)
         {
@@ -726,7 +716,9 @@ public:
             end--;
         }
 
-        return String::make_ref(start, static_cast<size_t>(end - start));
+        const size_t size = (start < end) ? static_cast<size_t>(end - start + 1) : 0;
+
+        return String::make_ref(start, size);
     }
 
     String replace(char occurence, char replacement) const noexcept
