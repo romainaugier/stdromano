@@ -680,8 +680,18 @@ public:
 
     String rstrip(char c = ' ') const noexcept
     {
+        if(this->size() == 0)
+        {
+            return String::make_ref(this->data(), 0);
+        }
+
         const char* start = this->data();
-        const char* end = this->back();
+        const char* end = this->back() - 1;
+
+        if(*end == '\0')
+        {
+            end--;
+        }
 
         while(end > start && *end == c)
         {
@@ -693,8 +703,18 @@ public:
 
     String strip(char c = ' ') const noexcept
     {
+        if(this->size() == 0)
+        {
+            return String::make_ref(this->data(), 0);
+        }
+
         const char* start = this->data();
         const char* end = this->back() - 1;
+
+        if(*end == '\0')
+        {
+            end--;
+        }
 
         while(start < end && *start == c)
         {
