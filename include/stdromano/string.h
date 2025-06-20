@@ -721,6 +721,11 @@ public:
         return String::make_ref(start, size);
     }
 
+    String substr(const size_t position) const noexcept
+    {
+        return String::make_ref(this->data() + position, this->size() - position);
+    }
+
     String replace(char occurence, char replacement) const noexcept
     {
         String res = *this;

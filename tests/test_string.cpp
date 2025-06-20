@@ -443,6 +443,14 @@ TEST_CASE(TestBoolConversion)
     ASSERT_EQUAL(false, _FALSE.to_bool());
 }
 
+TEST_CASE(TestSubStr)
+{
+    const StringD s = "Hello World!";
+    const StringD w = StringD::make_ref("World!");
+
+    ASSERT_EQUAL(0, std::strncmp(w.data(), s.substr(6).data(), w.size()));
+}
+
 int main()
 {
     TestRunner runner;
@@ -468,6 +476,7 @@ int main()
     runner.add_test("ZFill", TestZFill);
     runner.add_test("LongLongConversion", TestLongLongConversion);
     runner.add_test("DoubleConversion", TestDoubleConversion);
+    runner.add_test("SubStr", TestSubStr);
 
     runner.run_all();
 
