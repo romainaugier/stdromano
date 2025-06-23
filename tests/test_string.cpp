@@ -187,7 +187,7 @@ TEST_CASE(TestFind)
     ASSERT_EQUAL(12, str.find("World"));
     ASSERT_EQUAL(-1, str.find("Missing"));
 
-    ASSERT_EQUAL(-1, str.find(""));
+    ASSERT_EQUAL(0, str.find(""));
     ASSERT_EQUAL(-1, str.find("TooLongForTheString"));
     String<> empty_str;
     ASSERT_EQUAL(-1, empty_str.find("a"));
@@ -387,7 +387,7 @@ TEST_CASE(TestMoveAssignment)
 TEST_CASE(TestZeroedString)
 {
     const String<> zeroed = String<>::make_zeroed(2048);
-    ASSERT_EQUAL(2049, zeroed.capacity());
+    ASSERT_EQUAL(2048, zeroed.capacity());
 }
 
 TEST_CASE(TestReplace)
@@ -447,8 +447,27 @@ TEST_CASE(TestSubStr)
 {
     const StringD s = "Hello World!";
     const StringD w = StringD::make_ref("World!");
+    const StringD w2 = StringD::make_ref("Wor");
 
     ASSERT_EQUAL(0, std::strncmp(w.data(), s.substr(6).data(), w.size()));
+    ASSERT_EQUAL(0, std::strncmp(w2.data(), s.substr(6, 3).data(), w2.size()));
+}
+
+TEST_CASE(TestClear)
+{
+    StringD s = "Hello World!";
+
+    s.clear();
+    ASSERT_EQUAL(0, s.size());
+}
+
+TEST_CASE(TestErase)
+{
+    StringD s = "Hello World!";
+
+    s.erase(5);
+
+    ASSERT_EQUAL(0, std::strncmp(s.c_str(), "Hello", 5));
 }
 
 int main()
@@ -477,6 +496,8 @@ int main()
     runner.add_test("LongLongConversion", TestLongLongConversion);
     runner.add_test("DoubleConversion", TestDoubleConversion);
     runner.add_test("SubStr", TestSubStr);
+    runner.add_test("Clear", TestClear);
+    runner.add_test("Erase", TestErase);
 
     runner.run_all();
 
