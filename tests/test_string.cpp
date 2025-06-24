@@ -485,6 +485,21 @@ TEST_CASE(TestShrinkToFit)
     ASSERT_EQUAL(0, std::strncmp(s.c_str(), "Hello", 5));
 }
 
+TEST_CASE(TestInsertion)
+{
+    String<> str = "Hello World";
+
+    str.insertc(5, " Beautiful");
+    ASSERT_EQUAL(0, std::strcmp(str.c_str(), "Hello Beautiful World"));
+
+    String<> insert = " Amazing";
+    str.inserts(15, insert);
+    ASSERT_EQUAL(0, std::strcmp(str.c_str(), "Hello Beautiful Amazing World"));
+
+    str.insertf(0, "{}: ", 42);
+    ASSERT_EQUAL(0, std::strcmp(str.c_str(), "42: Hello Beautiful Amazing World"));
+}
+
 int main()
 {
     TestRunner runner;
@@ -514,6 +529,7 @@ int main()
     runner.add_test("Clear", TestClear);
     runner.add_test("Erase", TestErase);
     runner.add_test("ShrinkToFit", TestShrinkToFit);
+    runner.add_test("Insertion", TestInsertion);
 
     runner.run_all();
 

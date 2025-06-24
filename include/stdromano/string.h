@@ -696,6 +696,103 @@ public:
         this->prepends(tmp);
     }
 
+    void insertc(size_t position, const char* c, size_t n = 0) noexcept
+    {
+        STDROMANO_ASSERT(!this->_is_ref, "Cannot modify a reference string");
+        STDROMANO_ASSERT(c != nullptr, "Null pointer passed to insertc");
+        
+        if(position > this->_size)
+        {
+            position = this->_size;
+        }
+
+        if(*c == '\0')
+        {
+            return;
+        }
+        
+        const size_t insert_len = (n == 0) ? std::strlen(c) : n;
+
+        if(insert_len == 0)
+        {
+            return;
+        }
+        
+        const size_t new_size = this->_size + insert_len;
+        
+        if(new_size > this->_capacity)
+        {
+            size_t new_cap = std::max(new_size, 
+                                      static_cast<size_t>(this->_capacity * STRING_GROWTH_RATE));
+
+            this->reallocate(new_cap);
+        }
+        
+        char* d = this->data();
+
+        std::memmove(d + position + insert_len, 
+                     d + position, 
+                     this->_size - position + 1);
+                     
+        std::memcpy(d + position, c, insert_len);
+        
+        this->_size = static_cast<uint32_t>(new_size);
+    }
+
+    void inserts(size_t position, const String& other) noexcept
+    {
+        STDROMANO_ASSERT(!this->_is_ref, "Cannot modify a reference string");
+
+        if(other.empty())
+        {
+            return;
+        }
+        
+        if(position > this->_size)
+        {
+            position = this->_size;
+        }
+        
+        const size_t insert_len = other.size();
+        const size_t new_size = this->_size + insert_len;
+        
+        if(new_size > this->_capacity)
+        {
+            size_t new_cap = std::max(new_size, 
+                                      static_cast<size_t>(this->_capacity * STRING_GROWTH_RATE));
+
+            this->reallocate(new_cap);
+        }
+        
+        char* d = this->data();
+
+        std::memmove(d + position + insert_len, 
+                     d + position, 
+                     this->_size - position + 1);
+
+        std::memcpy(d + position, other.c_str(), insert_len);
+        
+        this->_size = static_cast<uint32_t>(new_size);
+    }
+
+    template <typename... Args>
+    void insertf(std::size_t position,
+                 fmt::format_string<Args...> fmt,
+                 Args&&... args) noexcept
+    {
+        STDROMANO_ASSERT(!this->_is_ref, "Cannot modify a reference string");
+
+        if(position > this->_size)
+        {
+            position = this->_size;
+        }
+        
+        String tmp;
+        fmt::format_to(std::back_inserter(tmp), fmt, std::forward<Args>(args)...);
+        
+        this->inserts(position, tmp);
+    }
+
     void erase(std::size_t start = 0, std::size_t length = String::NPOS) noexcept
     {
         STDROMANO_ASSERT(!this->_is_ref, "Cannot modify a reference string");
