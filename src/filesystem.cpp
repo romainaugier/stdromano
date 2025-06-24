@@ -3,6 +3,7 @@
 // All rights reserved.
 
 #include "stdromano/filesystem.h"
+#include "stdromano/logger.h"
 
 #if defined(STDROMANO_WIN)
 #define STRICT_TYPED_ITEMIDS // Better type safety for IDLists
@@ -57,6 +58,30 @@ String<> fs_filename(const String<>& path) noexcept
     }
 
     return String<>::make_ref(path.c_str() + path_len + 1, path.size() - path_len - 1);
+}
+
+StringD fs_current_dir() noexcept
+{
+    StringD res = StringD::make_zeroed(512);
+
+#if defined(STDROMANO_WIN)
+    DWORD size = GetCurrentDirectoryA(512, res.c_str());
+
+    if(size >= 512)
+    {
+        res = std::move(StringD::make_zeroed(size));
+        size = GetCurrentDirectoryA(size, res.c_str());
+    }
+    else
+    {
+        res.shrink_to_fit(size);
+    }
+
+    return res;
+#elif defined(STDROMANO_LINUX)
+#else
+    STDROMANO_NOT_IMPLEMENTED;
+#endif /* defined(STDROMANO_WIN) */
 }
 
 String<> expand_from_executable_dir(const String<>& path_to_expand) noexcept
@@ -187,7 +212,7 @@ bool fs_list_dir(ListDirIterator& it, const String<>& directory_path, const uint
         {
             DWORD err = GetLastError();
 
-            std::fprintf(stderr, "Error during fs_list_dir. Error code: %u", err);
+            std::fprintf(stderr, "Error during fs_list_dir. Error code: %u\n", err);
 
             return false;
         }
@@ -208,7 +233,7 @@ bool fs_list_dir(ListDirIterator& it, const String<>& directory_path, const uint
         }
     }
 
-    while(1)
+    while(true)
     {
         if(FindNextFileA(it._h_find, &it._find_data))
         {

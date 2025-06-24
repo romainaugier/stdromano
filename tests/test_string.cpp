@@ -470,6 +470,21 @@ TEST_CASE(TestErase)
     ASSERT_EQUAL(0, std::strncmp(s.c_str(), "Hello", 5));
 }
 
+TEST_CASE(TestShrinkToFit)
+{
+    StringD s = "Hello World!";
+
+    const std::size_t old_size = s.size();
+
+    s.shrink_to_fit();
+
+    ASSERT_EQUAL(old_size, s.size());
+
+    s.shrink_to_fit(5);
+
+    ASSERT_EQUAL(0, std::strncmp(s.c_str(), "Hello", 5));
+}
+
 int main()
 {
     TestRunner runner;
@@ -498,6 +513,7 @@ int main()
     runner.add_test("SubStr", TestSubStr);
     runner.add_test("Clear", TestClear);
     runner.add_test("Erase", TestErase);
+    runner.add_test("ShrinkToFit", TestShrinkToFit);
 
     runner.run_all();
 

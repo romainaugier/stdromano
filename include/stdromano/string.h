@@ -18,20 +18,20 @@ STDROMANO_NAMESPACE_BEGIN
 /* Finds the last occurence of needle in haystack (reverse strstr) */
 STDROMANO_API char* strrstr(const char* haystack, const char* needle) noexcept;
 
-template <size_t LocalCapacity = 7>
+template <std::size_t LocalCapacity = 7>
 class String
 {
     static constexpr float STRING_GROWTH_RATE = 1.61f;
-    static constexpr size_t STRING_ALIGNMENT = 32;
-    static constexpr size_t INVALID_REF_SIZE = std::numeric_limits<size_t>::max();
-    static constexpr size_t NPOS = std::numeric_limits<size_t>::max();
+    static constexpr std::size_t STRING_ALIGNMENT = 32;
+    static constexpr std::size_t INVALID_REF_SIZE = std::numeric_limits<size_t>::max();
+    static constexpr std::size_t NPOS = std::numeric_limits<size_t>::max();
 
-    template <size_t OtherCapacity>
+    template <std::size_t OtherCapacity>
     friend class String;
 
 public:
     using value_type = char;
-    using split_iterator = size_t;
+    using split_iterator = std::size_t;
 
 private:
     union
@@ -40,23 +40,27 @@ private:
         char _local_data[LocalCapacity + 1];
     };
 
-    uint32_t _size : 31;
-    uint32_t _capacity : 31;
-    uint32_t _is_local : 1;
-    uint32_t _is_ref : 1;
+    std::uint32_t _size : 31;
+    std::uint32_t _capacity : 31;
+    std::uint32_t _is_local : 1;
+    std::uint32_t _is_ref : 1;
 
-    void reallocate(size_t new_capacity) noexcept
+    void reallocate(std::size_t new_capacity) noexcept
     {
         STDROMANO_ASSERT(!this->_is_ref, "Cannot modify a reference string");
 
         char* new_data = (char*)mem_aligned_alloc((new_capacity + 1) * sizeof(char),
                                                   STRING_ALIGNMENT);
+
+        const std::size_t copy_size = std::min(static_cast<std::size_t>(this->_size),
+                                               new_capacity - 1);
+
         if(this->_size > 0)
         {
-            std::memcpy(new_data, this->data(), this->_size);
+            std::memcpy(new_data, this->data(), copy_size);
         }
 
-        new_data[this->_size] = '\0';
+        new_data[copy_size] = '\0';
 
         if(!this->_is_local && this->_heap_data != nullptr)
         {
@@ -64,7 +68,8 @@ private:
         }
 
         this->_heap_data = new_data;
-        this->_capacity = static_cast<uint32_t>(new_capacity);
+        this->_size = copy_size;
+        this->_capacity = static_cast<std::uint32_t>(new_capacity);
         this->_is_local = 0;
     }
 
@@ -78,14 +83,14 @@ public:
         this->_local_data[0] = '\0';
     }
 
-    String(const char* str) : String()
+    String(const char* str, const std::size_t len = String::NPOS) : String()
     {
         if(str == nullptr)
         {
             return;
         }
 
-        const size_t size = std::strlen(str);
+        const size_t size = len == String::NPOS ? std::strlen(str) : len;
 
         if(size == 0)
         {
@@ -479,7 +484,6 @@ public:
         return s;
     }
 
-
     String copy() const noexcept
     {
         if(this->_is_ref) 
@@ -692,7 +696,7 @@ public:
         this->prepends(tmp);
     }
 
-    void erase(size_t start = 0, size_t length = String::NPOS) noexcept
+    void erase(std::size_t start = 0, std::size_t length = String::NPOS) noexcept
     {
         STDROMANO_ASSERT(!this->_is_ref, "Cannot modify a reference string");
 
@@ -701,7 +705,7 @@ public:
             return;
         }
 
-        size_t actual_length = (length == String::NPOS || start + length > this->_size)
+        const std::size_t actual_length = (length == String::NPOS || start + length > this->_size)
                                ? this->_size - start
                                : length;
 
@@ -711,12 +715,23 @@ public:
         }
 
         char* d = this->data();
-        const size_t tail_start = start + actual_length;
-        const size_t tail_size = this->_size - tail_start + 1;
+        const std::size_t tail_start = start + actual_length;
+        const std::size_t tail_size = this->_size - tail_start + 1;
 
         std::memmove(d + start, d + tail_start, tail_size);
         this->_size -= actual_length;
     }
+
+    void shrink_to_fit(const std::size_t size = String::NPOS) noexcept
+    {
+        STDROMANO_ASSERT(!this->_is_ref, "Cannot modify a reference string");
+
+        const std::size_t new_capacity = std::min(size, static_cast<std::size_t>(this->_size)) + 1;
+
+        this->reallocate(new_capacity);
+    }
+
+    /* Python-like string methods */
 
     String upper() const noexcept
     {
@@ -884,7 +899,6 @@ public:
         return String::make_ref(this->data() + start_pos, actual_length);
     }
 
-
     String replace(char occurence, char replacement) const noexcept
     {
         String res = this->copy();
@@ -921,7 +935,6 @@ public:
 
         return std::strncmp(this->data() + this->size() - suffix.size(), suffix.data(), suffix.size()) == 0;
     }
-
 
     int find(const String& substring) const noexcept
     {
@@ -971,7 +984,6 @@ public:
             return true;
         }
     }
-
 
     String lsplit(const String& sep, String* rsplit_out = nullptr) const noexcept
     {
@@ -1043,7 +1055,6 @@ public:
         return String::make_ref(*this);
     }
 
-
     String zfill(const uint32_t total_width) const noexcept
     {
         if(this->_size >= total_width) 
@@ -1065,6 +1076,7 @@ public:
         return result;
     }
 
+    /* Conversion */
 
     long long to_long_long() const noexcept
     {

@@ -6,24 +6,37 @@
 #include "stdromano/logger.h"
 #include "test.h"
 
-TEST_CASE(test_expand_executable)
+TEST_CASE(TestPathExists)
+{
+    ASSERT_EQUAL(true, stdromano::fs_path_exists(__FILE__));
+    ASSERT_EQUAL(false, stdromano::fs_path_exists(stdromano::StringD("{}n", __FILE__)));
+}
+
+TEST_CASE(TestParentDir)
+{
+    stdromano::log_info(stdromano::fs_parent_dir(__FILE__));
+}
+
+TEST_CASE(TestFilename)
+{
+    stdromano::log_info(stdromano::fs_filename(__FILE__));
+}
+
+TEST_CASE(TestExpandExecutable)
 {
     stdromano::log_info(stdromano::expand_from_executable_dir("test/expand/file.c"));
 }
 
-TEST_CASE(test_load_file_content)
+TEST_CASE(TestLoadFileContent)
 {
     stdromano::String<> content = std::move(stdromano::load_file_content(__FILE__, "r"));
 
     ASSERT(!content.empty());
-
-    stdromano::log_info(content);
 }
 
-TEST_CASE(test_list_dir)
+TEST_CASE(TestListDir)
 {
-    const stdromano::String<> directory_path = stdromano::fs_parent_dir(
-                   stdromano::String<>::make_ref(__FILE__, std::strlen(__FILE__)));
+    const stdromano::StringD directory_path = stdromano::fs_parent_dir(__FILE__);
     stdromano::log_debug("Listing directory: {}", directory_path);
 
     stdromano::ListDirIterator it;
@@ -36,7 +49,7 @@ TEST_CASE(test_list_dir)
     }
 }
 
-TEST_CASE(test_file_dialog)
+TEST_CASE(TestFileDialog)
 {
     const stdromano::String<> file_path =
                    stdromano::open_file_dialog(stdromano::FileDialogMode_OpenFile,
@@ -45,6 +58,7 @@ TEST_CASE(test_file_dialog)
                                                "*.cpp|*.h|*.txt");
 
     stdromano::log_debug("Chosen file: {}", file_path.empty() ? "None" : file_path.c_str());
+
 
     const stdromano::String<> dir_path =
                    stdromano::open_file_dialog(stdromano::FileDialogMode_OpenDir,
@@ -55,16 +69,27 @@ TEST_CASE(test_file_dialog)
     stdromano::log_debug("Chosen directory: {}", dir_path.empty() ? "None" : dir_path.c_str());
 }
 
+TEST_CASE(TestCurrentDir)
+{
+    const stdromano::StringD cwd = stdromano::fs_current_dir();
+
+    stdromano::log_debug("CWD: {}", cwd);
+}
+
 int main()
 {
     stdromano::set_log_level(stdromano::LogLevel::Debug);
 
     TestRunner runner;
 
-    runner.add_test("Expand Executable", test_expand_executable);
-    runner.add_test("Load File Content", test_load_file_content);
-    runner.add_test("List Dir", test_list_dir);
-    // runner.add_test("File Dialog", test_file_dialog);
+    runner.add_test("PathExists", TestPathExists);
+    runner.add_test("ParentDir", TestParentDir);
+    runner.add_test("Filename", TestFilename);
+    runner.add_test("Expand Executable", TestExpandExecutable);
+    runner.add_test("Load File Content", TestLoadFileContent);
+    runner.add_test("List Dir", TestListDir);
+    // runner.add_test("File Dialog", TestFileDialog);
+    runner.add_test("CurrentDir", TestCurrentDir);
 
     runner.run_all();
 
