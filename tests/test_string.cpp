@@ -500,6 +500,17 @@ TEST_CASE(TestInsertion)
     ASSERT_EQUAL(0, std::strcmp(str.c_str(), "42: Hello Beautiful Amazing World"));
 }
 
+TEST_CASE(TestIsDigit)
+{
+    String<> digits = "0123456789";
+    String<> no_digits = "abcdef";
+    String<> mixed = "0123abcd";
+
+    ASSERT_EQUAL(true, digits.is_digit());
+    ASSERT_EQUAL(false, no_digits.is_digit());
+    ASSERT_EQUAL(false, mixed.is_digit());
+}
+
 int main()
 {
     TestRunner runner;
@@ -530,6 +541,7 @@ int main()
     runner.add_test("Erase", TestErase);
     runner.add_test("ShrinkToFit", TestShrinkToFit);
     runner.add_test("Insertion", TestInsertion);
+    runner.add_test("IsDigit", TestIsDigit);
 
     runner.run_all();
 

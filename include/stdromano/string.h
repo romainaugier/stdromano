@@ -526,8 +526,12 @@ public:
         return this->data() + this->_size;
     }
 
-
     STDROMANO_FORCE_INLINE size_t size() const noexcept
+    {
+        return this->_size;
+    }
+
+    STDROMANO_FORCE_INLINE size_t length() const noexcept
     {
         return this->_size;
     }
@@ -901,7 +905,6 @@ public:
         return result;
     }
 
-
     String lstrip(char c = ' ') const noexcept
     {
         if (this->empty()) return String::make_ref(this->data(), 0);
@@ -1171,6 +1174,19 @@ public:
         result.data()[result._size] = '\0';
         
         return result;
+    }
+
+    bool is_digit() const noexcept
+    {
+        for(std::size_t i = 0; i < this->_size; i++)
+        {
+            if(static_cast<int>(this->data()[i] - 48) > 9)
+            {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     /* Conversion */
