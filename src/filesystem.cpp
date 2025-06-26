@@ -84,6 +84,22 @@ StringD fs_current_dir() noexcept
 #endif /* defined(STDROMANO_WIN) */
 }
 
+void fs_mkdir(const StringD& dir_path) noexcept
+{
+    if(fs_path_exists(dir_path))
+    {
+        return;
+    }
+
+#if defined(STDROMANO_WIN)
+    CreateDirectoryA(dir_path.is_ref() ? dir_path.copy().c_str() : dir_path.c_str(), NULL);
+#elif defined(STDROMANO_LINUX)
+    mkdir(dir_path.is_ref() ? dir_path.copy().c_str() : dir_path.c_str(), 0755);
+#else
+    STDROMANO_NOT_IMPLEMENTED;
+#endif /* defined(STDROMANO_WIN) */
+}
+
 String<> expand_from_executable_dir(const String<>& path_to_expand) noexcept
 {
     size_t size;
