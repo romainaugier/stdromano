@@ -46,20 +46,25 @@ else()
 endif()
 
 if(JEMALLOC_FOUND)
+    find_library(JEMALLOC_LIB jemalloc
+        HINTS ${JEMALLOC_LIBRARY_DIRS}
+        PATH_SUFFIXES lib
+    )
+
     message(STATUS "Found jemalloc via pkg-config")
     message(STATUS "jemalloc include dirs: ${JEMALLOC_INCLUDE_DIRS}")
     message(STATUS "jemalloc library dirs: ${JEMALLOC_LIBRARY_DIRS}")
-    message(STATUS "jemalloc libraries: ${JEMALLOC_LIBRARIES}")
-
-    list(GET JEMALLOC_LIBRARIES 0 JEMALLOC_LIB)
+    message(STATUS "jemalloc libraries: ${JEMALLOC_LIB}")
 
     add_library(jemalloc SHARED IMPORTED GLOBAL)
 
     set_target_properties(jemalloc PROPERTIES
         IMPORTED_LOCATION ${JEMALLOC_LIB}
-        INTERFACE_INCLUDE_DIRECTORIES ${JEMALLOC_INCLUDE_DIR}
+        INTERFACE_INCLUDE_DIRECTORIES ${JEMALLOC_INCLUDE_DIRS}
     )
 else()
+    message(STATUS "Looking for jemalloc in vcpkg directories")
+
     find_path(JEMALLOC_INCLUDE_DIR jemalloc/jemalloc.h
         PATHS
         ${CMAKE_PREFIX_PATH}/include

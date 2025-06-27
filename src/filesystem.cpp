@@ -79,6 +79,9 @@ StringD fs_current_dir() noexcept
 
     return res;
 #elif defined(STDROMANO_LINUX)
+    getcwd(res.c_str(), res.size());
+
+    return res;
 #else
     STDROMANO_NOT_IMPLEMENTED;
 #endif /* defined(STDROMANO_WIN) */
@@ -131,7 +134,7 @@ String<> expand_from_executable_dir(const String<>& path_to_expand) noexcept
     }
 #endif /* defined(STDROMANO_WIN) */
 
-    return std::move(String<>("{}/{}", fmt::string_view(sz_path, size), path_to_expand));
+    return String<>("{}/{}", fmt::string_view(sz_path, size), path_to_expand);
 }
 
 String<> load_file_content(const String<>& file_path, const char* mode) noexcept
@@ -304,7 +307,7 @@ bool fs_list_dir(ListDirIterator& it, const String<>& directory_path, const uint
         if(it._entry->d_type == DT_UNKNOWN)
         {
             struct stat st;
-            const String<> full_path = std::move(it.get_current_path());
+            const String<> full_path = it.get_current_path();
 
             if(stat(full_path.c_str(), &st) == 0)
             {

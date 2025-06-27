@@ -11,6 +11,8 @@
 
 #include <new>
 #include <initializer_list>
+#include <utility>
+#include <algorithm>
 
 STDROMANO_NAMESPACE_BEGIN
 
@@ -275,6 +277,7 @@ public:
 
         if(this->uses_heap())
         {
+            this->clear();
             mem_free(this->_heap_storage);
             this->_heap_storage = nullptr;
         }
@@ -345,14 +348,14 @@ public:
 
                 if constexpr (std::is_nothrow_move_constructible_v<T>) 
                 {
-                    for(size_t i = 0; i < size_; i++) 
+                    for(size_t i = 0; i < this->_size; i++) 
                     {
                         ::new (new_storage + i) T(std::move(this->_heap_storage[i]));
                     }
                 } 
                 else 
                 {
-                    for(size_t i = 0; i < size_; i++) 
+                    for(size_t i = 0; i < this->_size; i++) 
                     {
                         ::new (new_storage + i) T(this->_heap_storage[i]);
                     }
