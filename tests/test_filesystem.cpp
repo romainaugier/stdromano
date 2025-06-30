@@ -69,6 +69,20 @@ TEST_CASE(TestFileDialog)
     stdromano::log_debug("Chosen directory: {}", dir_path.empty() ? "None" : dir_path.c_str());
 }
 
+TEST_CASE(TestWalk)
+{
+    const stdromano::StringD directory_path = stdromano::fs_parent_dir(__FILE__);
+
+    stdromano::log_debug("Walk: {}", directory_path);
+
+    for(stdromano::WalkIterator it(directory_path, stdromano::ListDirFlags_ListAll); 
+        it != stdromano::WalkIterator();
+        ++it) 
+    {
+        stdromano::log_debug(it->get_current_path());
+    }
+}
+
 TEST_CASE(TestCurrentDir)
 {
     const stdromano::StringD cwd = stdromano::fs_current_dir();
@@ -90,6 +104,7 @@ int main()
     runner.add_test("List Dir", TestListDir);
     // runner.add_test("File Dialog", TestFileDialog);
     runner.add_test("CurrentDir", TestCurrentDir);
+    runner.add_test("Walk", TestWalk);
 
     runner.run_all();
 

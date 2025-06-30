@@ -513,4 +513,111 @@ String<> open_file_dialog(FileDialogMode_ mode,
 #endif /* defined(STDROMANO_WIN) */
 }
 
+bool WalkIterator::process_current_directory() noexcept
+{
+#if defined(STDROMANO_WIN)
+    WIN32_FIND_DATAA find_data;
+
+    bool first_entry = (this->_h_find == INVALID_HANDLE_VALUE);
+
+    if(first_entry) 
+    {
+        if(this->_pending_dirs.empty()) 
+        {
+            this->_is_end = true;
+            return false;
+        }
+
+        this->_current_dir = this->_pending_dirs.front();
+        this->_pending_dirs.pop();
+        StringD search_path("{}\\*", this->_current_dir);
+
+        this->_h_find = FindFirstFileA(search_path.c_str(), &find_data);
+
+        if(this->_h_find == INVALID_HANDLE_VALUE)
+        {
+            return false;
+        }
+    } 
+    else 
+    {
+        if(!FindNextFileA(this->_h_find, &find_data)) 
+        {
+            return false;
+        }
+    }
+
+    while(true) 
+    {
+        if(this->should_skip_entry(find_data.cFileName, find_data.dwFileAttributes)) 
+        {
+            if(!FindNextFileA(this->_h_find, &find_data))
+            {
+                break;
+            }
+
+            continue;
+        }
+
+        StringD full_path("{}/{}", this->_current_dir, find_data.cFileName);
+
+        bool is_dir = (find_data.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) != 0;
+
+        if(is_dir) 
+        {
+            this->_pending_dirs.push(full_path);
+        }
+
+        if((is_dir && (this->_flags & ListDirFlags_ListDirs)) ||
+           (!is_dir && (this->_flags & ListDirFlags_ListFiles))) 
+        {
+            this->_current_item = { std::move(full_path), is_dir };
+            return true;
+        }
+
+        if (!FindNextFileA(this->_h_find, &find_data)) break;
+    }
+
+    FindClose(this->_h_find);
+    this->_h_find = INVALID_HANDLE_VALUE;
+
+#elif defined(STDROMANO_LINUX)
+    STDROMANO_NOT_IMPLEMENTED;
+#else
+    STDROMANO_NOT_IMPLEMENTED;
+#endif /* defined(STDROMANO_WIN) */
+
+    return false;
+}
+
+void WalkIterator::move_to_next_directory() noexcept
+{
+    if(this->_pending_dirs.empty()) 
+    {
+        this->_is_end = true;
+    }
+}
+
+bool WalkIterator::should_skip_entry(const char* name
+#if defined(STDROMANO_WIN)
+                                    , DWORD attrs) const noexcept
+#else
+                                     ) const noexcept
+#endif /* defined(STDROMANO_WIN) */
+{
+    if(name[0] == '.' && (name[1] == '\0' || (name[1] == '.' && name[2] == '\0'))) 
+    {
+        return true;
+    }
+
+#if defined(STDROMANO_WIN)
+    if((attrs & FILE_ATTRIBUTE_HIDDEN) && !(this->_flags & ListDirFlags_ListHidden))
+    {
+        return true;
+    }
+#endif /* defined(STDROMANO_WIN) */
+
+    return false;
+}
+
 STDROMANO_NAMESPACE_END
