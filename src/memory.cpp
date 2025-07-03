@@ -52,7 +52,7 @@ void mem_aligned_free(void* ptr) noexcept
     je_free(ptr);
 }
 
-constexpr const char* units[4] = {"Bytes", "Gb", "Mb", "Kb"};
+constexpr const char* units[4] = { "Bytes", "Gb", "Mb", "Kb" };
 
 void format_byte_size(float size, char* buffer) noexcept
 {
@@ -87,7 +87,7 @@ Arena::Arena(const std::size_t initial_size,
 
 Arena::Block* Arena::allocate_block(const std::size_t size) noexcept
 {
-    const std::uint32_t total_size = size + sizeof(Block);
+    const std::size_t total_size = size + sizeof(Block);
 
     void* addr = mem_alloc(total_size);
 

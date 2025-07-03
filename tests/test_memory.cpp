@@ -29,6 +29,12 @@ TEST_CASE(test_memory_arena)
     ASSERT(std::strcmp(my_string_alloced_another_ptr->c_str(), "this is a string alloced") == 0);
     ASSERT(std::strcmp(my_string_emplaced_ptr->c_str(), "this is a string emplaced") == 0);
 
+    for(std::size_t i = 0; i < 10000; i++)
+    {
+        std::size_t* pptr = arena.emplace<std::size_t>(i);
+        ASSERT_EQUAL(i, *pptr);
+    }
+
     arena.clear();
 
     /*

@@ -194,7 +194,7 @@ String<> ListDirIterator::get_current_path() const noexcept
 bool ListDirIterator::is_file() const noexcept
 {
 #if defined(STDROMANO_WIN)
-    return this->_find_data.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY;
+    return this->_find_data.dwFileAttributes & ~FILE_ATTRIBUTE_DIRECTORY;
 #elif defined(STDROMANO_LINUX)
     return this->_entry->d_type == DT_REG;
 #else
@@ -205,7 +205,7 @@ bool ListDirIterator::is_file() const noexcept
 bool ListDirIterator::is_directory() const noexcept
 {
 #if defined(STDROMANO_WIN)
-    return this->_find_data.dwFileAttributes & ~FILE_ATTRIBUTE_DIRECTORY;
+    return this->_find_data.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY;
 #elif defined(STDROMANO_LINUX)
     return this->_entry->d_type == DT_DIR;
 #else
