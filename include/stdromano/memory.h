@@ -14,6 +14,7 @@
 #include <cstring>
 #include <immintrin.h>
 #include <type_traits>
+#include <vector>
 
 #if defined(STDROMANO_GCC)
 #include <alloca.h>
@@ -62,7 +63,22 @@ STDROMANO_API void format_byte_size(float size, char* buffer) noexcept;
 
 class STDROMANO_API Arena
 {
-    static constexpr float ARENA_GROWTH_RATE = 1.6180339887f;
+    static constexpr std::uint32_t ARENA_BLOCK_SIZE = 16384; /* 16 Kb */
+
+    struct Block
+    {
+        void* _address;
+        std::size_t _size;
+        std::size_t _offset;
+        Block* _prev;
+        Block* _next;
+
+        Block(void* address, std::size_t size) : _address(address),
+                                                 _size(size),
+                                                 _offset(0),
+                                                 _prev(nullptr),
+                                                 _next(nullptr) {}
+    };
 
     struct Destructor
     {
@@ -71,31 +87,35 @@ class STDROMANO_API Arena
         Destructor* next;
     };
 
-    void* _data = nullptr;
-    size_t _offset = 0;
-    size_t _capacity = 0;
+    Block* _current_block;
+
+    std::size_t _capacity;
+
+    std::size_t _block_size;
 
     Destructor* _destructors = nullptr;
 
-    STDROMANO_FORCE_INLINE bool check_resize(const size_t new_size) const noexcept
-    {
-        return (this->_offset + new_size) >= this->_capacity;
-    }
-
-    STDROMANO_FORCE_INLINE size_t align_offset(const size_t alignment) const noexcept
-    {
-        const uintptr_t current_addr =
-            reinterpret_cast<uintptr_t>(static_cast<char*>(this->_data) + this->_offset);
-        const uintptr_t aligned_addr = (current_addr + alignment - 1) & ~(alignment - 1);
-        return this->_offset + (aligned_addr - current_addr);
-    }
+    static Block* allocate_block(const std::size_t size) noexcept;
 
     STDROMANO_FORCE_INLINE void* current_address() const noexcept
     {
-        return static_cast<void*>(static_cast<char*>(this->_data) + this->_offset);
+        return static_cast<void*>(static_cast<char*>(this->_current_block->_address) + 
+                                  this->_current_block->_offset);
     }
 
-    void grow(const size_t min_size) noexcept;
+    STDROMANO_FORCE_INLINE std::size_t align_offset(const size_t alignment) const noexcept
+    {
+        const uintptr_t current_addr = reinterpret_cast<uintptr_t>(this->current_address());
+        const uintptr_t aligned_addr = (current_addr + alignment - 1) & ~(alignment - 1);
+        return this->_current_block->_offset + (aligned_addr - current_addr);
+    }
+
+    STDROMANO_FORCE_INLINE bool check_resize(const std::uint32_t size) const noexcept
+    {
+        return (this->_current_block->_offset + size) > this->_current_block->_size;
+    }
+
+    void grow() noexcept;
 
     template <typename T>
     static void dtor_func(void* ptr)
@@ -104,13 +124,12 @@ class STDROMANO_API Arena
     }
 
 public:
-    Arena(const size_t initial_size);
+    Arena(const std::size_t initial_size,
+          const std::size_t block_size = ARENA_BLOCK_SIZE);
 
     ~Arena();
 
     void clear() noexcept;
-
-    void resize(const size_t new_capacity) noexcept;
 
     template <typename T, typename... Args>
     T* emplace(Args... args) noexcept
@@ -122,21 +141,21 @@ public:
 
         if(this->check_resize(total_size))
         {
-            this->grow(total_size);
+            this->grow();
         }
 
-        this->_offset = this->align_offset(alignof(T));
+        this->_current_block->_offset = this->align_offset(alignof(T));
 
         void* object_address = this->current_address();
 
-        this->_offset += object_size;
+        this->_current_block->_offset += object_size;
 
         T* object = ::new(object_address) T(args...);
 
         if(needs_destructor)
         {
             Destructor* dtor = static_cast<Destructor*>(this->current_address());
-            this->_offset += dtor_size;
+            this->_current_block->_offset += dtor_size;
 
             dtor->destroy_func = &Arena::dtor_func<T>;
             dtor->object_ptr = object;
@@ -152,9 +171,23 @@ public:
     {
         STDROMANO_ASSERT(offset < this->_capacity, "Out of bounds access");
 
-        return offset >= this->_capacity
-                   ? nullptr
-                   : static_cast<void*>(static_cast<char*>(this->_data) + offset);
+        Block* current = this->_current_block;
+        std::size_t total_capacity = 0;
+
+        while(current != nullptr)
+        {
+            if(offset < (total_capacity + static_cast<std::size_t>(current->_size)))
+            {
+                const std::size_t base_offset = offset - total_capacity;
+
+                return static_cast<void*>(static_cast<char*>(current->_address) + base_offset);
+            }
+
+            total_capacity += static_cast<std::size_t>(current->_size);
+            current = current->_next;
+        }
+
+        return nullptr;
     }
 };
 

@@ -77,21 +77,49 @@ void format_byte_size(float size, char* buffer) noexcept
     std::snprintf(buffer, 16, "%.02f %s", size, units[unit]);
 }
 
-Arena::Arena(const size_t initial_size)
+Arena::Arena(const std::size_t initial_size,
+             const std::size_t block_size)
 {
-    this->_data = mem_alloc(initial_size);
-    this->_offset = 0;
+    this->_current_block = Arena::allocate_block(initial_size);
     this->_capacity = initial_size;
+    this->_block_size = block_size;
 }
 
-void Arena::grow(const size_t min_size) noexcept
+Arena::Block* Arena::allocate_block(const std::size_t size) noexcept
 {
-    const size_t min_capacity = this->_capacity + min_size;
-    const size_t new_capacity =
-        std::max(static_cast<size_t>(static_cast<float>(this->_capacity) * ARENA_GROWTH_RATE),
-                 min_capacity);
+    const std::uint32_t total_size = size + sizeof(Block);
 
-    this->resize(new_capacity);
+    void* addr = mem_alloc(total_size);
+
+    if(addr == nullptr)
+    {
+        return nullptr;
+    }
+
+    void* block_addr = static_cast<char*>(addr) + sizeof(Block);
+
+    ::new(addr) Arena::Block(block_addr, size);
+
+    return static_cast<Block*>(addr);
+}
+
+void Arena::grow() noexcept
+{
+    Block* next_block;
+
+    if(this->_current_block->_next != nullptr)
+    {
+        next_block = this->_current_block->_next;
+    }
+    else
+    {
+        next_block = Arena::allocate_block(this->_block_size);
+        this->_capacity += this->_block_size;
+    }
+
+    next_block->_prev = this->_current_block;
+    this->_current_block->_next = next_block;
+    this->_current_block = next_block;
 }
 
 void Arena::clear() noexcept
@@ -105,32 +133,34 @@ void Arena::clear() noexcept
     }
 
     this->_destructors = nullptr;
-    this->_offset = 0;
-}
 
-void Arena::resize(const size_t new_capacity) noexcept
-{
-    if(new_capacity <= this->_capacity)
+    Block* current = this->_current_block;
+
+    while(current != nullptr)
     {
-        return;
+        current->_offset = 0;
+
+        if(current != nullptr)
+        {
+            this->_current_block = current;
+        }
+
+        current = current->_prev;
     }
-
-    void* new_data_ptr = mem_realloc(this->_data, new_capacity);
-
-    if(new_data_ptr == nullptr)
-    {
-        return;
-    }
-
-    this->_data = new_data_ptr;
-    this->_capacity = new_capacity;
 }
 
 Arena::~Arena()
 {
     this->clear();
 
-    mem_free(this->_data);
+    Block* current = this->_current_block;
+
+    while(current != nullptr)
+    {
+        Block* tmp = current;
+        current = tmp->_prev;
+        mem_free(tmp);
+    }
 }
 
 STDROMANO_NAMESPACE_END
