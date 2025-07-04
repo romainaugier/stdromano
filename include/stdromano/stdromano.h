@@ -142,7 +142,7 @@
     if(!(expr))                                                                                    \
     {                                                                                              \
         std::fprintf(stderr,                                                                       \
-                     "Assertion failed in file %s at line %d: %s",                                 \
+                     "Assertion failed in file %s at line %d: %s\n",                               \
                      __FILE__,                                                                     \
                      __LINE__,                                                                     \
                      message);                                                                     \
@@ -152,8 +152,8 @@
 #define STDROMANO_STATIC_ASSERT(expr, message) static_assert(expr, message)
 #define STDROMANO_NOT_IMPLEMENTED                                                                  \
     std::fprintf(stderr,                                                                           \
-                 "Called function %s that is not implemented (%s:%d)",                             \
-                 ROMANORENDER_FUNCTION,                                                            \
+                 "Called function %s that is not implemented (%s:%d)\n",                           \
+                 STDROMANO_FUNCTION,                                                               \
                  __FILE__,                                                                         \
                  __LINE__);                                                                        \
     std::exit(1)

@@ -582,7 +582,8 @@ bool WalkIterator::process_current_directory() noexcept
     this->_h_find = INVALID_HANDLE_VALUE;
 
 #elif defined(STDROMANO_LINUX)
-    STDROMANO_NOT_IMPLEMENTED;
+    return false;
+    // STDROMANO_NOT_IMPLEMENTED;
 #else
     STDROMANO_NOT_IMPLEMENTED;
 #endif /* defined(STDROMANO_WIN) */
