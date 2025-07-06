@@ -582,8 +582,61 @@ bool WalkIterator::process_current_directory() noexcept
     this->_h_find = INVALID_HANDLE_VALUE;
 
 #elif defined(STDROMANO_LINUX)
-    return false;
-    // STDROMANO_NOT_IMPLEMENTED;
+    if(this->_dir == nullptr)
+    {
+        if(this->_pending_dirs.empty()) 
+        {
+            this->_is_end = true;
+            return false;
+        }
+
+        this->_current_dir = this->_pending_dirs.front();
+        this->_pending_dirs.pop();
+
+        this->_dir = opendir(this->_current_dir.c_str());
+    }
+
+    struct dirent* entry;
+
+    while((entry = readdir(this->_dir)))
+    {
+        bool is_hidden = entry->d_name[0] == '.';
+
+        if(is_hidden && !(this->_flags & ListDirFlags_ListHidden))
+        {
+            continue;
+        }
+
+        bool is_dir = false;
+
+        StringD full_path("{}/{}", this->_current_dir, entry->d_name);
+
+        if(entry->d_type == DT_UNKNOWN)
+        {
+            struct stat st;
+
+            if(stat(full_path.c_str(), &st) == 0)
+            {
+                is_dir = S_ISDIR(st.st_mode);
+            }
+        }
+        else if(entry->d_type == DT_DIR)
+        {
+            is_dir = true;
+            this->_pending_dirs.push(full_path);
+        }
+
+        if((is_dir && (this->_flags & ListDirFlags_ListFiles)) ||
+           (!is_dir && (this->_flags & ListDirFlags_ListDirs)))
+        {
+            this->_current_item = { std::move(full_path), is_dir };
+            return true;
+        }
+    }
+
+    closedir(this->_dir);
+    this->_dir = nullptr;
+
 #else
     STDROMANO_NOT_IMPLEMENTED;
 #endif /* defined(STDROMANO_WIN) */

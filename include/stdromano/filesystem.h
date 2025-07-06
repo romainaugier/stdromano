@@ -115,6 +115,8 @@ private:
     
 #if defined(STDROMANO_WIN)
     HANDLE _h_find = INVALID_HANDLE_VALUE;
+#elif defined(STDROMANO_LINUX)
+    DIR* _dir = nullptr;
 #endif /* defined(STDROMANO_WIN) */
 
 public:

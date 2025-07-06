@@ -29,7 +29,7 @@ TEST_CASE(TestExpandExecutable)
 
 TEST_CASE(TestLoadFileContent)
 {
-    stdromano::String<> content = std::move(stdromano::load_file_content(__FILE__, "r"));
+    stdromano::String<> content = stdromano::load_file_content(__FILE__, "r");
 
     ASSERT(!content.empty());
 }
