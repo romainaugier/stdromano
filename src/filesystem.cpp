@@ -296,9 +296,10 @@ bool fs_list_dir(ListDirIterator& it, const String<>& directory_path, const uint
 
     while((it._entry = readdir(it._dir)))
     {
-        bool is_hidden = it._entry->d_name[0] == '.';
+        bool should_skip = (it._entry->d_name[0] == '.') && (it._entry->d_name[1] == '\0' ||
+                           (it._entry->d_name[1] == '.' && it._entry->d_name[2] == '\0'));
 
-        if(is_hidden && !(flags & ListDirFlags_ListHidden))
+        if(should_skip)
         {
             continue;
         }

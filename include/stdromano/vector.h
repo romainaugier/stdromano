@@ -857,7 +857,11 @@ public:
     STDROMANO_FORCE_INLINE void sort(F&& cmp = F()) noexcept
     {
         STDROMANO_ASSERT(this->_data != nullptr, "Vector has not been allocated");
-        STDROMANO_ASSERT(this->size() > 1, "Size must be greater than one");
+
+        if(this->_size <= 1)
+        {
+            return;
+        }
 
         std::qsort(this->data(), this->size(), sizeof(T), std::forward<F>(cmp));
     }

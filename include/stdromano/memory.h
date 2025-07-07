@@ -18,6 +18,7 @@
 #include <new>
 #include <type_traits>
 #include <vector>
+#include <limits>
 
 
 #if defined(STDROMANO_GCC)
