@@ -9,12 +9,16 @@
 
 #include "stdromano/stdromano.h"
 
+#include <cstddef>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
 #include <immintrin.h>
+#include <memory>
+#include <new>
 #include <type_traits>
 #include <vector>
+
 
 #if defined(STDROMANO_GCC)
 #include <alloca.h>
@@ -44,7 +48,90 @@ STDROMANO_API void* mem_aligned_alloc(const size_t size, const size_t alignment)
 
 STDROMANO_API void mem_aligned_free(void* ptr) noexcept;
 
-static STDROMANO_FORCE_INLINE void mem_swap(void* a, void* b, const size_t size) noexcept
+/* STL-like allocators wrapping alloc functions above */
+
+template <typename T>
+class STDROMANO_API Allocator
+{
+public:
+    using value_type = T;
+    using propagate_on_container_move_assignment = std::true_type;
+    using is_always_equal = std::false_type;
+
+    Allocator() = default;
+
+    template <typename U>
+    constexpr Allocator(const Allocator<U>&) noexcept {}
+
+    [[nodiscard]] T* allocate(const std::size_t n)
+    {
+        if(n > this->max_size())
+        {
+            throw std::bad_alloc();
+        }
+
+        if(auto p = static_cast<T*>(mem_alloc(n * sizeof(T))))
+        {
+            return p;
+        }
+
+        throw std::bad_alloc();
+    }
+
+    void deallocate(T* p, std::size_t) noexcept
+    {
+        mem_free(p);
+    }
+
+    [[nodiscard]] constexpr std::size_t max_size() const noexcept
+    {
+        return std::numeric_limits<std::size_t>::max() / sizeof(T);
+    }
+};
+
+template <typename T, std::size_t Alignment>
+class STDROMANO_API AlignedAllocator 
+{
+public:
+    using value_type = T;
+    using propagate_on_container_move_assignment = std::true_type;
+    using is_always_equal = std::false_type;
+
+    static_assert(Alignment >= alignof(T), "Alignment must be at least as strict as T alignment");
+    static_assert((Alignment & (Alignment - 1)) == 0, "Alignment must be a power of two");
+
+    AlignedAllocator() = default;
+
+    template <typename U>
+    constexpr AlignedAllocator(const AlignedAllocator<U, Alignment>&) noexcept {}
+
+    [[nodiscard]] T* allocate(const std::size_t n)
+    {
+        if(n > this->max_size())
+        {
+            throw std::bad_alloc();
+        }
+
+        if(auto p = static_cast<T*>(mem_aligned_alloc(n * sizeof(T), Alignment)))
+        {
+            return p;
+        }
+
+        throw std::bad_alloc();
+    }
+
+    void deallocate(T* p, std::size_t) noexcept
+    {
+        mem_aligned_free(p);
+    }
+
+    [[nodiscard]] constexpr std::size_t max_size() const noexcept
+    {
+        return std::numeric_limits<std::size_t>::max() / sizeof(T);
+    }
+};
+
+static STDROMANO_FORCE_INLINE void mem_swap(void* a, void* b, const std::size_t size) noexcept
 {
     unsigned char* p;
     unsigned char* q;
@@ -73,11 +160,14 @@ class STDROMANO_API Arena
         Block* _prev;
         Block* _next;
 
-        Block(void* address, std::size_t size) : _address(address),
-                                                 _size(size),
-                                                 _offset(0),
-                                                 _prev(nullptr),
-                                                 _next(nullptr) {}
+        Block(void* address, std::size_t size)
+            : _address(address),
+              _size(size),
+              _offset(0),
+              _prev(nullptr),
+              _next(nullptr)
+        {
+        }
     };
 
     struct Destructor
@@ -99,7 +189,7 @@ class STDROMANO_API Arena
 
     STDROMANO_FORCE_INLINE void* current_address() const noexcept
     {
-        return static_cast<void*>(static_cast<char*>(this->_current_block->_address) + 
+        return static_cast<void*>(static_cast<char*>(this->_current_block->_address) +
                                   this->_current_block->_offset);
     }
 
@@ -124,8 +214,7 @@ class STDROMANO_API Arena
     }
 
 public:
-    Arena(const std::size_t initial_size,
-          const std::size_t block_size = ARENA_BLOCK_SIZE);
+    Arena(const std::size_t initial_size, const std::size_t block_size = ARENA_BLOCK_SIZE);
 
     ~Arena();
 
