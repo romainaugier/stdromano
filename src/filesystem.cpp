@@ -565,7 +565,7 @@ bool WalkIterator::process_current_directory() noexcept
 
         bool is_dir = (find_data.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) != 0;
 
-        if(is_dir) 
+        if(is_dir && this->_flags & WalkFlags_Recursive) 
         {
             this->_pending_dirs.push(full_path);
         }
