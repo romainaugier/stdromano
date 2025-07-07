@@ -90,6 +90,15 @@ STDROMANO_API String<> open_file_dialog(FileDialogMode_ mode,
                                         const String<>& initial_path,
                                         const String<>& filter) noexcept;
 
+enum WalkFlags : uint32_t
+{
+    WalkFlags_ListFiles = 0x1,
+    WalkFlags_ListDirs = 0x2,
+    WalkFlags_ListHidden = 0x4,
+    WalkFlags_ListAll = WalkFlags_ListFiles | WalkFlags_ListDirs,
+    WalkFlags_Recursive = 0x8,
+};
+
 class STDROMANO_API WalkIterator 
 {
 public:

@@ -62,9 +62,9 @@ String<> fs_filename(const String<>& path) noexcept
 
 StringD fs_current_dir() noexcept
 {
+#if defined(STDROMANO_WIN)
     StringD res = StringD::make_zeroed(512);
 
-#if defined(STDROMANO_WIN)
     DWORD size = GetCurrentDirectoryA(512, res.c_str());
 
     if(size >= 512)
@@ -79,9 +79,11 @@ StringD fs_current_dir() noexcept
 
     return res;
 #elif defined(STDROMANO_LINUX)
-    getcwd(res.c_str(), res.size());
+    std::array<char, PATH_MAX> res;
 
-    return res;
+    getcwd(res.data(), res.size());
+
+    return StringD(res.data());
 #else
     STDROMANO_NOT_IMPLEMENTED;
 #endif /* defined(STDROMANO_WIN) */
@@ -568,14 +570,17 @@ bool WalkIterator::process_current_directory() noexcept
             this->_pending_dirs.push(full_path);
         }
 
-        if((is_dir && (this->_flags & ListDirFlags_ListDirs)) ||
-           (!is_dir && (this->_flags & ListDirFlags_ListFiles))) 
+        if((is_dir && (this->_flags & WalkFlags_ListDirs)) ||
+           (!is_dir && (this->_flags & WalkFlags_ListFiles))) 
         {
             this->_current_item = { std::move(full_path), is_dir };
             return true;
         }
 
-        if (!FindNextFileA(this->_h_find, &find_data)) break;
+        if(!FindNextFileA(this->_h_find, &find_data))
+        {
+            break;
+        }
     }
 
     FindClose(this->_h_find);
@@ -602,7 +607,7 @@ bool WalkIterator::process_current_directory() noexcept
     {
         bool is_hidden = entry->d_name[0] == '.';
 
-        if(is_hidden && !(this->_flags & ListDirFlags_ListHidden))
+        if(is_hidden && !(this->_flags & WalkFlags_ListHidden))
         {
             continue;
         }
@@ -623,11 +628,15 @@ bool WalkIterator::process_current_directory() noexcept
         else if(entry->d_type == DT_DIR)
         {
             is_dir = true;
-            this->_pending_dirs.push(full_path);
+
+            if(this->_flags & WalkFlags_Recursive)
+            {
+                this->_pending_dirs.push(full_path);
+            }
         }
 
-        if((is_dir && (this->_flags & ListDirFlags_ListFiles)) ||
-           (!is_dir && (this->_flags & ListDirFlags_ListDirs)))
+        if((is_dir && (this->_flags & WalkFlags_ListFiles)) ||
+           (!is_dir && (this->_flags & WalkFlags_ListDirs)))
         {
             this->_current_item = { std::move(full_path), is_dir };
             return true;
