@@ -33,4 +33,26 @@ char* strrstr(const char* haystack, const char* needle) noexcept
     return result;
 }
 
+bool case_insensitive_less(char lhs, char rhs) noexcept
+{
+    return to_lower(static_cast<int>(lhs)) < to_lower(static_cast<int>(rhs));
+}
+
+bool case_sensitive_less(char lhs, char rhs) noexcept
+{
+    return lhs < rhs;
+}
+
+int strcmp(const StringD& lhs, const StringD& rhs, bool case_sensitive) noexcept
+{
+    bool ret = std::lexicographical_compare(lhs.begin(), 
+                                            lhs.end(),
+                                            rhs.begin(),
+                                            rhs.end(),
+                                            case_sensitive ? case_sensitive_less : 
+                                                             case_insensitive_less);
+
+    return ret ? -1 : 1;
+}
+
 STDROMANO_NAMESPACE_END

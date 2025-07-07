@@ -38,12 +38,22 @@ STDROMANO_FORCE_INLINE bool is_letter_lower(unsigned int c) noexcept
 
 STDROMANO_FORCE_INLINE char to_lower(unsigned int c) noexcept
 {
-    return static_cast<char>(c | 0x60);
+    if(is_letter(c))
+    {
+        return static_cast<char>(c | 0x60);
+    }
+
+    return c;
 }
 
 STDROMANO_FORCE_INLINE char to_upper(unsigned int c) noexcept
 {
-    return static_cast<char>(c & ~0x20);
+    if(is_letter(c))
+    {
+        return static_cast<char>(c & ~0x20);
+    }
+
+    return c;
 }
 
 STDROMANO_NAMESPACE_END

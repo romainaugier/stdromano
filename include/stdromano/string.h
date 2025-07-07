@@ -551,6 +551,101 @@ public:
         return this->_is_ref;
     }
 
+    class iterator
+    {
+    public:
+        using iterator_category = std::random_access_iterator_tag;
+        using value_type = char;
+        using difference_type = std::ptrdiff_t;
+        using pointer = char*;
+        using reference = char&;
+
+        iterator() noexcept : _ptr(nullptr) {}
+        explicit iterator(pointer p) noexcept : _ptr(p) {}
+
+        reference operator*() const noexcept { return *this->_ptr; }
+        pointer operator->() const noexcept { return this->_ptr; }
+
+        iterator& operator++() noexcept { ++this->_ptr; return *this; }
+        iterator operator++(int) noexcept { iterator tmp = *this; ++this->_ptr; return tmp; }
+
+        iterator& operator--() noexcept { --this->_ptr; return *this; }
+        iterator operator--(int) noexcept { iterator tmp = *this; --this->_ptr; return tmp; }
+
+        iterator& operator+=(difference_type n) noexcept { this->_ptr += n; return *this; }
+        iterator& operator-=(difference_type n) noexcept { this->_ptr -= n; return *this; }
+
+        friend iterator operator+(iterator it, difference_type n) noexcept { return iterator(it._ptr + n); }
+        friend iterator operator+(difference_type n, iterator it) noexcept { return iterator(it._ptr + n); }
+        friend iterator operator-(iterator it, difference_type n) noexcept { return iterator(it._ptr - n); }
+        friend difference_type operator-(const iterator& lhs, const iterator& rhs) noexcept { return lhs._ptr - rhs._ptr; }
+
+        reference operator[](difference_type n) const noexcept { return this->_ptr[n]; }
+
+        bool operator==(const iterator& other) const noexcept { return this->_ptr == other._ptr; }
+        bool operator!=(const iterator& other) const noexcept { return this->_ptr != other._ptr; }
+        bool operator<(const iterator& other) const noexcept { return this->_ptr < other._ptr; }
+        bool operator>(const iterator& other) const noexcept { return this->_ptr > other._ptr; }
+        bool operator<=(const iterator& other) const noexcept { return this->_ptr <= other._ptr; }
+        bool operator>=(const iterator& other) const noexcept { return this->_ptr >= other._ptr; }
+
+    private:
+        pointer _ptr;
+        friend class const_iterator;
+    };
+
+    class const_iterator
+    {
+    public:
+        using iterator_category = std::random_access_iterator_tag;
+        using value_type = const char;
+        using difference_type = std::ptrdiff_t;
+        using pointer = const char*;
+        using reference = const char&;
+
+        const_iterator() noexcept : _ptr(nullptr) {}
+        explicit const_iterator(pointer p) noexcept : _ptr(p) {}
+        const_iterator(const iterator& it) noexcept : _ptr(it._ptr) {}
+
+        reference operator*() const noexcept { return *this->_ptr; }
+        pointer operator->() const noexcept { return this->_ptr; }
+
+        const_iterator& operator++() noexcept { ++this->_ptr; return *this; }
+        const_iterator operator++(int) noexcept { const_iterator tmp = *this; ++this->_ptr; return tmp; }
+
+        const_iterator& operator--() noexcept { --this->_ptr; return *this; }
+        const_iterator operator--(int) noexcept { const_iterator tmp = *this; --this->_ptr; return tmp; }
+
+        const_iterator& operator+=(difference_type n) noexcept { this->_ptr += n; return *this; }
+        const_iterator& operator-=(difference_type n) noexcept { this->_ptr -= n; return *this; }
+
+        friend const_iterator operator+(const_iterator it, difference_type n) noexcept { return const_iterator(it._ptr + n); }
+        friend const_iterator operator+(difference_type n, const_iterator it) noexcept { return const_iterator(it._ptr + n); }
+        friend const_iterator operator-(const_iterator it, difference_type n) noexcept { return const_iterator(it._ptr - n); }
+        friend difference_type operator-(const const_iterator& lhs, const const_iterator& rhs) noexcept { return lhs._ptr - rhs._ptr; }
+
+        reference operator[](difference_type n) const noexcept { return this->_ptr[n]; }
+
+        bool operator==(const const_iterator& other) const noexcept { return this->_ptr == other._ptr; }
+        bool operator!=(const const_iterator& other) const noexcept { return this->_ptr != other._ptr; }
+        bool operator<(const const_iterator& other) const noexcept { return this->_ptr < other._ptr; }
+        bool operator>(const const_iterator& other) const noexcept { return this->_ptr > other._ptr; }
+        bool operator<=(const const_iterator& other) const noexcept { return this->_ptr <= other._ptr; }
+        bool operator>=(const const_iterator& other) const noexcept { return this->_ptr >= other._ptr; }
+
+    private:
+        pointer _ptr;
+    };
+
+    iterator begin() noexcept { return iterator(this->data()); }
+    iterator end() noexcept { return iterator(this->data() + this->_size); }
+
+    const_iterator begin() const noexcept { return const_iterator(this->data()); }
+    const_iterator end() const noexcept { return const_iterator(this->data() + this->_size); }
+
+    const_iterator cbegin() const noexcept { return const_iterator(this->data()); }
+    const_iterator cend() const noexcept { return const_iterator(this->data() + this->_size); }
+
     void clear() noexcept
     {
         STDROMANO_ASSERT(!this->_is_ref, "Cannot modify a reference string");
@@ -1242,8 +1337,10 @@ public:
         
         return false;
     }
-
 };
+
+/* Returns -1 if lhs < rhs, 0 if lhs == rhs, 1 if lhs > rhs */
+STDROMANO_API int strcmp(const String<>& lhs, const String<>& rhs, bool case_sensitive = true) noexcept;
 
 /* String dynamically sized */
 using StringD = String<>;
