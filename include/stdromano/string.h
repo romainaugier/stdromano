@@ -57,7 +57,7 @@ private:
 
         if(this->_size > 0)
         {
-            std::memcpy(new_data, this->data(), copy_size);
+            mem_cpy(new_data, this->data(), copy_size);
         }
 
         new_data[copy_size] = '\0';
@@ -74,7 +74,7 @@ private:
     }
 
 public:
-    String() noexcept
+    constexpr String() noexcept
         : _size(0),
           _capacity(LocalCapacity),
           _is_local(1),
@@ -83,14 +83,14 @@ public:
         this->_local_data[0] = '\0';
     }
 
-    String(const char* str, const std::size_t len = String::NPOS) : String()
+    constexpr String(const char* str, const std::size_t len = String::NPOS) : String()
     {
         if(str == nullptr)
         {
             return;
         }
 
-        const size_t size = len == String::NPOS ? std::strlen(str) : len;
+        const size_t size = len == String::NPOS ? str_len(str) : len;
 
         if(size == 0)
         {
@@ -102,7 +102,7 @@ public:
             this->reallocate(size);
         }
 
-        std::memcpy(this->data(), str, size + 1);
+        mem_cpy(this->data(), str, size + 1);
         this->_size = static_cast<uint32_t>(size);
     }
 
@@ -117,10 +117,10 @@ public:
         }
     }
     
-    String(const String& other) noexcept : _size(other._size),
-                                           _capacity(other._is_local ? LocalCapacity : other._capacity),
-                                           _is_local(other._is_local),
-                                           _is_ref(0)
+    constexpr String(const String& other) noexcept : _size(other._size),
+                                                     _capacity(other._is_local ? LocalCapacity : other._capacity),
+                                                     _is_local(other._is_local),
+                                                     _is_ref(0)
     {
         if(other._is_ref)
         {
@@ -133,7 +133,7 @@ public:
         {
             this->_is_local = 1;
             this->_capacity = LocalCapacity;
-            std::memcpy(this->_local_data, other.data(), other._size + 1);
+            mem_cpy(this->_local_data, other.data(), other._size + 1);
         }
         else
         {
@@ -141,11 +141,11 @@ public:
             this->_capacity = other._capacity;
             this->_heap_data = (char*)mem_aligned_alloc((this->_capacity + 1) * sizeof(char),
                                                         STRING_ALIGNMENT);
-            std::memcpy(this->_heap_data, other.data(), other._size + 1);
+            mem_cpy(this->_heap_data, other.data(), other._size + 1);
         }
     }
 
-    String& operator=(const String& other) noexcept
+    constexpr String& operator=(const String& other) noexcept
     {
         if(this == &other)
         {
@@ -170,23 +170,23 @@ public:
         }
         else if(this->_is_local)
         {
-            std::memcpy(this->_local_data, other._local_data, this->_size + 1);
+            mem_cpy(this->_local_data, other._local_data, this->_size + 1);
         }
         else
         {
             this->_heap_data = (char*)mem_aligned_alloc((this->_capacity + 1) * sizeof(char),   
                                                         STRING_ALIGNMENT);
-            std::memcpy(this->_heap_data, other._heap_data, this->_size + 1);
+            mem_cpy(this->_heap_data, other._heap_data, this->_size + 1);
         }
 
         return *this;
     }
 
 
-    String(String&& other) noexcept : _size(other._size),
-                                      _capacity(other._capacity),
-                                      _is_local(other._is_local),
-                                      _is_ref(other._is_ref)
+    constexpr String(String&& other) noexcept : _size(other._size),
+                                                _capacity(other._capacity),
+                                                _is_local(other._is_local),
+                                                _is_ref(other._is_ref)
     {
         if(other._is_ref)
         {
@@ -194,7 +194,7 @@ public:
         }
         else if(other._is_local)
         {
-            std::memcpy(this->_local_data, other._local_data, other._size + 1);
+            mem_cpy(this->_local_data, other._local_data, other._size + 1);
             this->_capacity = LocalCapacity;
         }
         else
@@ -214,7 +214,7 @@ public:
         }
     }
 
-    String& operator=(String&& other) noexcept
+    constexpr String& operator=(String&& other) noexcept
     {
         if(this == &other)
         {
@@ -238,7 +238,7 @@ public:
         }
         else if(other._is_local)
         {
-            std::memcpy(this->_local_data, other._local_data, other._size + 1);
+            mem_cpy(this->_local_data, other._local_data, other._size + 1);
             this->_capacity = LocalCapacity;
         }
         else
@@ -261,7 +261,7 @@ public:
     }
 
     template<size_t OtherCapacity>
-    String(const String<OtherCapacity>& other) : String()
+    constexpr String(const String<OtherCapacity>& other) : String()
     {
         this->_size = other._size;
         this->_is_ref = 0;
@@ -277,7 +277,7 @@ public:
         {
             this->_is_local = 1;
             this->_capacity = LocalCapacity;
-            std::memcpy(this->_local_data, other.data(), other._size + 1);
+            mem_cpy(this->_local_data, other.data(), other._size + 1);
         }
         else
         {
@@ -285,12 +285,12 @@ public:
             this->_capacity = other._capacity;
             this->_heap_data = (char*)mem_aligned_alloc((this->_capacity + 1) * sizeof(char),
                                                         STRING_ALIGNMENT);
-            std::memcpy(this->_heap_data, other.data(), other._size + 1);
+            mem_cpy(this->_heap_data, other.data(), other._size + 1);
         }
     }
 
     template<size_t OtherCapacity>
-    String& operator=(const String<OtherCapacity>& other) noexcept
+    constexpr String& operator=(const String<OtherCapacity>& other) noexcept
     {
         if(!this->_is_ref && !this->_is_local && this->_heap_data != nullptr)
         {
@@ -314,7 +314,7 @@ public:
             {
                 this->_is_local = 1;
                 this->_capacity = LocalCapacity;
-                std::memcpy(this->_local_data, other.data(), other._size + 1);
+                mem_cpy(this->_local_data, other.data(), other._size + 1);
             }
             else
             {
@@ -322,14 +322,14 @@ public:
                 this->_capacity = other._capacity;
                 this->_heap_data = (char*)mem_aligned_alloc((this->_capacity + 1) * sizeof(char),
                                                             STRING_ALIGNMENT);
-                std::memcpy(this->_heap_data, other.data(), other._size + 1);
+                mem_cpy(this->_heap_data, other.data(), other._size + 1);
             }
         }
         return *this;
     }
 
     template<size_t OtherCapacity>
-    String(String<OtherCapacity>&& other) noexcept
+    constexpr String(String<OtherCapacity>&& other) noexcept
     {
         this->_size = other._size;
         this->_capacity = other._capacity;
@@ -342,7 +342,7 @@ public:
         }
         else if(this->_is_local)
         {
-            std::memcpy(this->_local_data, other._local_data, this->_size + 1);
+            mem_cpy(this->_local_data, other._local_data, this->_size + 1);
             this->_capacity = LocalCapacity;
         }
         else
@@ -360,7 +360,7 @@ public:
 
 
     template<size_t OtherCapacity>
-    String& operator=(String<OtherCapacity>&& other) noexcept
+    constexpr String& operator=(String<OtherCapacity>&& other) noexcept
     {
         if(!this->_is_ref && !this->_is_local && this->_heap_data != nullptr)
         {
@@ -379,7 +379,7 @@ public:
         }
         else if(this->_is_local)
         {
-            std::memcpy(this->_local_data, other._local_data, this->_size + 1);
+            mem_cpy(this->_local_data, other._local_data, this->_size + 1);
             this->_capacity = LocalCapacity;
         }
         else
@@ -397,7 +397,6 @@ public:
         return *this;
     }
 
-
     ~String()
     {
         if(!this->_is_ref && !this->_is_local && this->_heap_data != nullptr)
@@ -412,19 +411,19 @@ public:
         this->_is_ref = 0;
     }
 
-    STDROMANO_FORCE_INLINE char& operator[](const size_t i) noexcept
+    constexpr STDROMANO_FORCE_INLINE char& operator[](const size_t i) noexcept
     {
         STDROMANO_ASSERT(i < this->_size, "Index out of bounds");
         return this->data()[i];
     }
 
-    STDROMANO_FORCE_INLINE const char& operator[](const size_t i) const noexcept
+    constexpr STDROMANO_FORCE_INLINE const char& operator[](const size_t i) const noexcept
     {
         STDROMANO_ASSERT(i < this->_size, "Index out of bounds");
         return this->data()[i];
     }
 
-    bool operator==(const String<>& other) const
+    constexpr bool operator==(const String<>& other) const
     {
         if(this->size() != other.size()) 
         {
@@ -439,19 +438,19 @@ public:
         return std::memcmp(this->c_str(), other.c_str(), this->size()) == 0;
     }
 
-    bool operator!=(const String<>& other) const
+    constexpr bool operator!=(const String<>& other) const
     {
         return !this->operator==(other);
     }
 
-    static String make_ref(const char* str, size_t size_param = INVALID_REF_SIZE) noexcept
+    constexpr static String make_ref(const char* str, size_t size_param = INVALID_REF_SIZE) noexcept
     {
         if(str == nullptr) 
         {
             return String();
         } 
 
-        const size_t size = size_param == INVALID_REF_SIZE ? std::strlen(str) : size_param;
+        const size_t size = size_param == INVALID_REF_SIZE ? str_len(str) : size_param;
 
         String s;
         s._heap_data = const_cast<char*>(str);
@@ -463,12 +462,12 @@ public:
         return s;
     }
 
-    static String make_ref(const String& str) noexcept
+    constexpr static String make_ref(const String& str) noexcept
     {
         return String::make_ref(str.data(), str.size());
     }
 
-    static String make_zeroed(const size_t size) noexcept
+    constexpr static String make_zeroed(const size_t size) noexcept
     {
         String s;
 
@@ -479,12 +478,12 @@ public:
 
         s._size = static_cast<uint32_t>(size);
         
-        std::memset(s.data(), 0, size + 1);
+        mem_set(s.data(), 0, size + 1);
 
         return s;
     }
 
-    String copy() const noexcept
+    constexpr String copy() const noexcept
     {
         if(this->_is_ref) 
         {
@@ -494,59 +493,59 @@ public:
         return String(*this);
     }
 
-    STDROMANO_FORCE_INLINE const char* data() const noexcept
+    constexpr STDROMANO_FORCE_INLINE const char* data() const noexcept
     {
         return this->_is_local ? this->_local_data : this->_heap_data;
     }
 
-    STDROMANO_FORCE_INLINE char* data() noexcept
+    constexpr STDROMANO_FORCE_INLINE char* data() noexcept
     {
         return this->_is_local ? this->_local_data : this->_heap_data;
     }
 
-    STDROMANO_FORCE_INLINE const char* c_str() const noexcept
+    constexpr STDROMANO_FORCE_INLINE const char* c_str() const noexcept
     {
         return this->_is_local ? this->_local_data : this->_heap_data;
     }
 
-    STDROMANO_FORCE_INLINE char* c_str() noexcept
+    constexpr STDROMANO_FORCE_INLINE char* c_str() noexcept
     {
         return this->_is_local ? this->_local_data : this->_heap_data;
     }
 
-    STDROMANO_FORCE_INLINE const char* back() const noexcept
+    constexpr STDROMANO_FORCE_INLINE const char* back() const noexcept
     {
         STDROMANO_ASSERT(this->_size > 0 || (this->_is_local || this->_heap_data != nullptr), "String must be valid to get back's address");
         return this->data() + this->_size;
     }
 
-    STDROMANO_FORCE_INLINE char* back() noexcept
+    constexpr STDROMANO_FORCE_INLINE char* back() noexcept
     {
         STDROMANO_ASSERT(this->_size > 0 || (this->_is_local || this->_heap_data != nullptr), "String must be valid to get back's address");
         return this->data() + this->_size;
     }
 
-    STDROMANO_FORCE_INLINE size_t size() const noexcept
+    constexpr STDROMANO_FORCE_INLINE size_t size() const noexcept
     {
         return this->_size;
     }
 
-    STDROMANO_FORCE_INLINE size_t length() const noexcept
+    constexpr STDROMANO_FORCE_INLINE size_t length() const noexcept
     {
         return this->_size;
     }
 
-    STDROMANO_FORCE_INLINE size_t capacity() const noexcept
+    constexpr STDROMANO_FORCE_INLINE size_t capacity() const noexcept
     {
         return this->_capacity;
     }
 
-    STDROMANO_FORCE_INLINE bool empty() const noexcept
+    constexpr STDROMANO_FORCE_INLINE bool empty() const noexcept
     {
         return this->_size == 0;
     }
 
-    STDROMANO_FORCE_INLINE bool is_ref() const noexcept
+    constexpr STDROMANO_FORCE_INLINE bool is_ref() const noexcept
     {
         return this->_is_ref;
     }
@@ -646,7 +645,7 @@ public:
     const_iterator cbegin() const noexcept { return const_iterator(this->data()); }
     const_iterator cend() const noexcept { return const_iterator(this->data() + this->_size); }
 
-    void clear() noexcept
+    constexpr void clear() noexcept
     {
         STDROMANO_ASSERT(!this->_is_ref, "Cannot modify a reference string");
 
@@ -683,7 +682,7 @@ public:
             return;
         }
 
-        const size_t len_to_append = (n == 0) ? std::strlen(c) : n;
+        const size_t len_to_append = (n == 0) ? str_len(c) : n;
 
         if(len_to_append == 0)
         {
@@ -699,7 +698,7 @@ public:
             this->reallocate(new_cap);
         }
 
-        std::memcpy(this->data() + this->_size, c, len_to_append);
+        mem_cpy(this->data() + this->_size, c, len_to_append);
         this->_size = static_cast<uint32_t>(required_content_size);
         this->data()[this->_size] = '\0';
     }
@@ -722,7 +721,7 @@ public:
             this->reallocate(new_cap);
         }
         
-        std::memcpy(this->data() + this->_size, other.c_str(), len_to_append);
+        mem_cpy(this->data() + this->_size, other.c_str(), len_to_append);
         this->_size = static_cast<uint32_t>(required_content_size);
         this->data()[this->_size] = '\0';
     }
@@ -744,7 +743,7 @@ public:
             return;
         }
 
-        const size_t len_to_prepend = (n == 0) ? std::strlen(c) : n;
+        const size_t len_to_prepend = (n == 0) ? str_len(c) : n;
 
         if(len_to_prepend == 0)
         {
@@ -760,8 +759,8 @@ public:
             this->reallocate(new_cap);
         }
 
-        std::memmove(this->data() + len_to_prepend, this->data(), this->_size + 1);
-        std::memcpy(this->data(), c, len_to_prepend);
+        mem_move(this->data() + len_to_prepend, this->data(), this->_size + 1);
+        mem_cpy(this->data(), c, len_to_prepend);
 
         this->_size = static_cast<uint32_t>(required_content_size);
     }
@@ -780,8 +779,8 @@ public:
             this->reallocate(new_cap);
         }
 
-        std::memmove(this->data() + len_to_prepend, this->data(), this->_size + 1);
-        std::memcpy(this->data(), other.c_str(), len_to_prepend);
+        mem_move(this->data() + len_to_prepend, this->data(), this->_size + 1);
+        mem_cpy(this->data(), other.c_str(), len_to_prepend);
         
         this->_size = static_cast<uint32_t>(required_content_size);
     }
@@ -810,7 +809,7 @@ public:
             return;
         }
         
-        const size_t insert_len = (n == 0) ? std::strlen(c) : n;
+        const size_t insert_len = (n == 0) ? str_len(c) : n;
 
         if(insert_len == 0)
         {
@@ -829,11 +828,11 @@ public:
         
         char* d = this->data();
 
-        std::memmove(d + position + insert_len, 
-                     d + position, 
-                     this->_size - position + 1);
+        mem_move(d + position + insert_len, 
+                 d + position, 
+                 this->_size - position + 1);
                      
-        std::memcpy(d + position, c, insert_len);
+        mem_cpy(d + position, c, insert_len);
         
         this->_size = static_cast<uint32_t>(new_size);
     }
@@ -865,11 +864,11 @@ public:
         
         char* d = this->data();
 
-        std::memmove(d + position + insert_len, 
-                     d + position, 
-                     this->_size - position + 1);
+        mem_move(d + position + insert_len, 
+                 d + position, 
+                 this->_size - position + 1);
 
-        std::memcpy(d + position, other.c_str(), insert_len);
+        mem_cpy(d + position, other.c_str(), insert_len);
         
         this->_size = static_cast<uint32_t>(new_size);
     }
@@ -914,7 +913,7 @@ public:
         const std::size_t tail_start = start + actual_length;
         const std::size_t tail_size = this->_size - tail_start + 1;
 
-        std::memmove(d + start, d + tail_start, tail_size);
+        mem_move(d + start, d + tail_start, tail_size);
         this->_size -= actual_length;
     }
 
@@ -929,7 +928,7 @@ public:
 
     /* Python-like string methods */
 
-    String upper() const noexcept
+    constexpr String upper() const noexcept
     {
         if(this->empty())
         {
@@ -951,7 +950,7 @@ public:
         return result;
     }
 
-    String lower() const noexcept
+    constexpr String lower() const noexcept
     {
         if(this->empty())
         {
@@ -973,7 +972,7 @@ public:
         return result;
     }
 
-    String capitalize() const noexcept
+    constexpr String capitalize() const noexcept
     {
         if(this->empty()) 
         {
@@ -1063,7 +1062,7 @@ public:
     }
 
 
-    String substr(const size_t position) const noexcept
+    constexpr String substr(const size_t position) const noexcept
     {
         STDROMANO_ASSERT(position <= this->_size, "Substring position out of bounds");
 
@@ -1075,7 +1074,7 @@ public:
         return String::make_ref(this->data() + position, this->_size - position);
     }
 
-    String substr(const size_t start_pos, const size_t length) const noexcept
+    constexpr String substr(const size_t start_pos, const size_t length) const noexcept
     {
         STDROMANO_ASSERT(start_pos <= this->_size, "Substring start position out of bounds");
 
@@ -1111,7 +1110,7 @@ public:
         return res;
     }
 
-    bool startswith(const String& prefix) const noexcept
+    constexpr bool startswith(const String& prefix) const noexcept
     {
         if(prefix.size() > this->size())
         {
@@ -1121,7 +1120,7 @@ public:
         return std::strncmp(this->data(), prefix.data(), prefix.size()) == 0;
     }
 
-    bool endswith(const String& suffix) const noexcept
+    constexpr bool endswith(const String& suffix) const noexcept
     {
         if(suffix.size() > this->size())
         {
@@ -1262,8 +1261,8 @@ public:
         String result;
         result.reallocate(total_width);
         
-        std::memset(result.data(), '0', num_zeros);
-        std::memcpy(result.data() + num_zeros, this->data(), this->_size);
+        mem_set(result.data(), '0', num_zeros);
+        mem_cpy(result.data() + num_zeros, this->data(), this->_size);
         
         result._size = total_width;
         result.data()[result._size] = '\0';
@@ -1271,7 +1270,7 @@ public:
         return result;
     }
 
-    bool is_digit() const noexcept
+    constexpr bool is_digit() const noexcept
     {
         for(std::size_t i = 0; i < this->_size; i++)
         {

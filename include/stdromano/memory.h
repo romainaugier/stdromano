@@ -147,6 +147,74 @@ static STDROMANO_FORCE_INLINE void mem_swap(void* a, void* b, const std::size_t 
     }
 }
 
+constexpr STDROMANO_FORCE_INLINE std::size_t str_len(const char* str) noexcept
+{
+    if(str == nullptr)
+    {
+        return 0;
+    }
+
+    std::size_t len = 0;
+
+    while(str[len] != '\0')
+    {
+        ++len;
+    }
+
+    return len;
+}
+
+constexpr STDROMANO_FORCE_INLINE void mem_cpy(void* dst, const void* src, std::size_t count) noexcept
+{
+    if(dst != nullptr && src != nullptr)
+    {
+        char* _dst = static_cast<char*>(dst);
+        const char* _src = static_cast<const char*>(src);
+
+        for(std::size_t i = 0; i < count; i++)
+        {
+            _dst[i] = _src[i];
+        }
+    }
+}
+
+constexpr STDROMANO_FORCE_INLINE void mem_move(void* dst, const void* src, std::size_t count) noexcept
+{
+    if(dst != nullptr && src != nullptr)
+    {
+        char* _dst = static_cast<char*>(dst);
+        const char* _src = static_cast<const char*>(src);
+
+        if(_dst < _src)
+        {
+            for(std::size_t i = 0; i < count; ++i)
+            {
+                _dst[i] = _src[i];
+            }
+        }
+        else if(_dst > _src)
+        {
+            for (std::size_t i = count; i > 0; --i)
+            {
+                _dst[i - 1] = _src[i - 1];
+            }
+        }
+    }
+}
+
+constexpr STDROMANO_FORCE_INLINE void mem_set(void* dst, char value, std::size_t count) noexcept
+{
+    if(dst != nullptr)
+    {
+        char* _dst = static_cast<char*>(dst);
+
+        for(std::size_t i = 0; i < count; i++)
+        {
+            _dst[i] = value;
+        }
+    }
+}
+
 STDROMANO_API void format_byte_size(float size, char* buffer) noexcept;
 
 class STDROMANO_API Arena
