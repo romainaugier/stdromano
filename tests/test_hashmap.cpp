@@ -304,6 +304,22 @@ TEST_CASE(test_stress_emplace_vs_find_existing)
     SCOPED_PROFILE_STOP(find_time);
 }
 
+TEST_CASE(test_initializer_list)
+{
+    stdromano::HashMap<std::int64_t, std::string> map = {
+        { 0, "zero" },
+        { 1, "one" },
+        { 2, "two" },
+        { 3, "three" },
+    };
+
+    ASSERT(map.contains(0));
+    ASSERT(map.contains(1));
+    ASSERT(map.contains(2));
+    ASSERT(map.contains(3));
+    ASSERT(!map.contains(6));
+}
+
 int main()
 {
     stdromano::set_log_level(stdromano::LogLevel::Debug);
@@ -320,6 +336,7 @@ int main()
     runner.add_test("Edge Cases", test_edge_cases);
     runner.add_test("Stress Test", test_stress);
     runner.add_test("Stress Emplace vs Find Existing", test_stress_emplace_vs_find_existing);
+    runner.add_test("Test Initializer list construction", test_initializer_list);
 
     runner.run_all();
 

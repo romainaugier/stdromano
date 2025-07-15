@@ -17,6 +17,7 @@
 #include <stdexcept>
 #include <type_traits>
 #include <vector>
+#include <initializer_list>
 
 STDROMANO_NAMESPACE_BEGIN
 
@@ -238,6 +239,7 @@ private:
         }
     };
 
+    Hash _hash_func;
     std::vector<Bucket> _buckets;
     size_t _items_count = 0;
     uint32_t _hash_key;
@@ -387,7 +389,7 @@ public:
 private:
     STDROMANO_FORCE_INLINE uint32_t get_hash(const key_type& key) const
     {
-        return static_cast<uint32_t>(Hash{}(key) ^ this->_hash_key);
+        return static_cast<uint32_t>(this->_hash_func(key) ^ this->_hash_key);
     }
 
     STDROMANO_FORCE_INLINE size_t get_index(const uint32_t hash) const
@@ -553,8 +555,8 @@ public:
         return const_iterator(this, this->_buckets.size());
     }
 
-    explicit HashMap(size_t initial_capacity = INITIAL_CAPACITY)
-        : _hash_key(this->generate_hash_key())
+    explicit HashMap(size_t initial_capacity = INITIAL_CAPACITY, const Hash& hash = Hash())
+        : _hash_func(hash), _hash_key(this->generate_hash_key())
     {
         if(initial_capacity == 0)
         {
@@ -567,6 +569,27 @@ public:
 
         this->_buckets.resize(initial_capacity);
         this->_max_probes = static_cast<int16_t>(std::log2(static_cast<float>(initial_capacity)));
+    }
+
+    HashMap(std::initializer_list<value_type> init,
+            std::size_t initial_capacity = 0,
+            const Hash& hash = Hash()) : HashMap(initial_capacity, hash)
+    {
+        if(init.size() > 0)
+        {
+            const std::size_t required_buckets = static_cast<std::size_t>(std::ceil(init.size() / MAX_LOAD_FACTOR));
+            const std::size_t get_new_capacity = bit_ceil(required_buckets);
+
+            if(get_new_capacity > this->_buckets.size())
+            {
+                this->grow(get_new_capacity, false);
+            }
+
+            for(const auto& item : init)
+            {
+                this->emplace(item);
+            }
+        }
     }
 
     template <typename P>
@@ -730,12 +753,19 @@ public:
 
     void reserve(size_t new_capacity)
     {
-        if(new_capacity <= this->_buckets.size())
+        if(new_capacity == 0)
         {
             return;
         }
 
-        new_capacity = bit_ceil(new_capacity + 1);
+        const std::size_t required_buckets = static_cast<std::size_t>(std::ceil(new_capacity / MAX_LOAD_FACTOR));
+
+        if(required_buckets <= this->_buckets.size())
+        {
+            return;
+        }
+
+        new_capacity = bit_ceil(required_buckets);
 
         this->grow(new_capacity, false);
     }
