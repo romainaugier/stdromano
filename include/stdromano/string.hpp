@@ -7,9 +7,9 @@
 #if !defined(__STDROMANO_STRING)
 #define __STDROMANO_STRING
 
-#include "stdromano/char.h"
-#include "stdromano/hash.h"
-#include "stdromano/memory.h"
+#include "stdromano/char.hpp"
+#include "stdromano/hash.hpp"
+#include "stdromano/memory.hpp"
 
 #include "spdlog/fmt/fmt.h"
 

@@ -7,7 +7,7 @@
 #if !defined(__STDROMANO_MEMORY)
 #define __STDROMANO_MEMORY
 
-#include "stdromano/stdromano.h"
+#include "stdromano/stdromano.hpp"
 
 #include <cstddef>
 #include <cstdio>

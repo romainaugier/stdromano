@@ -1,11 +1,11 @@
 
 
-#include "stdromano/hashset.h"
+#include "stdromano/hashset.hpp"
 
 #define STDROMANO_ENABLE_PROFILING
-#include "stdromano/profiling.h"
+#include "stdromano/profiling.hpp"
 
-#include "test.h"
+#include "test.hpp"
 
 #include <numeric>
 #include <random>

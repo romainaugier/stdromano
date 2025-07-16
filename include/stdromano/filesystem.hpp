@@ -7,7 +7,7 @@
 #if !defined(__STDROMANO_FILESYSTEM)
 #define __STDROMANO_FILESYSTEM
 
-#include "stdromano/string.h"
+#include "stdromano/string.hpp"
 
 #include <queue>
 

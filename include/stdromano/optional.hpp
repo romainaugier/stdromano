@@ -7,7 +7,7 @@
 #if !defined(__STDROMANO_OPTIONAL)
 #define __STDROMANO_OPTIONAL
 
-#include "stdromano/stdromano.h"
+#include "stdromano/stdromano.hpp"
 
 #include <stdexcept>
 #include <type_traits>

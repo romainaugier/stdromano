@@ -7,9 +7,9 @@
 #if !defined(__STDROMANO_HASHMAP)
 #define __STDROMANO_HASHMAP
 
-#include "stdromano/bits.h"
-#include "stdromano/optional.h"
-#include "stdromano/random.h"
+#include "stdromano/bits.hpp"
+#include "stdromano/optional.hpp"
+#include "stdromano/random.hpp"
 
 #include <cmath>
 #include <functional>

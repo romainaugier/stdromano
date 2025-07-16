@@ -7,7 +7,7 @@
 #if !defined(__STDROMANO_HASH)
 #define __STDROMANO_HASH
 
-#include "stdromano/stdromano.h"
+#include "stdromano/stdromano.hpp"
 
 #include <cstring>
 

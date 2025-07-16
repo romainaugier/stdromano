@@ -1,7 +1,7 @@
 #if !defined(__STDROMANO_SPDLOGUTILS)
 #define __STDROMANO_SPDLOGUTILS
 
-#include "stdromano/stdromano.h"
+#include "stdromano/stdromano.hpp"
 
 #include "spdlog/sinks/basic_file_sink.h"
 #include "spdlog/sinks/stdout_color_sinks.h"

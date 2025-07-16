@@ -126,7 +126,7 @@ if [[ $? -ne 0 ]]; then
 fi
 
 if [[ $RUNTESTS -eq 1 ]]; then
-    ctest --output-on-failure
+    ctest --output-on-failure -C $BUILDTYPE
     
     if [[ $? -ne 0 ]]; then
         log_error "Error during CMake testing"
@@ -136,7 +136,7 @@ if [[ $RUNTESTS -eq 1 ]]; then
 fi
 
 if [[ $INSTALL -eq 1 ]]; then
-    cmake --install . --config %BUILDTYPE% --prefix $INSTALLDIR
+    cmake --install . --config $BUILDTYPE --prefix $INSTALLDIR
 
     if [[ $? -ne 0 ]]; then
         log_error "Error during CMake installation"

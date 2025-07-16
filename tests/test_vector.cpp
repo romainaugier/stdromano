@@ -2,8 +2,8 @@
 // Copyright (c) 2025 - Present Romain Augier
 // All rights reserved.
 
-#include "stdromano/vector.h"
-#include "test.h"
+#include "stdromano/vector.hpp"
+#include "test.hpp"
 
 #include <string>
 

@@ -2,10 +2,10 @@
 // Copyright (c) 2025 - Present Romain Augier
 // All rights reserved.
 
-#include "stdromano/logger.h"
-#include "stdromano/memory.h"
-#include "stdromano/string.h"
-#include "test.h"
+#include "stdromano/logger.hpp"
+#include "stdromano/memory.hpp"
+#include "stdromano/string.hpp"
+#include "test.hpp"
 
 TEST_CASE(test_memory_arena)
 {

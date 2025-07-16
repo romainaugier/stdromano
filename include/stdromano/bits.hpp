@@ -7,7 +7,7 @@
 #if !defined(__STDROMANO_BITS)
 #define __STDROMANO_BITS
 
-#include "stdromano/stdromano.h"
+#include "stdromano/stdromano.hpp"
 
 #include <immintrin.h>
 

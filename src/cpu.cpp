@@ -2,7 +2,7 @@
 // Copyright (c) 2025 - Present Romain Augier
 // All rights reserved.
 
-#include "stdromano/cpu.h"
+#include "stdromano/cpu.hpp"
 
 #include <cstring>
 

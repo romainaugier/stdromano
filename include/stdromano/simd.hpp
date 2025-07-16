@@ -7,7 +7,8 @@
 #if !defined(__STDROMANO_SIMD)
 #define __STDROMANO_SIMD
 
-#include "stdromano/stdromano.h"
+#include "stdromano/stdromano.hpp"
+
 #include <immintrin.h>
 
 STDROMANO_NAMESPACE_BEGIN

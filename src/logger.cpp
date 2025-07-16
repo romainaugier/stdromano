@@ -2,8 +2,8 @@
 // Copyright (c) 2025 - Present Romain Augier
 // All rights reserved.
 
-#include "stdromano/logger.h"
-#include "stdromano/memory.h"
+#include "stdromano/logger.hpp"
+#include "stdromano/memory.hpp"
 
 STDROMANO_NAMESPACE_BEGIN
 

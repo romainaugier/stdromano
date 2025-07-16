@@ -78,7 +78,7 @@ if %errorlevel% neq 0 (
 )
 
 if %RUNTESTS% equ 1 (
-    ctest --output-on-failure
+    ctest --output-on-failure -C %BUILDTYPE%
 
     if %errorlevel% neq 0 (
         call :LogError "Error caught during CMake testing"

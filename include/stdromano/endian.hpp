@@ -9,7 +9,7 @@
  * https://gist.githubusercontent.com/panzi/6856583/raw/12f9f02f1298bb0bc054ba667bccc0cf032cdb03/portable_endian.h
  */
 
-#include "stdromano/stdromano.h"
+#include "stdromano/stdromano.hpp"
 
 #if defined(STDROMANO_LINUX)
 

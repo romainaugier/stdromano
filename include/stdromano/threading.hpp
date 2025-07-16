@@ -5,7 +5,7 @@
 #if !defined(__STDROMANO_THREADING)
 #define __STDROMANO_THREADING
 
-#include "stdromano/stdromano.h"
+#include "stdromano/stdromano.hpp"
 
 #include "concurrentqueue.h"
 

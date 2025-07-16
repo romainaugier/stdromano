@@ -2,7 +2,7 @@
 // Copyright (c) 2025 - Present Romain Augier
 // All rights reserved.
 
-#include "stdromano/memory.h"
+#include "stdromano/memory.hpp"
 
 #include "jemalloc/jemalloc.h"
 

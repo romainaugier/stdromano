@@ -5,7 +5,7 @@
 #if !defined(__STDROMANO_CPU)
 #define __STDROMANO_CPU
 
-#include "stdromano/stdromano.h"
+#include "stdromano/stdromano.hpp"
 
 #if defined(STDROMANO_MSVC)
 #include <intrin.h>

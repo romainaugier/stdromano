@@ -2,9 +2,9 @@
 // Copyright (c) 2025 - Present Romain Augier
 // All rights reserved.
 
-#include "stdromano/filesystem.h"
-#include "stdromano/logger.h"
-#include "test.h"
+#include "stdromano/filesystem.hpp"
+#include "stdromano/logger.hpp"
+#include "test.hpp"
 
 TEST_CASE(TestPathExists)
 {

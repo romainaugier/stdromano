@@ -2,12 +2,12 @@
 // Copyright (c) 2025 - Present Romain Augier
 // All rights reserved.
 
-#include "stdromano/hashmap.h"
+#include "stdromano/hashmap.hpp"
 
 #define STDROMANO_ENABLE_PROFILING
-#include "stdromano/profiling.h"
+#include "stdromano/profiling.hpp"
 
-#include "test.h"
+#include "test.hpp"
 
 #include <numeric>
 #include <random>

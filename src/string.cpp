@@ -2,7 +2,7 @@
 // Copyright (c) 2025 - Present Romain Augier
 // All rights reserved.
 
-#include "stdromano/string.h"
+#include "stdromano/string.hpp"
 
 STDROMANO_NAMESPACE_BEGIN
 

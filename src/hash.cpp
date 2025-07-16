@@ -2,8 +2,8 @@
 // Copyright (c) 2025 - Present Romain Augier
 // All rights reserved.
 
-#include "stdromano/hash.h"
-#include "stdromano/endian.h"
+#include "stdromano/hash.hpp"
+#include "stdromano/endian.hpp"
 
 STDROMANO_NAMESPACE_BEGIN
 

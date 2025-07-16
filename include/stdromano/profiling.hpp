@@ -1,8 +1,8 @@
 #if !defined(__STDROMANO_PROFILING)
 #define __STDROMANO_PROFILING
 
-#include "stdromano/cpu.h"
-#include "stdromano/logger.h"
+#include "stdromano/cpu.hpp"
+#include "stdromano/logger.hpp"
 
 #include <chrono>
 #include <ratio>

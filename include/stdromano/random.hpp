@@ -7,7 +7,7 @@
 #if !defined(__STDROMANO_RANDOM)
 #define __STDROMANO_RANDOM
 
-#include "stdromano/stdromano.h"
+#include "stdromano/stdromano.hpp"
 
 #include <atomic>
 

@@ -2,8 +2,8 @@
 // Copyright (c) 2025 - Present Romain Augier
 // All rights reserved.
 
-#include "stdromano/string.h"
-#include "test.h"
+#include "stdromano/string.hpp"
+#include "test.hpp"
 
 using namespace stdromano;
 

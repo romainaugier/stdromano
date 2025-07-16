@@ -2,8 +2,8 @@
 // Copyright (c) 2025 - Present Romain Augier
 // All rights reserved.
 
-#include "stdromano/threading.h"
-#include "stdromano/memory.h"
+#include "stdromano/threading.hpp"
+#include "stdromano/memory.hpp"
 
 #include <cstdio>
 

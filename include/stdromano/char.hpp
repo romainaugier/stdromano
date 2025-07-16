@@ -7,7 +7,7 @@
 #if !defined(__STDROMANO_CHAR)
 #define __STDROMANO_CHAR
 
-#include "stdromano/stdromano.h"
+#include "stdromano/stdromano.hpp"
 
 STDROMANO_NAMESPACE_BEGIN
 

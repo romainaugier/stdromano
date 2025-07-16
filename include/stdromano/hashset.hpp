@@ -7,7 +7,7 @@
 #if !defined(__STDROMANO_HASHSET)
 #define __STDROMANO_HASHSET
 
-#include "stdromano/hashmap.h"
+#include "stdromano/hashmap.hpp"
 
 #include <type_traits>
 

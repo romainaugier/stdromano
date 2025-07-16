@@ -7,7 +7,7 @@
 #if !defined(__STDROMANO_STACKVECTOR)
 #define __STDROMANO_STACKVECTOR
 
-#include "stdromano/memory.h"
+#include "stdromano/memory.hpp"
 
 #include <new>
 #include <initializer_list>

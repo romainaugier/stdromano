@@ -2,8 +2,8 @@
 // Copyright (c) 2025 - Present Romain Augier
 // All rights reserved.
 
-#include "stdromano/filesystem.h"
-#include "stdromano/logger.h"
+#include "stdromano/filesystem.hpp"
+#include "stdromano/logger.hpp"
 
 #if defined(STDROMANO_WIN)
 #define STRICT_TYPED_ITEMIDS // Better type safety for IDLists

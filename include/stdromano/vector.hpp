@@ -7,7 +7,7 @@
 #if !defined(__STDROMANO_VECTOR)
 #define __STDROMANO_VECTOR
 
-#include "stdromano/memory.h"
+#include "stdromano/memory.hpp"
 
 #include <algorithm>
 #include <cstdint>

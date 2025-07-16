@@ -2,9 +2,9 @@
 // Copyright (c) 2025 - Present Romain Augier
 // All rights reserved.
 
-#include "stdromano/cpu.h"
-#include "stdromano/logger.h"
-#include "stdromano/simd.h"
+#include "stdromano/cpu.hpp"
+#include "stdromano/logger.hpp"
+#include "stdromano/simd.hpp"
 
 #include <cstdio>
 
