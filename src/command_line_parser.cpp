@@ -59,9 +59,13 @@ public:
                                                                              _data(data),
                                                                              _size(size) {}
 
-    CmdLineToken(CmdLineToken& other) : _type(other._type),
-                                        _data(other._data),
-                                        _size(other._size) {}
+    CmdLineToken(const CmdLineToken& other) noexcept : _type(other._type),
+                                                       _data(other._data),
+                                                       _size(other._size) {}
+
+    CmdLineToken(CmdLineToken&& other) noexcept : _type(other._type),
+                                                  _data(other._data),
+                                                  _size(other._size) {}
 
     STDROMANO_FORCE_INLINE std::uint32_t get_type() const noexcept { return this->_type; }
     STDROMANO_FORCE_INLINE const char* get_data() const noexcept { return this->_data; }

@@ -49,26 +49,6 @@ private:
     {
         return this->_heap_storage != nullptr;
     }
-
-    STDROMANO_FORCE_INLINE T* stack_data() noexcept
-    { 
-        return reinterpret_cast<T*>(this->_stack_storage);
-    }
-
-    STDROMANO_FORCE_INLINE const T* stack_data() const noexcept
-    { 
-        return reinterpret_cast<const T*>(this->_stack_storage);
-    }
-    
-    STDROMANO_FORCE_INLINE T* data() noexcept
-    {
-        return this->uses_heap() ? this->_heap_storage : this->stack_data();
-    }
-    
-    STDROMANO_FORCE_INLINE const T* data() const noexcept
-    {
-        return this->uses_heap() ? this->_heap_storage : this->stack_data();
-    }
     
     void transition_to_heap(size_t new_capacity) 
     {
@@ -84,21 +64,10 @@ private:
             throw std::bad_alloc();
         }
         
-        if constexpr (std::is_nothrow_move_constructible_v<T>) 
+        for(size_t i = 0; i < this->_size; i++) 
         {
-            for(size_t i = 0; i < this->_size; i++) 
-            {
-                ::new (this->_heap_storage + i) T(std::move(stack_data()[i]));
-                stack_data()[i].~T();
-            }
-        }
-        else 
-        {
-            for(size_t i = 0; i < this->_size; i++) 
-            {
-                ::new (this->_heap_storage + i) T(stack_data()[i]);
-                stack_data()[i].~T();
-            }
+            ::new(this->_heap_storage + i) T(std::move_if_noexcept(this->data()[i]));
+            this->data()[i].~T();
         }
         
         this->_capacity = new_capacity;
@@ -112,15 +81,21 @@ private:
 
             if(!this->uses_heap()) 
             {
-                transition_to_heap(new_capacity);
+                this->transition_to_heap(new_capacity);
             } 
             else 
             {
-                T* new_storage = static_cast<T*>(mem_realloc(this->_heap_storage, new_capacity));
+                T* new_storage = static_cast<T*>(mem_alloc(new_capacity));
 
                 if(new_storage == nullptr)
                 {
                     throw std::bad_alloc();
+                }
+        
+                for(size_t i = 0; i < this->_size; i++) 
+                {
+                    ::new(new_storage + i) T(std::move_if_noexcept(this->data()[i]));
+                    this->data()[i].~T();
                 }
 
                 this->_heap_storage = new_storage;
@@ -167,34 +142,27 @@ public:
 
         for(size_t i = 0; i < other._size; i++) 
         {
-            this->push_back(other[i]);
+            ::new(this->data() + i) T(other[i]);
         }
+
+        this->_size = other.size();
     }
     
     StackVector(StackVector&& other) noexcept
     {
-        if(!other.uses_heap())
-        {
-            if constexpr (std::is_nothrow_move_constructible_v<T>) 
-            {
-                for(size_t i = 0; i < other._size; i++) 
-                {
-                    ::new (this->stack_data() + i) T(std::move(other.stack_data()[i]));
-                }
-            } 
-            else 
-            {
-                for(size_t i = 0; i < this->_size; i++) 
-                {
-                    ::new (this->stack_data() + i) T(other.stack_data()[i]);
-                }
-            }
-        }
-
         this->_size = other._size;
         this->_capacity = other._capacity;
         this->_heap_storage = other._heap_storage;
         
+        if(!other.uses_heap())
+        {
+            for(size_t i = 0; i < this->_size; i++) 
+            {
+                ::new(this->data() + i) T(std::move_if_noexcept(other.data()[i]));
+                other.data()[i].~T();
+            }
+        }
+
         other._size = 0;
         other._capacity = N;
         other._heap_storage = nullptr;
@@ -214,7 +182,8 @@ public:
                 } 
                 else 
                 {
-                    T* new_storage = static_cast<T*>(mem_realloc(this->_heap_storage, other._size));
+                    T* new_storage = static_cast<T*>(mem_realloc(this->_heap_storage, 
+                                                                 other._size));
 
                     if(new_storage == nullptr)
                     {
@@ -247,19 +216,10 @@ public:
             
             if(!this->uses_heap()) 
             {
-                if constexpr (std::is_nothrow_move_constructible_v<T>) 
+                for(size_t i = 0; i < this->_size; i++)
                 {
-                    for(size_t i = 0; i < this->_size; i++)
-                    {
-                        ::new (this->stack_data() + i) T(std::move(other.stack_data()[i]));
-                    }
-                } 
-                else 
-                {
-                    for(size_t i = 0; i < this->_size; i++)
-                    {
-                        ::new (this->stack_data() + i) T(other.stack_data()[i]);
-                    }
+                    ::new(this->data() + i) T(std::move_if_noexcept(other.data()[i]));
+                    other.data()[i].~T();
                 }
             }
             
@@ -277,7 +237,6 @@ public:
 
         if(this->uses_heap())
         {
-            this->clear();
             mem_free(this->_heap_storage);
             this->_heap_storage = nullptr;
         }
@@ -310,6 +269,18 @@ public:
 
         return this->data()[pos];
     }
+
+    STDROMANO_FORCE_INLINE T* data() noexcept
+    {
+        return this->uses_heap() ? this->_heap_storage :
+                                   reinterpret_cast<T*>(this->_stack_storage);
+    }
+    
+    STDROMANO_FORCE_INLINE const T* data() const noexcept
+    {
+        return this->uses_heap() ? this->_heap_storage : 
+                                   reinterpret_cast<const T*>(this->_stack_storage);
+    }
     
     STDROMANO_FORCE_INLINE reference front() noexcept { return this->data()[0]; }
     STDROMANO_FORCE_INLINE const_reference front() const noexcept { return this->data()[0]; }
@@ -339,26 +310,17 @@ public:
             } 
             else if(this->uses_heap()) 
             {
-                T* new_storage = static_cast<T*>(mem_realloc(this->_heap_storage, new_capacity));
+                T* new_storage = static_cast<T*>(mem_alloc(new_capacity));
 
                 if(new_storage == nullptr)
                 {
                     throw std::bad_alloc();
                 }
 
-                if constexpr (std::is_nothrow_move_constructible_v<T>) 
+                for(size_t i = 0; i < this->_size; i++) 
                 {
-                    for(size_t i = 0; i < this->_size; i++) 
-                    {
-                        ::new (new_storage + i) T(std::move(this->_heap_storage[i]));
-                    }
-                } 
-                else 
-                {
-                    for(size_t i = 0; i < this->_size; i++) 
-                    {
-                        ::new (new_storage + i) T(this->_heap_storage[i]);
-                    }
+                    ::new(new_storage + i) T(std::move_if_noexcept(this->_heap_storage[i]));
+                    this->_heap_storage[i].~T();
                 }
 
                 this->_heap_storage = new_storage;
@@ -381,7 +343,7 @@ public:
     {
         this->grow_if_needed();
 
-        ::new (this->data() + this->_size) T(value);
+        ::new(this->data() + this->_size) T(value);
 
         this->_size++;
     }
@@ -390,7 +352,7 @@ public:
     {
         this->grow_if_needed();
 
-        ::new (this->data() + this->_size) T(std::move(value));
+        ::new(this->data() + this->_size) T(std::move(value));
 
         this->_size++;
     }
@@ -400,7 +362,7 @@ public:
     {
         this->grow_if_needed();
 
-        ::new (data() + this->_size) T(std::forward<Args>(args)...);
+        ::new(data() + this->_size) T(std::forward<Args>(args)...);
 
         return this->data()[this->_size++];
     }
@@ -425,7 +387,7 @@ public:
         {
             for(size_t i = this->_size; i < count; i++) 
             {
-                ::new (this->data() + i) T(value);
+                ::new(this->data() + i) T(value);
             }
         } 
         else if (count < this->_size) 
