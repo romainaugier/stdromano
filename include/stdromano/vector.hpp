@@ -7,6 +7,10 @@
 #if !defined(__STDROMANO_VECTOR)
 #define __STDROMANO_VECTOR
 
+#if !defined(STDROMANO_NULL_VECTOR_ASSERTIONS)
+#define STDROMANO_NULL_VECTOR_ASSERTIONS 0
+#endif /* !defined(STDROMANO_NULL_VECTOR_ASSERTIONS) */
+
 #include "stdromano/memory.hpp"
 
 #include <algorithm>
@@ -656,7 +660,9 @@ public:
 
     void insert(const T& element, const uint32_t position) noexcept
     {
+#if STDROMANO_NULL_VECTOR_ASSERTIONS
         STDROMANO_ASSERT(this->_data != nullptr, "Vector has not been allocated");
+#endif /* STDROMANO_NULL_VECTOR_ASSERTIONS */
         STDROMANO_ASSERT(position <= this->size(), "Position must be lower than the vector size");
 
         if(this->size() == this->capacity())
@@ -674,7 +680,9 @@ public:
 
     iterator insert(const_iterator pos, uint32_t count, const T& value) noexcept
     {
+#if STDROMANO_NULL_VECTOR_ASSERTIONS
         STDROMANO_ASSERT(this->_data != nullptr, "Vector has not been allocated");
+#endif /* STDROMANO_NULL_VECTOR_ASSERTIONS */
 
         const uint32_t position = pos.index;
 
@@ -707,7 +715,9 @@ public:
     template <class InputIt>
     iterator insert(const_iterator pos, InputIt first, InputIt last) noexcept
     {
+#if STDROMANO_NULL_VECTOR_ASSERTIONS
         STDROMANO_ASSERT(this->_data != nullptr, "Vector has not been allocated");
+#endif /* STDROMANO_NULL_VECTOR_ASSERTIONS */
 
         if(first == last)
         {
@@ -746,7 +756,9 @@ public:
 
     iterator erase(const_iterator pos) noexcept
     {
+#if STDROMANO_NULL_VECTOR_ASSERTIONS
         STDROMANO_ASSERT(this->_data != nullptr, "Vector has not been allocated");
+#endif /* STDROMANO_NULL_VECTOR_ASSERTIONS */
         STDROMANO_ASSERT(pos.index < this->size(),
                          "Iterator position must be lower than vector size");
 
@@ -763,9 +775,11 @@ public:
 
     iterator erase(iterator first, iterator last) noexcept
     {
+#if STDROMANO_NULL_VECTOR_ASSERTIONS
         STDROMANO_ASSERT(this->_data != nullptr, "Vector has not been allocated");
+#endif /* STDROMANO_NULL_VECTOR_ASSERTIONS */
 
-        if(first.index <= this->size() && first.index < last.index && last.index <= this->size())
+        if(first.index < this->size() && first.index < last.index && last.index < this->size())
         {
             const uint32_t start_pos = first.index;
             const uint32_t count = last.index - first.index;
@@ -788,7 +802,9 @@ public:
 
     void remove(const uint32_t position) noexcept
     {
+#if STDROMANO_NULL_VECTOR_ASSERTIONS
         STDROMANO_ASSERT(this->_data != nullptr, "Vector has not been allocated");
+#endif /* STDROMANO_NULL_VECTOR_ASSERTIONS */
         STDROMANO_ASSERT(this->size() > 0, "No elements present in the vector");
         STDROMANO_ASSERT(position < this->size(), "Position must be lower than the vector size");
 
@@ -801,7 +817,9 @@ public:
 
     T pop_back() noexcept
     {
+#if STDROMANO_NULL_VECTOR_ASSERTIONS
         STDROMANO_ASSERT(this->_data != nullptr, "Vector has not been allocated");
+#endif /* STDROMANO_NULL_VECTOR_ASSERTIONS */
         STDROMANO_ASSERT(this->size() > 0, "No elements present in the vector");
 
         T object = std::move_if_noexcept((*this)[this->size() - 1]);
@@ -815,7 +833,14 @@ public:
 
     iterator find(const T& other) noexcept
     {
+#if STDROMANO_NULL_VECTOR_ASSERTIONS
         STDROMANO_ASSERT(this->_data != nullptr, "Vector has not been allocated");
+#else 
+        if(this->size() == 0)
+        {
+            return this->end();
+        }
+#endif /* STDROMANO_NULL_VECTOR_ASSERTIONS */
 
         for(uint32_t i = 0; i < this->size(); i++)
         {
@@ -828,7 +853,14 @@ public:
 
     const_iterator cfind(const T& other) const noexcept
     {
+#if STDROMANO_NULL_VECTOR_ASSERTIONS
         STDROMANO_ASSERT(this->_data != nullptr, "Vector has not been allocated");
+#else 
+        if(this->size() == 0)
+        {
+            return this->cend();
+        }
+#endif /* STDROMANO_NULL_VECTOR_ASSERTIONS */
 
         for(uint32_t i = 0; i < this->size(); i++)
         {
@@ -841,7 +873,14 @@ public:
 
     STDROMANO_FORCE_INLINE void shrink_to_fit() noexcept
     {
+#if STDROMANO_NULL_VECTOR_ASSERTIONS
         STDROMANO_ASSERT(this->_data != nullptr, "Vector has not been allocated");
+#else 
+        if(this->size() == 0)
+        {
+            return;
+        }
+#endif /* STDROMANO_NULL_VECTOR_ASSERTIONS */
 
         if(this->_capacity > this->_size)
         {
@@ -851,7 +890,14 @@ public:
 
     void clear() noexcept
     {
+#if STDROMANO_NULL_VECTOR_ASSERTIONS
         STDROMANO_ASSERT(this->_data != nullptr, "Vector has not been allocated");
+#else 
+        if(this->size() == 0)
+        {
+            return;
+        }
+#endif /* STDROMANO_NULL_VECTOR_ASSERTIONS */
 
         for(uint32_t i = 0; i < this->size(); i++)
         {
@@ -864,7 +910,14 @@ public:
     template <typename F = std::less<T>>
     STDROMANO_FORCE_INLINE void sort(F&& cmp = F()) noexcept
     {
+#if STDROMANO_NULL_VECTOR_ASSERTIONS
         STDROMANO_ASSERT(this->_data != nullptr, "Vector has not been allocated");
+#else 
+        if(this->size() == 0)
+        {
+            return;
+        }
+#endif /* STDROMANO_NULL_VECTOR_ASSERTIONS */
 
         if(this->_size <= 1)
         {
