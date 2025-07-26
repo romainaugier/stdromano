@@ -104,7 +104,15 @@ public:
         const uint32_t capacity = initial_capacity == 0 ? MIN_SIZE : initial_capacity;
         this->_data = Vector::allocate(capacity);
         this->set_capacity(capacity);
-        this->set_size(0);
+        this->set_size(initial_capacity);
+
+        if constexpr (std::is_default_constructible_v<T>)
+        {
+            for(uint32_t i = 0; i < this->size(); i++)
+            {
+                ::new(this->_data + i) T();
+            }
+        }
     }
 
     Vector(const uint32_t count, const T& value)
