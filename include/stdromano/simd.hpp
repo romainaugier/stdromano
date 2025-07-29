@@ -47,6 +47,12 @@ STDROMANO_FORCE_INLINE __m128 _mm_abs_ps(const __m128& x) noexcept
     return _mm_andnot_ps(x, sign_mask);
 }
 
+STDROMANO_FORCE_INLINE __m256 _mm256_abs_ps(const __m256& x) noexcept
+{
+    static const __m256 sign_mask = _mm256_set1_ps(-0.0f);
+    return _mm256_andnot_ps(x, sign_mask);
+}
+
 /* Horizontal sums (sum the entire vector to a single element) */
 /* https://stackoverflow.com/questions/6996764/fastest-way-to-do-horizontal-sse-vector-sum-or-other-reduction
  */
