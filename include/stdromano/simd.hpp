@@ -44,13 +44,13 @@ STDROMANO_API bool simd_force_vectorization_mode(const VectorizationMode mode) n
 STDROMANO_FORCE_INLINE __m128 _mm_abs_ps(const __m128& x) noexcept
 {
     static const __m128 sign_mask = _mm_set1_ps(-0.0f);
-    return _mm_andnot_ps(x, sign_mask);
+    return _mm_andnot_ps(sign_mask, x);
 }
 
 STDROMANO_FORCE_INLINE __m256 _mm256_abs_ps(const __m256& x) noexcept
 {
     static const __m256 sign_mask = _mm256_set1_ps(-0.0f);
-    return _mm256_andnot_ps(x, sign_mask);
+    return _mm256_andnot_ps(sign_mask, x);
 }
 
 /* Horizontal sums (sum the entire vector to a single element) */
