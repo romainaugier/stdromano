@@ -25,8 +25,8 @@ void simd_check_vectorization() noexcept
     const bool has_sse = (regs[3] & (1 << 25)) != 0;
     const bool has_avx = (regs[2] & (1 << 28)) != 0;
 
-    g_has_fma = (regs[3] & (1 << 12)) != 0;
-    g_has_f16c = (regs[3] & (1 << 29)) != 0;
+    g_has_fma = (regs[2] & (1 << 12)) != 0;
+    g_has_f16c = (regs[2] & (1 << 29)) != 0;
 
     bool has_avx2 = false;
 
