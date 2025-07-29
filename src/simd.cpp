@@ -10,8 +10,11 @@
 
 STDROMANO_NAMESPACE_BEGIN
 
-static uint32_t _g_max_vectorization_mode = VectorizationMode_Scalar;
-static uint32_t _g_vectorization_mode = VectorizationMode_Scalar;
+static uint32_t g_max_vectorization_mode = VectorizationMode_Scalar;
+static uint32_t g_vectorization_mode = VectorizationMode_Scalar;
+
+static bool g_has_fma = false;
+static bool g_has_f16c = false;
 
 void simd_check_vectorization() noexcept
 {
@@ -21,6 +24,9 @@ void simd_check_vectorization() noexcept
 
     const bool has_sse = (regs[3] & (1 << 25)) != 0;
     const bool has_avx = (regs[2] & (1 << 28)) != 0;
+
+    g_has_fma = (regs[3] & (1 << 12)) != 0;
+    g_has_f16c = (regs[3] & (1 << 29)) != 0;
 
     bool has_avx2 = false;
 
@@ -32,18 +38,18 @@ void simd_check_vectorization() noexcept
 
     if(has_avx2)
     {
-        _g_max_vectorization_mode = VectorizationMode_AVX2;
+        g_max_vectorization_mode = VectorizationMode_AVX2;
     }
     else if(has_avx)
     {
-        _g_max_vectorization_mode = VectorizationMode_AVX;
+        g_max_vectorization_mode = VectorizationMode_AVX;
     }
     else if(has_sse)
     {
-        _g_max_vectorization_mode = VectorizationMode_SSE;
+        g_max_vectorization_mode = VectorizationMode_SSE;
     }
 
-    _g_vectorization_mode = _g_max_vectorization_mode;
+    g_vectorization_mode = g_max_vectorization_mode;
 
     if(std::getenv("STDROMANO_VECTORIZATION") != nullptr)
     {
@@ -55,42 +61,52 @@ void simd_check_vectorization() noexcept
         }
         else if(std::strcmp(env_val, "SSE") == 0 && has_sse)
         {
-            _g_vectorization_mode = VectorizationMode_SSE;
+            g_vectorization_mode = VectorizationMode_SSE;
         }
         else if(std::strcmp(env_val, "AVX") == 0 && has_avx)
         {
-            _g_vectorization_mode = VectorizationMode_AVX;
+            g_vectorization_mode = VectorizationMode_AVX;
         }
         else if(std::strcmp(env_val, "AVX2") == 0 && has_avx2)
         {
-            _g_vectorization_mode = VectorizationMode_AVX2;
+            g_vectorization_mode = VectorizationMode_AVX2;
         }
     }
 }
 
 bool simd_has_sse() noexcept
 {
-    return _g_max_vectorization_mode >= 1;
+    return g_max_vectorization_mode >= 1;
 }
 
 bool simd_has_avx() noexcept
 {
-    return _g_max_vectorization_mode >= 2;
+    return g_max_vectorization_mode >= 2;
 }
 
 bool simd_has_avx2() noexcept
 {
-    return _g_max_vectorization_mode >= 3;
+    return g_max_vectorization_mode >= 3;
+}
+
+bool simd_has_fma() noexcept
+{
+    return g_has_fma;
+}
+
+bool simd_has_f16c() noexcept
+{
+    return g_has_f16c;
 }
 
 VectorizationMode simd_get_vectorization_mode() noexcept
 {
-    return static_cast<VectorizationMode>(_g_vectorization_mode);
+    return static_cast<VectorizationMode>(g_vectorization_mode);
 }
 
 const char* simd_get_vectorization_mode_as_string() noexcept
 {
-    switch(_g_vectorization_mode)
+    switch(g_vectorization_mode)
     {
         case VectorizationMode_Scalar:
             return "Scalar";
@@ -108,12 +124,12 @@ const char* simd_get_vectorization_mode_as_string() noexcept
 
 bool simd_force_vectorization_mode(const VectorizationMode mode) noexcept
 {
-    if(mode > _g_max_vectorization_mode)
+    if(mode > g_max_vectorization_mode)
     {
         return false;
     }
 
-    _g_vectorization_mode = mode;
+    g_vectorization_mode = mode;
 
     return true;
 }

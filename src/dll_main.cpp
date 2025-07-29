@@ -28,8 +28,10 @@ void STDROMANO_LIB_ENTRY lib_entry(void)
     stdromano::cpu_check();
     stdromano::simd_check_vectorization();
 
-    stdromano::log_debug("stdromano vectorization mode: {}\n",
-                         stdromano::simd_get_vectorization_mode_as_string());
+    stdromano::log_debug("stdromano vectorization mode: {} (fma: {}, f16c: {})\n",
+                         stdromano::simd_get_vectorization_mode_as_string(),
+                         stdromano::simd_has_fma(),
+                         stdromano::simd_has_f16c());
 }
 
 void STDROMANO_LIB_EXIT lib_exit(void)

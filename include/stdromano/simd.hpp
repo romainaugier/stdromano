@@ -29,6 +29,10 @@ STDROMANO_API bool simd_has_avx() noexcept;
 
 STDROMANO_API bool simd_has_avx2() noexcept;
 
+STDROMANO_API bool simd_has_fma() noexcept;
+
+STDROMANO_API bool simd_has_f16c() noexcept;
+
 STDROMANO_API VectorizationMode simd_get_vectorization_mode() noexcept;
 
 STDROMANO_API const char* simd_get_vectorization_mode_as_string() noexcept;
@@ -36,6 +40,12 @@ STDROMANO_API const char* simd_get_vectorization_mode_as_string() noexcept;
 STDROMANO_API bool simd_force_vectorization_mode(const VectorizationMode mode) noexcept;
 
 /* SIMD helper functions */
+
+STDROMANO_FORCE_INLINE __m128 _mm_abs_ps(const __m128& x) noexcept
+{
+    static const __m128 sign_mask = _mm_set1_ps(-0.0f);
+    return _mm_andnot_ps(x, sign_mask);
+}
 
 /* Horizontal sums (sum the entire vector to a single element) */
 /* https://stackoverflow.com/questions/6996764/fastest-way-to-do-horizontal-sse-vector-sum-or-other-reduction
