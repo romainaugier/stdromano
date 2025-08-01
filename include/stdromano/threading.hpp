@@ -238,11 +238,7 @@ private:
 class STDROMANO_API GlobalThreadPool
 {
 public:
-    static GlobalThreadPool& get_instance() noexcept
-    {
-        static GlobalThreadPool tp;
-        return tp;
-    }
+    static GlobalThreadPool& get_instance() noexcept;
 
     GlobalThreadPool(const GlobalThreadPool&) = delete;
     GlobalThreadPool& operator=(const GlobalThreadPool&) = delete;

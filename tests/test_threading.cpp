@@ -64,8 +64,6 @@ void atexit_handler_stdromano_global_threadpool()
 
 int main()
 {
-    STDROMANO_ATEXIT_REGISTER(atexit_handler_stdromano_global_threadpool, true);
-
     std::printf("Starting threading test\n");
 
     stdromano::Thread t1(t1_func);

@@ -83,12 +83,7 @@ ThreadPool::~ThreadPool()
     {
         const size_t num_workers = this->_num_workers.load();
 
-        this->_stop = true;
-
-        while(this->_num_workers.load() > 0)
-        {
-            thread_sleep(1);
-        }
+        this->_stop.store(true);
 
         for(size_t i = 0; i < num_workers; i++)
         {
@@ -151,8 +146,6 @@ void ThreadPool::init(const int64_t workers_count) noexcept
                         }
                     }
                 }
-
-                tp->_num_workers--;
             });
 
         this->_workers[i].start();
@@ -193,6 +186,18 @@ GlobalThreadPool::~GlobalThreadPool()
         delete this->_tp;
         this->_tp = nullptr;
     }
+}
+
+GlobalThreadPool& GlobalThreadPool::get_instance() noexcept
+{
+    if(!g_global_threadpool_started)
+    {
+        std::atexit(atexit_handler_global_threadpool);
+    }
+
+    static GlobalThreadPool tp;
+
+    return tp;
 }
 
 void atexit_handler_global_threadpool() noexcept
