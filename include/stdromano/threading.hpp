@@ -11,7 +11,6 @@
 
 #include <atomic>
 #include <functional>
-#include <mutex>
 
 #if defined(STDROMANO_WIN)
 #include "Windows.h"

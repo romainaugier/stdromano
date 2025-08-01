@@ -104,6 +104,7 @@ public:
 
         mem_cpy(this->data(), str, size + 1);
         this->_size = static_cast<uint32_t>(size);
+        this->data()[this->_size] = '\0';
     }
 
     template <typename... Args>

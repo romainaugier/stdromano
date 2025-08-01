@@ -66,8 +66,8 @@ private:
         
         for(size_t i = 0; i < this->_size; i++) 
         {
-            ::new(this->_heap_storage + i) T(std::move_if_noexcept(this->data()[i]));
-            this->data()[i].~T();
+            ::new(this->_heap_storage + i) T(std::move_if_noexcept(reinterpret_cast<const T*>(this->_stack_storage)[i]));
+            reinterpret_cast<const T*>(this->_stack_storage)[i].~T();
         }
         
         this->_capacity = new_capacity;
@@ -97,6 +97,8 @@ private:
                     ::new(new_storage + i) T(std::move_if_noexcept(this->data()[i]));
                     this->data()[i].~T();
                 }
+
+                mem_free(this->_heap_storage);
 
                 this->_heap_storage = new_storage;
                 this->_capacity = new_capacity;
@@ -208,11 +210,25 @@ public:
     {
         if(this != &other) 
         {
-            this->~StackVector();
+            this->clear();
+
+            if(this->uses_heap()) 
+            {
+                mem_free(this->_heap_storage);
+                this->_heap_storage = nullptr;
+            }
+
+            if(other.uses_heap()) 
+            {
+                this->_heap_storage = other._heap_storage;
+            }
+            else 
+            {
+                this->_heap_storage = nullptr;
+            }
 
             this->_size = other._size;
-            this->_capacity = other._capacity;
-            this->_heap_storage = other._heap_storage;
+            this->_capacity = other.uses_heap() ? other._capacity : N;
             
             if(!this->uses_heap()) 
             {
@@ -322,6 +338,8 @@ public:
                     ::new(new_storage + i) T(std::move_if_noexcept(this->_heap_storage[i]));
                     this->_heap_storage[i].~T();
                 }
+
+                mem_free(this->_heap_storage);
 
                 this->_heap_storage = new_storage;
                 this->_capacity = new_capacity;

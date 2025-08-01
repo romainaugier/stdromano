@@ -36,7 +36,7 @@ TEST_CASE(TestLoadFileContent)
 
 TEST_CASE(TestListDir)
 {
-    const stdromano::StringD directory_path = stdromano::fs_parent_dir(__FILE__);
+    const stdromano::StringD directory_path = stdromano::fs_parent_dir(__FILE__).copy();
     stdromano::log_debug("Listing directory: {}", directory_path);
 
     stdromano::ListDirIterator it;
@@ -71,7 +71,7 @@ TEST_CASE(TestFileDialog)
 
 TEST_CASE(TestWalk)
 {
-    const stdromano::StringD directory_path = stdromano::fs_parent_dir(__FILE__);
+    const stdromano::StringD directory_path = stdromano::fs_parent_dir(__FILE__).copy();
 
     stdromano::log_debug("Walk: {}", directory_path);
 
