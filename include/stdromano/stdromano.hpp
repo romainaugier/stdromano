@@ -172,6 +172,8 @@
 #define STDROMANO_PACKED_STRUCT(__struct__) __struct__
 #endif /* defined(STDROMANO_MSVC) */
 
+#define STDROMANO_NO_DISCARD [[nodiscard]]
+
 #if defined(STDROMANO_MSVC)
 #define dump_struct(s)
 #elif defined(STDROMANO_CLANG)
