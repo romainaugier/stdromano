@@ -1,4 +1,4 @@
-# STDRomano
+# stdromano
 
 C++ 17 data structures and utilities.
 
@@ -9,6 +9,7 @@ This library is based on the great work of some existing libraries:
  - [spdlog](https://github.com/gabime/spdlog)
  - [MoodyCamel Concurrent Queue](https://github.com/cameron314/concurrentqueue)
  - [jemalloc](https://github.com/jemalloc/jemalloc)
+ - [OpenCL](https://www.khronos.org/opencl/)
 
 ## CMake
 
