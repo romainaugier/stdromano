@@ -43,7 +43,7 @@ constexpr STDROMANO_FORCE_INLINE char to_lower(unsigned int c) noexcept
         return static_cast<char>(c | 0x60);
     }
 
-    return c;
+    return static_cast<char>(c);
 }
 
 constexpr STDROMANO_FORCE_INLINE char to_upper(unsigned int c) noexcept
@@ -53,7 +53,7 @@ constexpr STDROMANO_FORCE_INLINE char to_upper(unsigned int c) noexcept
         return static_cast<char>(c & ~0x20);
     }
 
-    return c;
+    return static_cast<char>(c);
 }
 
 STDROMANO_NAMESPACE_END

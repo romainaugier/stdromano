@@ -29,6 +29,8 @@ elseif(WIN32)
 endif()
 
 target_link_libraries(${PROJECT_NAME} PRIVATE jemalloc)
+target_link_libraries(${PROJECT_NAME} PUBLIC OpenCL::OpenCL)
+target_link_libraries(${PROJECT_NAME} PUBLIC OpenCL::HeadersCpp)
 
 target_include_directories(${PROJECT_NAME}
                            PUBLIC

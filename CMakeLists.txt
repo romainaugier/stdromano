@@ -111,6 +111,9 @@ else()
     endif()
 endif()
 
+# OpenCL
+find_package(OpenCL CONFIG REQUIRED)
+
 add_subdirectory(src)
 
 if(RUN_TESTS EQUAL 1)
