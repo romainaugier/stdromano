@@ -67,3 +67,4 @@ stdromanoConfigVersion.cmake
 
 # vcpkg repository
 vcpkg
+vcpkg_installed

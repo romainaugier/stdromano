@@ -31,13 +31,13 @@ typedef struct _PROCESSOR_POWER_INFORMATION
 
 STDROMANO_NAMESPACE_BEGIN
 
-static uint64_t _g_get_frequency_counter = 0;
-static uint32_t _g_frequency = 0;
-static uint32_t _g_refresh_rate = 10000;
+static uint64_t g_get_frequency_counter = 0;
+static uint32_t g_frequency = 0;
+static uint32_t g_refresh_rate = 10000;
 
 uint32_t _get_cpu_frequency() noexcept
 {
-    if(_g_get_frequency_counter % _g_refresh_rate == 0)
+    if(g_get_frequency_counter % g_refresh_rate == 0)
     {
 #if defined(STDROMANO_WIN)
         PROCESSOR_POWER_INFORMATION* ppi;
@@ -73,7 +73,7 @@ uint32_t _get_cpu_frequency() noexcept
 
         LocalFree(p_buffer);
 
-        _g_frequency = (uint32_t)current;
+        g_frequency = (uint32_t)current;
 #elif defined(STDROMANO_LINUX)
         const uint64_t start = cpu_rdtsc();
 
@@ -87,16 +87,16 @@ uint32_t _get_cpu_frequency() noexcept
 
         const double frequency = (double)(end - start) * 1000;
 
-        _g_frequency = (uint32_t)(frequency / 1000000);
+        g_frequency = (uint32_t)(frequency / 1000000);
 #endif /* defined(STDROMANO_WIN) */
     }
 
-    _g_get_frequency_counter++;
+    g_get_frequency_counter++;
 
-    return _g_frequency;
+    return g_frequency;
 }
 
-static uint32_t _cpu_freq_mhz = 0;
+static uint32_t g_cpu_freq_mhz = 0;
 
 void cpu_check() noexcept
 {
@@ -109,11 +109,11 @@ void cpu_check() noexcept
     if(regs[0] >= 0x16)
     {
         cpuid(regs, 0x16);
-        _cpu_freq_mhz = regs[0];
+        g_cpu_freq_mhz = regs[0];
     }
     else
     {
-        _cpu_freq_mhz = _get_cpu_frequency();
+        g_cpu_freq_mhz = _get_cpu_frequency();
     }
 }
 
@@ -142,7 +142,7 @@ bool cpu_get_name(char* name) noexcept
 
 uint32_t cpu_get_frequency() noexcept
 {
-    return _cpu_freq_mhz;
+    return g_cpu_freq_mhz;
 }
 
 uint32_t cpu_get_current_frequency() noexcept
@@ -152,7 +152,7 @@ uint32_t cpu_get_current_frequency() noexcept
 
 void cpu_get_current_frequency_set_refresh_rate(uint32_t refresh_rate) noexcept
 {
-    _g_refresh_rate = refresh_rate;
+    g_refresh_rate = refresh_rate;
 }
 
 STDROMANO_NAMESPACE_END
