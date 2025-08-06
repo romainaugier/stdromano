@@ -12,18 +12,20 @@
 STDROMANO_NAMESPACE_BEGIN
 
 /* 
-    Dense matrix stored in row-major order 
-
-        col col col col col
-    row 0
-    row 0
-    row 0
-    row 0
-    row 0
+    Dense matrix stored in column-major order 
 */
 
+namespace detail {
+    STDROMANO_API void matmat_mulf(const float* __restrict A,
+                                   const float* __restrict B,
+                                   float* __restrict C,
+                                   std::size_t M,
+                                   std::size_t K,
+                                   std::size_t N) noexcept;
+}
+
 template<typename T>
-class STDROMANO_API DenseMatrix 
+class DenseMatrix 
 {
     static_assert(std::is_floating_point_v<T> || std::is_integral_v<T>,
                   "T must be floating-point or integral type");
@@ -37,7 +39,6 @@ private:
 
     DenseMatrix matmat_add(const DenseMatrix& other) const noexcept;
     DenseMatrix matmat_sub(const DenseMatrix& other) const noexcept;
-    DenseMatrix matmat_mul(const DenseMatrix& other) const noexcept;
 
     DenseMatrix matscalar_mul(const T& other) const noexcept;
     
@@ -46,12 +47,12 @@ public:
     
     DenseMatrix(std::size_t nrows, std::size_t ncols) : _nrows(nrows), _ncols(ncols) 
     {
-        this->_data = mem_aligned_alloc(this->nbytes(), ALIGNMENT);
+        this->_data = static_cast<T*>(mem_aligned_alloc(this->nbytes(), ALIGNMENT));
     }
     
     DenseMatrix(std::size_t nrows, std::size_t ncols, const T& init_value) : _nrows(nrows), _ncols(ncols) 
     {
-        this->_data = mem_aligned_alloc(this->nbytes(), ALIGNMENT);
+        this->_data = static_cast<T*>(mem_aligned_alloc(this->nbytes(), ALIGNMENT));
 
         this->fill(init_value);
     }
@@ -66,7 +67,7 @@ public:
     
     DenseMatrix(const DenseMatrix& other) noexcept : _nrows(other._nrows), _ncols(other._ncols)
     {
-        this->_data = mem_aligned_alloc(this->nbytes(), ALIGNMENT);
+        this->_data = static_cast<T*>(mem_aligned_alloc(this->nbytes(), ALIGNMENT));
 
         std::memcpy(this->_data, other._data, this->nbytes());
     }
@@ -83,7 +84,7 @@ public:
             this->_nrows = other._nrows;
             this->_ncols = other._ncols;
 
-            this->_data = mem_aligned_alloc(this->nbytes(), ALIGNMENT);
+            this->_data = static_cast<T*>(mem_aligned_alloc(this->nbytes(), ALIGNMENT));
         }
 
         return *this;
@@ -132,28 +133,28 @@ public:
     {
         STDROMANO_ASSERT(row < this->_nrows && col < this->_ncols, "Out-of-bounds access");
 
-        return this->_data[row * this->_ncols + col];
+        return this->_data[col * this->_nrows + row];
     }
     
     STDROMANO_FORCE_INLINE const T& operator()(size_t row, size_t col) const noexcept
     {
         STDROMANO_ASSERT(row < this->_nrows && col < this->_ncols, "Out-of-bounds access");
 
-        return this->_data[row * this->_ncols + col];
+        return this->_data[col * this->_nrows + row];
     }
     
     STDROMANO_FORCE_INLINE T& at(size_t row, size_t col) noexcept
     {
         STDROMANO_ASSERT(row < this->_nrows && col < this->_ncols, "Out-of-bounds access");
 
-        return this->_data[row * this->_ncols + col];
+        return this->_data[col * this->_nrows + row];
     }
     
     STDROMANO_FORCE_INLINE const T& at(size_t row, size_t col) const noexcept
     {
         STDROMANO_ASSERT(row < this->_nrows && col < this->_ncols, "Out-of-bounds access");
 
-        return this->_data[row * this->_ncols + col];
+        return this->_data[col * this->_nrows + row];
     }
     
     STDROMANO_FORCE_INLINE T* data() { return this->_data; }
@@ -161,7 +162,23 @@ public:
     
     DenseMatrix operator*(const DenseMatrix& other) const noexcept
     {
-        return this->matmat_mul(other);
+        DenseMatrix res(this->_nrows, other._ncols);
+        res.zero();
+
+        const std::size_t M = this->_nrows;
+        const std::size_t K = this->_ncols;
+        const std::size_t N = other._ncols;
+
+        if constexpr (std::is_same_v<T, float>)
+        {
+            detail::matmat_mulf(this->data(), other.data(), res.data(), M, K, N);
+        }
+        else 
+        {
+            static_assert(0, "T not supported for matrix multiplication");
+        }
+        
+        return res;
     }
     
     DenseMatrix operator+(const DenseMatrix& other) const noexcept
@@ -204,7 +221,7 @@ public:
         return result;
     }
     
-    void fill(const T& value) noexcept 
+    void fill(T value) noexcept 
     {
         for(std::size_t i = 0; i < this->size(); i++)
         {
@@ -216,6 +233,8 @@ public:
     {
         this->fill(T{});
     }
+
+    void debug(std::size_t max_rows = 0, std::size_t max_cols = 0) const noexcept;
 };
 
 using DenseMatrixF = DenseMatrix<float>;

@@ -202,7 +202,7 @@ public:
 
     bool add_work(ThreadPoolWork* work) noexcept;
 
-    bool add_work(std::function<void()>&& func) noexcept
+    STDROMANO_FORCE_INLINE bool add_work(std::function<void()>&& func) noexcept
     {
         LambdaWork* work = new LambdaWork(std::forward<std::function<void()>&&>(func));
         return this->add_work(work);
@@ -210,14 +210,19 @@ public:
 
     void wait() const noexcept;
 
-    bool is_started() const noexcept
+    STDROMANO_FORCE_INLINE bool is_started() const noexcept
     {
         return this->_started.load();
     }
 
-    bool is_stopped() const noexcept
+    STDROMANO_FORCE_INLINE bool is_stopped() const noexcept
     {
         return this->_stop.load();
+    }
+
+    STDROMANO_FORCE_INLINE std::size_t num_workers() const noexcept
+    {
+        return this->_num_workers.load();
     }
 
 private:
@@ -260,6 +265,11 @@ public:
     void stop() noexcept
     {
         this->~GlobalThreadPool();
+    }
+
+    STDROMANO_FORCE_INLINE std::size_t num_workers() const noexcept
+    {
+        return this->_tp->num_workers();
     }
 
 private:

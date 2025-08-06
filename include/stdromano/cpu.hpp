@@ -49,6 +49,15 @@ STDROMANO_API uint32_t cpu_get_current_frequency() noexcept;
 
 STDROMANO_API void cpu_get_current_frequency_set_refresh_rate(uint32_t refresh_rate) noexcept;
 
+enum CPUCache_ : std::uint32_t
+{
+    CPUCache_L1,
+    CPUCache_L2,
+    CPUCache_L3,
+};
+
+STDROMANO_API std::size_t cpu_get_cache_size(std::uint32_t cache) noexcept;
+
 STDROMANO_NAMESPACE_END
 
 #endif /* !defined(__STDROMANO_CPU) */

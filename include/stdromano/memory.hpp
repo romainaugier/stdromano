@@ -14,12 +14,11 @@
 #include <cstdlib>
 #include <cstring>
 #include <immintrin.h>
+#include <limits>
 #include <memory>
 #include <new>
 #include <type_traits>
 #include <vector>
-#include <limits>
-
 
 #if defined(STDROMANO_GCC)
 #include <alloca.h>
@@ -39,15 +38,24 @@ STDROMANO_API void* mem_crealloc(void* ptr, const size_t size) noexcept;
 
 STDROMANO_API void mem_free(void* ptr) noexcept;
 
+STDROMANO_API void* mem_aligned_alloc(const size_t size, const size_t alignment) noexcept;
+
+STDROMANO_API void mem_aligned_free(void* ptr) noexcept;
+
+/* Alloca functions */
+
 #if defined(STDROMANO_MSVC)
 #define mem_alloca(size) _malloca(size)
 #elif defined(STDROMANO_GCC)
 #define mem_alloca(size) __builtin_alloca(size)
 #endif /* defined(STDROMANO_MSVC) */
 
-STDROMANO_API void* mem_aligned_alloc(const size_t size, const size_t alignment) noexcept;
-
-STDROMANO_API void mem_aligned_free(void* ptr) noexcept;
+#define mem_aligned_alloca(ptrname, size, alignment)                                               \
+    std::uintptr_t ptrname##_raw =                                                                 \
+        reinterpret_cast<std::uintptr_t>(mem_alloca((size) + (alignment) - 1 + sizeof(void*)));    \
+    std::uintptr_t ptrname##_aligned =                                                             \
+        (ptrname##_raw + sizeof(void*) + (alignment) - 1) & ~((std::uintptr_t)(alignment) - 1);    \
+    void* ptrname = reinterpret_cast<void*>(ptrname##_aligned)
 
 /* STL-like allocators wrapping alloc functions above */
 
@@ -62,7 +70,9 @@ public:
     Allocator() = default;
 
     template <typename U>
-    constexpr Allocator(const Allocator<U>&) noexcept {}
+    constexpr Allocator(const Allocator<U>&) noexcept
+    {
+    }
 
     [[nodiscard]] T* allocate(const std::size_t n)
     {
@@ -91,7 +101,7 @@ public:
 };
 
 template <typename T, std::size_t Alignment>
-class STDROMANO_API AlignedAllocator 
+class STDROMANO_API AlignedAllocator
 {
 public:
     using value_type = T;
@@ -104,7 +114,9 @@ public:
     AlignedAllocator() = default;
 
     template <typename U>
-    constexpr AlignedAllocator(const AlignedAllocator<U, Alignment>&) noexcept {}
+    constexpr AlignedAllocator(const AlignedAllocator<U, Alignment>&) noexcept
+    {
+    }
 
     [[nodiscard]] T* allocate(const std::size_t n)
     {
@@ -164,7 +176,9 @@ constexpr STDROMANO_FORCE_INLINE std::size_t str_len(const char* str) noexcept
     return len;
 }
 
-constexpr STDROMANO_FORCE_INLINE void mem_cpy(void* dst, const void* src, std::size_t count) noexcept
+constexpr STDROMANO_FORCE_INLINE void mem_cpy(void* dst,
+                                              const void* src,
+                                              std::size_t count) noexcept
 {
     if(dst != nullptr && src != nullptr)
     {
@@ -178,7 +192,9 @@ constexpr STDROMANO_FORCE_INLINE void mem_cpy(void* dst, const void* src, std::s
     }
 }
 
-constexpr STDROMANO_FORCE_INLINE void mem_move(void* dst, const void* src, std::size_t count) noexcept
+constexpr STDROMANO_FORCE_INLINE void mem_move(void* dst,
+                                               const void* src,
+                                               std::size_t count) noexcept
 {
     if(dst != nullptr && src != nullptr)
     {
@@ -194,7 +210,7 @@ constexpr STDROMANO_FORCE_INLINE void mem_move(void* dst, const void* src, std::
         }
         else if(_dst > _src)
         {
-            for (std::size_t i = count; i > 0; --i)
+            for(std::size_t i = count; i > 0; --i)
             {
                 _dst[i - 1] = _src[i - 1];
             }

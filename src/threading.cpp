@@ -144,6 +144,10 @@ void ThreadPool::init(const int64_t workers_count) noexcept
 
                             tp->_num_active_workers--;
                         }
+                        else 
+                        {
+                            std::this_thread::yield();
+                        }
                     }
                 }
             });
@@ -164,7 +168,7 @@ void ThreadPool::wait() const noexcept
 {
     while(this->_work_queue.size_approx() > 0 || this->_num_active_workers.load() > 0)
     {
-        thread_sleep(1);
+        std::this_thread::yield();
     }
 }
 

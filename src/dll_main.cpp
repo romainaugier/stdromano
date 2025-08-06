@@ -32,6 +32,11 @@ void STDROMANO_LIB_ENTRY lib_entry(void)
                          stdromano::simd_get_vectorization_mode_as_string(),
                          stdromano::simd_has_fma(),
                          stdromano::simd_has_f16c());
+
+    stdromano::log_debug("stdromano detected caches size: L1: {}, L2: {}, L3: {}",
+                         stdromano::cpu_get_cache_size(stdromano::CPUCache_L1),
+                         stdromano::cpu_get_cache_size(stdromano::CPUCache_L2),
+                         stdromano::cpu_get_cache_size(stdromano::CPUCache_L2));
 }
 
 void STDROMANO_LIB_EXIT lib_exit(void)
