@@ -158,15 +158,53 @@ STDROMANO_FORCE_INLINE void thread_sleep(const size_t sleep_duration_ms) noexcep
 #endif /* defined(STDROMANO_WIN) */
 }
 
+STDROMANO_FORCE_INLINE void thread_yield() noexcept
+{
+    std::this_thread::yield();
+}
+
+/********************************/
+/* ThreadPool */
+/********************************/
+
+class ThreadPool;
+class ThreadPoolWork;
+
+class STDROMANO_API ThreadPoolWaiter
+{
+    friend class ThreadPool;
+    friend class ThreadPoolWork;
+
+    std::size_t _expected = 0;
+    std::atomic<std::size_t> _done = 0;
+
+public:
+    ThreadPoolWaiter() {}
+
+    void wait() const noexcept
+    {
+        while(this->_done.load() != this->_expected)
+        {
+            thread_yield();
+        }
+    }
+};
+
 class STDROMANO_API ThreadPoolWork
 {
-public:
-    ThreadPoolWork()
-    {
-    }
+    friend class ThreadPool;
 
-    virtual ~ThreadPoolWork()
+    ThreadPoolWaiter* _waiter = nullptr;
+
+public:
+    ThreadPoolWork() {}
+
+    virtual ~ThreadPoolWork() noexcept
     {
+        if(this->_waiter != nullptr)
+        {
+            ++this->_waiter->_done;
+        }
     }
 
     virtual void execute() = 0;
@@ -200,12 +238,13 @@ public:
 
     ~ThreadPool();
 
-    bool add_work(ThreadPoolWork* work) noexcept;
+    bool add_work(ThreadPoolWork* work, ThreadPoolWaiter* waiter = nullptr) noexcept;
 
-    STDROMANO_FORCE_INLINE bool add_work(std::function<void()>&& func) noexcept
+    STDROMANO_FORCE_INLINE bool add_work(std::function<void()>&& func,
+                                         ThreadPoolWaiter* waiter = nullptr) noexcept
     {
         LambdaWork* work = new LambdaWork(std::forward<std::function<void()>&&>(func));
-        return this->add_work(work);
+        return this->add_work(work, waiter);
     }
 
     void wait() const noexcept;
@@ -254,14 +293,14 @@ public:
     GlobalThreadPool(const GlobalThreadPool&) = delete;
     GlobalThreadPool& operator=(const GlobalThreadPool&) = delete;
 
-    bool add_work(ThreadPoolWork* work) noexcept
+    bool add_work(ThreadPoolWork* work, ThreadPoolWaiter* waiter = nullptr) noexcept
     {
-        return this->_tp->add_work(std::forward<ThreadPoolWork*>(work));
+        return this->_tp->add_work(std::forward<ThreadPoolWork*>(work), waiter);
     }
 
-    bool add_work(std::function<void()>&& work) noexcept
+    bool add_work(std::function<void()>&& work, ThreadPoolWaiter* waiter = nullptr) noexcept
     {
-        return this->_tp->add_work(std::forward<std::function<void()>>(work));
+        return this->_tp->add_work(std::forward<std::function<void()>>(work), waiter);
     }
 
     void wait() const noexcept

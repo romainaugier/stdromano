@@ -11,10 +11,6 @@
 
 STDROMANO_NAMESPACE_BEGIN
 
-/* 
-    Dense matrix stored in column-major order 
-*/
-
 namespace detail {
     STDROMANO_API void matmat_mulf(const float* __restrict A,
                                    const float* __restrict B,
@@ -22,7 +18,43 @@ namespace detail {
                                    std::size_t M,
                                    std::size_t K,
                                    std::size_t N) noexcept;
+
+    STDROMANO_API void matmat_muld(const double* __restrict A,
+                                   const double* __restrict B,
+                                   double* __restrict C,
+                                   std::size_t M,
+                                   std::size_t K,
+                                   std::size_t N) noexcept;
+
+    STDROMANO_API void matmat_muli(const std::int32_t* __restrict A,
+                                   const std::int32_t* __restrict B,
+                                   std::int32_t* __restrict C,
+                                   std::size_t M,
+                                   std::size_t K,
+                                   std::size_t N) noexcept;
+
+    STDROMANO_API void mat_debugf(const float* __restrict A,
+                                  std::size_t M,
+                                  std::size_t N,
+                                  std::size_t max_M = 0,
+                                  std::size_t max_N = 0) noexcept;
+
+    STDROMANO_API void mat_debugd(const double* __restrict A,
+                                  std::size_t M,
+                                  std::size_t N,
+                                  std::size_t max_M = 0,
+                                  std::size_t max_N = 0) noexcept;
+
+    STDROMANO_API void mat_debugi(const std::int32_t* __restrict A,
+                                  std::size_t M,
+                                  std::size_t N,
+                                  std::size_t max_M = 0,
+                                  std::size_t max_N = 0) noexcept;
 }
+
+/* 
+    Dense matrix stored in column-major order for the best matmul performance
+*/
 
 template<typename T>
 class DenseMatrix 
@@ -173,6 +205,14 @@ public:
         {
             detail::matmat_mulf(this->data(), other.data(), res.data(), M, K, N);
         }
+        else if constexpr (std::is_same_v<T, double>)
+        {
+            detail::matmat_muld(this->data(), other.data(), res.data(), M, K, N);
+        }
+        else if constexpr (std::is_same_v<T, std::int32_t>)
+        {
+            detail::matmat_muli(this->data(), other.data(), res.data(), M, K, N);
+        }
         else 
         {
             static_assert(0, "T not supported for matrix multiplication");
@@ -234,7 +274,38 @@ public:
         this->fill(T{});
     }
 
-    void debug(std::size_t max_rows = 0, std::size_t max_cols = 0) const noexcept;
+    void debug(std::size_t max_rows = 0, std::size_t max_cols = 0) const noexcept
+    {
+        if constexpr (std::is_same_v<T, float>)
+        {
+            detail::mat_debugf(this->_data,
+                               this->_nrows,
+                               this->_ncols,
+                               max_rows,
+                               max_cols);
+        }
+    }
+
+    /* 
+        Trace is only defined for square matrices,
+        so if the matrix is not square it returns 0 by default 
+    */
+    T trace() const noexcept
+    {
+        if(this->_nrows != this->_ncols)
+        {
+            return static_cast<T>(0);
+        }
+
+        T result = static_cast<T>(0);
+
+        for(std::size_t i = 0; i < this->_nrows; i++)
+        {
+            result += (*this)(i, i);
+        }
+
+        return result;
+    }
 };
 
 using DenseMatrixF = DenseMatrix<float>;

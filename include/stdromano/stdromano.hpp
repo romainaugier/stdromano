@@ -103,12 +103,6 @@
 #define STDROMANO_LIB_EXIT __attribute__((destructor))
 #endif /* defined(STDROMANO_MSVC) */
 
-#if __cplusplus > 201703
-#define STDROMANO_MAYBE_UNUSED [[maybe_unused]]
-#else
-#define STDROMANO_MAYBE_UNUSED
-#endif /* __cplusplus > 201703 */
-
 #if defined(STDROMANO_BUILD_SHARED)
 #define STDROMANO_API STDROMANO_EXPORT
 #else
@@ -173,6 +167,7 @@
 #endif /* defined(STDROMANO_MSVC) */
 
 #define STDROMANO_NO_DISCARD [[nodiscard]]
+#define STDROMANO_MAYBE_UNUSED [[maybe_unused]]
 
 #if defined(STDROMANO_MSVC)
 #define dump_struct(s)

@@ -17,7 +17,7 @@ int main() noexcept
 #if STDROMANO_DEBUG
     std::size_t M = 644, N = 766, K = 512;
 #else
-    std::size_t M = 2048, N = 2048, K = 2048;
+    std::size_t M = 1024, N = 1024, K = 1024;
 #endif /* defined(STDROMANO_DEBUG) */
 
     stdromano::DenseMatrixF A(M, K);
@@ -26,14 +26,11 @@ int main() noexcept
     stdromano::DenseMatrixF B(K, N);
     B.fill(2);
 
-    for(std::size_t i = 0; i < NUM_TESTS; ++i)
-    {
-        SCOPED_PROFILE_START(stdromano::ProfileUnit::MilliSeconds, matmat_mul);
-        stdromano::DenseMatrixF C = A * B;
-        SCOPED_PROFILE_STOP(matmat_mul);
-    }
+    SCOPED_PROFILE_START(stdromano::ProfileUnit::MilliSeconds, matmat_mul);
+    stdromano::DenseMatrixF C = A * B;
+    SCOPED_PROFILE_STOP(matmat_mul);
 
-    // C.debug(10, 10);
+    C.debug(10, 10);
 
     stdromano::log_info("Finished dense_matrix test");
 

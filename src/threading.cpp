@@ -137,6 +137,7 @@ void ThreadPool::init(const int64_t workers_count) noexcept
                                 if(work != nullptr)
                                 {
                                     work->execute();
+
                                     delete work;
                                 }
                             }
@@ -161,9 +162,22 @@ void ThreadPool::init(const int64_t workers_count) noexcept
     this->_started.store(true);
 }
 
-bool ThreadPool::add_work(ThreadPoolWork* work) noexcept
+bool ThreadPool::add_work(ThreadPoolWork* work,
+                          ThreadPoolWaiter* waiter) noexcept
 {
-    return this->_work_queue.enqueue(work);
+    work->_waiter = waiter;
+
+    if(!this->_work_queue.enqueue(work))
+    {
+        return false;
+    }
+
+    if(waiter != nullptr)
+    {
+        ++waiter->_expected;
+    }
+
+    return true;
 }
 
 void ThreadPool::wait() const noexcept
