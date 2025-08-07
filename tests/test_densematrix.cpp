@@ -8,11 +8,17 @@
 #define STDROMANO_ENABLE_PROFILING
 #include "stdromano/profiling.hpp"
 
+#define NUM_TESTS 10
+
 int main() noexcept
 {
     stdromano::log_info("Starting dense_matrix test");
 
-    std::size_t M = 1492, N = 899, K = 1789;
+#if STDROMANO_DEBUG
+    std::size_t M = 644, N = 766, K = 512;
+#else
+    std::size_t M = 2048, N = 2048, K = 2048;
+#endif /* defined(STDROMANO_DEBUG) */
 
     stdromano::DenseMatrixF A(M, K);
     A.fill(1);
@@ -20,9 +26,12 @@ int main() noexcept
     stdromano::DenseMatrixF B(K, N);
     B.fill(2);
 
-    SCOPED_PROFILE_START(stdromano::ProfileUnit::MilliSeconds, matmat_mul);
-    stdromano::DenseMatrixF C = A * B;
-    SCOPED_PROFILE_STOP(matmat_mul);
+    for(std::size_t i = 0; i < NUM_TESTS; ++i)
+    {
+        SCOPED_PROFILE_START(stdromano::ProfileUnit::MilliSeconds, matmat_mul);
+        stdromano::DenseMatrixF C = A * B;
+        SCOPED_PROFILE_STOP(matmat_mul);
+    }
 
     // C.debug(10, 10);
 

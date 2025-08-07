@@ -119,6 +119,11 @@ void ThreadPool::init(const int64_t workers_count) noexcept
                         break;
                     }
 
+                    if(tp->_num_active_workers.load() >= tp->_max_active_workers.load())
+                    {
+                        continue;
+                    }
+
                     if(tp->_work_queue.size_approx() > 0)
                     {
                         ThreadPoolWork* work = nullptr;
@@ -144,16 +149,13 @@ void ThreadPool::init(const int64_t workers_count) noexcept
 
                             tp->_num_active_workers--;
                         }
-                        else 
-                        {
-                            std::this_thread::yield();
-                        }
                     }
                 }
             });
 
         this->_workers[i].start();
         this->_num_workers++;
+        this->_max_active_workers++;
     }
 
     this->_started.store(true);
@@ -178,7 +180,15 @@ GlobalThreadPool::GlobalThreadPool()
 {
     if(this->_tp == nullptr)
     {
-        this->_tp = new ThreadPool();
+        const char* max_threads_env = std::getenv("STDROMANO_MAX_THREADS");
+        std::int64_t max_threads = -1;
+
+        if(max_threads_env != nullptr)
+        {
+            max_threads = std::atoll(max_threads_env);
+        }
+
+        this->_tp = new ThreadPool(max_threads);
         g_global_threadpool_started = true;
     }
 }

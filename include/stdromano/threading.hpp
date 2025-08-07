@@ -225,12 +225,19 @@ public:
         return this->_num_workers.load();
     }
 
+    STDROMANO_FORCE_INLINE void set_max_active_workers(std::size_t max_workers) noexcept
+    {
+        this->_max_active_workers.store(max_workers);
+    }
+
 private:
     moodycamel::ConcurrentQueue<ThreadPoolWork*> _work_queue;
     Thread* _workers;
 
-    std::atomic<size_t> _num_workers;
-    std::atomic<size_t> _num_active_workers;
+    std::atomic<std::size_t> _num_workers;
+    std::atomic<std::size_t> _num_active_workers;
+
+    std::atomic<std::size_t> _max_active_workers;
 
     std::atomic<bool> _stop;
 
@@ -270,6 +277,11 @@ public:
     STDROMANO_FORCE_INLINE std::size_t num_workers() const noexcept
     {
         return this->_tp->num_workers();
+    }
+
+    STDROMANO_FORCE_INLINE void set_max_active_workers(std::size_t max_active_workers) noexcept
+    {
+        this->_tp->set_max_active_workers(max_active_workers);
     }
 
 private:
