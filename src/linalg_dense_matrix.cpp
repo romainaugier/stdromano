@@ -1619,6 +1619,8 @@ void pack_blockA(const float* __restrict A,
     }
 }
 
+#define MULTITHREAD 1
+
 void matmat_mulf_avx2(const float* __restrict A,
                       const float* __restrict B,
                       float* __restrict C,
@@ -1626,11 +1628,18 @@ void matmat_mulf_avx2(const float* __restrict A,
                       std::size_t K,
                       std::size_t N) noexcept
 {
+#if MULTITHREAD
     const std::size_t nthreads = global_threadpool.num_workers() / 2;
-    const std::size_t KC = 64;
+#else
+    constexpr std::size_t nthreads = 1;
+#endif /* MULTITHREAD */
+    const std::size_t KC = 144;
     const std::size_t MC = (16 * (40 / nthreads) * nthreads);
     const std::size_t NC = (6 * (800 / nthreads) * nthreads);
 
+#if !MULTITHREAD
+    float* blockA_packed = static_cast<float*>(mem_aligned_alloc(MC * KC * sizeof(float), 32));
+#endif /* !MULTITHREAD */
     float* blockB_packed = static_cast<float*>(mem_aligned_alloc(NC * KC * sizeof(float), 32));
 
     for(std::size_t j = 0; j < N; j += NC)
@@ -1642,9 +1651,10 @@ void matmat_mulf_avx2(const float* __restrict A,
 
         for(std::size_t i = 0; i < M; i += MC)
         {
+#if MULTITHREAD
             global_threadpool.add_work([=]() -> void {
-                mem_aligned_alloca(_blockA_packed, MC * KC * sizeof(float), 32);
-                float* blockA_packed = static_cast<float*>(_blockA_packed);
+                float* blockA_packed = static_cast<float*>(mem_aligned_alloc(MC * KC * sizeof(float), 32));
+#endif /* MULTITHREAD */
 
                 std::size_t mc = std::min(MC, M - i);
 
@@ -1669,10 +1679,16 @@ void matmat_mulf_avx2(const float* __restrict A,
                                                     M);
                     }
                 }
+
+#if MULTITHREAD
+                mem_aligned_free(blockA_packed);
             });
+#endif /* MULTITHREAD */
         }
                 
+#if MULTITHREAD
         global_threadpool.wait();
+#endif /* MULTITHREAD */
 
         for(std::size_t p = kc; p < K; p += KC)
         {
@@ -1682,9 +1698,10 @@ void matmat_mulf_avx2(const float* __restrict A,
 
             for(std::size_t i = 0; i < M; i += MC)
             {
+#if MULTITHREAD
+                float* blockA_packed = static_cast<float*>(mem_aligned_alloc(MC * KC * sizeof(float), 32));
                 global_threadpool.add_work([=]() -> void {
-                    mem_aligned_alloca(_blockA_packed, MC * KC * sizeof(float), 32);
-                    float* blockA_packed = static_cast<float*>(_blockA_packed);
+#endif /* MULTITHREAD */
 
                     std::size_t mc = std::min(MC, M - i);
 
@@ -1701,19 +1718,30 @@ void matmat_mulf_avx2(const float* __restrict A,
                             std::size_t mr = std::min(std::size_t(16), M - global_i);
 
                             kernel_16x6_load_accum(&blockA_packed[ir * kc],
-                                                    &blockB_packed[jr * kc],
-                                                    &C[global_j * M + global_i],
-                                                    mr,
-                                                    nr,
-                                                    kc,
-                                                    M);
+                                                   &blockB_packed[jr * kc],
+                                                   &C[global_j * M + global_i],
+                                                   mr,
+                                                   nr,
+                                                   kc,
+                                                   M);
                         }
                     }
+
+#if MULTITHREAD
+                    mem_aligned_free(blockA_packed);
                 });
+#endif /* MULTITHREAD */
             }
         }
+
+#if MULTITHREAD
+        global_threadpool.wait();
+#endif /* MULTITHREAD */
     }
 
+#if !MULTITHREAD
+    mem_aligned_free(blockA_packed);
+#endif /* !MULTITHREAD */
     mem_aligned_free(blockB_packed);
 }
 
