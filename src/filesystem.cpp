@@ -105,13 +105,68 @@ void fs_mkdir(const StringD& dir_path) noexcept
 #endif /* defined(STDROMANO_WIN) */
 }
 
-String<> expand_from_executable_dir(const String<>& path_to_expand) noexcept
+String<> fs_expand_from_executable_dir(const String<>& path_to_expand) noexcept
 {
-    size_t size;
+    std::size_t size;
 
 #if defined(STDROMANO_WIN)
     char sz_path[MAX_PATH];
-    GetModuleFileNameA(nullptr, sz_path, MAX_PATH);
+
+    if(GetModuleFileNameA(nullptr, sz_path, MAX_PATH) == 0)
+    {
+        log_error("Error caught during GetModuleFileNameA: {}", GetLastError());
+        return StringD();
+    }
+
+    size = std::strlen(sz_path);
+
+    while(size > 0 && sz_path[size] != '\\')
+    {
+        size--;
+    }
+#elif defined(STDROMANO_LINUX)
+    char sz_path[PATH_MAX];
+    ssize_t count = readlink("/proc/self/exe", sz_path, PATH_MAX);
+
+    if(count < 0 || count >= PATH_MAX)
+        return "";
+
+    sz_path[count] = '\0';
+
+    size = count - 1;
+
+    while(size > 0 && sz_path[size] != '/')
+    {
+        size--;
+    }
+#endif /* defined(STDROMANO_WIN) */
+
+    return String<>("{}/{}", fmt::string_view(sz_path, size), path_to_expand);
+}
+
+String<> fs_expand_from_lib_dir(const String<>& path_to_expand) noexcept
+{
+    std::size_t size;
+
+#if defined(STDROMANO_WIN)
+    HMODULE hm = nullptr;
+
+    if(GetModuleHandleEx(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS |
+                         GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
+                         (LPCSTR)&fs_expand_from_lib_dir,
+                         &hm) == 0)
+    {
+        log_error("Error caught during GetModuleHandleEx: {}", GetLastError());
+        return StringD();
+    }
+
+    char sz_path[MAX_PATH];
+
+    if(GetModuleFileNameA(nullptr, sz_path, MAX_PATH) == 0)
+    {
+        log_error("Error caught during GetModuleFileNameA: {}", GetLastError());
+        return StringD();
+    }
 
     size = std::strlen(sz_path);
 
@@ -233,7 +288,7 @@ bool fs_list_dir(ListDirIterator& it, const String<>& directory_path, const uint
         {
             DWORD err = GetLastError();
 
-            std::fprintf(stderr, "Error during fs_list_dir. Error code: %u\n", err);
+            std::fprintf(stderr, "Error during fs_list_dir. Error code: %lu\n", err);
 
             return false;
         }
@@ -279,7 +334,7 @@ bool fs_list_dir(ListDirIterator& it, const String<>& directory_path, const uint
 
             if(err != ERROR_NO_MORE_FILES)
             {
-                std::fprintf(stderr, "Error during fs_list_dir. Error code: %u", err);
+                std::fprintf(stderr, "Error during fs_list_dir. Error code: %lu", err);
             }
 
             return false;

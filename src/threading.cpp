@@ -180,7 +180,7 @@ bool ThreadPool::add_work(ThreadPoolWork* work,
     return true;
 }
 
-void ThreadPool::wait() const noexcept
+void ThreadPool::wait() noexcept
 {
     while(this->_work_queue.size_approx() > 0 || this->_num_active_workers.load() > 0)
     {

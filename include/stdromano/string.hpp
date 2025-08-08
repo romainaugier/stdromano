@@ -915,7 +915,7 @@ public:
         const std::size_t tail_size = this->_size - tail_start + 1;
 
         mem_move(d + start, d + tail_start, tail_size);
-        this->_size -= actual_length;
+        this->_size -= static_cast<std::uint32_t>(actual_length);
     }
 
     void shrink_to_fit(const std::size_t size = String::NPOS) noexcept
@@ -1350,6 +1350,10 @@ using String1024 = String<1024>;
 using String260 = String<260>;
 using String128 = String<128>;
 using String32 = String<32>;
+
+#if defined(STDROMANO_WIN)
+STDROMANO_EXPIMP_TEMPLATE template class STDROMANO_API String<>;
+#endif /* defined(STDROMANO_WIN) */
 
 STDROMANO_NAMESPACE_END
 

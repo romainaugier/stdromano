@@ -3,6 +3,8 @@
 // All rights reserved.
 
 #include "stdromano/opencl.hpp"
+#include "stdromano/filesystem.hpp"
+
 #include "spdlog/fmt/bundled/base.h"
 
 STDROMANO_NAMESPACE_BEGIN
@@ -15,7 +17,7 @@ OpenCLManager& OpenCLManager::get_instance() noexcept
 
 bool OpenCLManager::initialize(const OpenCLConfig& config) noexcept
 {
-    if(this->_initialized)
+    if(this->is_initialized())
     {
         return true;
     }
@@ -38,11 +40,35 @@ bool OpenCLManager::initialize(const OpenCLConfig& config) noexcept
         return false;
     }
 
-    this->_initialized = true;
+    this->_initialized.store(true);
 
     if(this->_config.enable_debug_output)
     {
         this->print_device_info();
+    }
+
+    return true;
+}
+
+bool OpenCLManager::copy_buffer(const cl::Buffer& to,
+                                const cl::Buffer& from,
+                                std::size_t size,
+                                std::size_t device_index,
+                                bool blocking) noexcept
+{
+    STDROMANO_ASSERT(this->is_initialized(), "OpenCL Manager has not been initialized");
+
+    if(device_index >= this->_queues.size())
+    {
+        return false;
+    }
+
+    cl_int err = this->_queues[device_index].enqueueCopyBuffer(from, to, 0, 0, size);
+
+    if(err != CL_SUCCESS)
+    {
+        log_error("OpenCL error: failed to copy buffer: {}", this->get_cl_error_string(err));
+        return false;
     }
 
     return true;
@@ -211,6 +237,39 @@ void OpenCLManager::finish_all_queues() noexcept
                         this->get_cl_error_string(err));
         }
     }
+}
+
+HashMap<StringD, StringD> g_kernel_sources;
+
+const StringD& OpenCLManager::get_kernel_source(const StringD& name) const noexcept
+{
+    const StringD kernel_path = fs_expand_from_lib_dir(StringD("cl/{}.cl", name));
+
+    if(!fs_path_exists(kernel_path))
+    {
+        static const StringD invalid;
+
+        return invalid;
+    }
+
+    if(!g_kernel_sources.contains(name))
+    {
+        g_kernel_sources[name] = load_file_content(kernel_path, "r");
+    }
+
+    return g_kernel_sources[name];
+}
+
+bool OpenCLManager::has_kernel_source(const StringD& name) const noexcept
+{
+    if(g_kernel_sources.contains(name))
+    {
+        return true;
+    }
+    
+    const StringD kernel_path = fs_expand_from_lib_dir(StringD("cl/{}.cl", name));
+
+    return fs_path_exists(kernel_path);
 }
 
 bool OpenCLManager::setup_platform_and_devices() noexcept

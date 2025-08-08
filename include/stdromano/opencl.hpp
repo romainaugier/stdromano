@@ -11,6 +11,7 @@
 #include "stdromano/hashmap.hpp"
 #include "stdromano/string.hpp"
 #include "stdromano/logger.hpp"
+#include "stdromano/atomic.hpp"
 
 #include <CL/opencl.hpp>
 
@@ -74,6 +75,8 @@ struct DeviceInfo
     size_t max_work_group_size;
     bool is_dedicated;
 
+    DeviceInfo() = default;
+
     DeviceInfo(const cl::Device& dev)
         : device(dev)
     {
@@ -114,7 +117,7 @@ public:
 
     STDROMANO_FORCE_INLINE bool is_initialized() const noexcept
     {
-        return this->_initialized;
+        return this->_initialized.load();
     }
 
     /* Returns nullptr if not initialized */
@@ -122,7 +125,7 @@ public:
     {
         STDROMANO_ASSERT(this->is_initialized(), "OpenCL Manager has not been initialized");
 
-        if(!this->_initialized)
+        if(!this->is_initialized())
         {
             return nullptr;
         }
@@ -135,7 +138,7 @@ public:
     {
         STDROMANO_ASSERT(this->is_initialized(), "OpenCL Manager has not been initialized");
 
-        if(!this->_initialized)
+        if(!this->is_initialized())
         {
             return nullptr;
         }
@@ -148,7 +151,7 @@ public:
     {
         STDROMANO_ASSERT(this->is_initialized(), "OpenCL Manager has not been initialized");
 
-        if(!this->_initialized)
+        if(!this->is_initialized())
         {
             return nullptr;
         }
@@ -161,7 +164,7 @@ public:
     {
         STDROMANO_ASSERT(this->is_initialized(), "OpenCL Manager has not been initialized");
 
-        if(!this->_initialized)
+        if(!this->is_initialized())
         {
             return nullptr;
         }
@@ -179,7 +182,7 @@ public:
     {
         STDROMANO_ASSERT(this->is_initialized(), "OpenCL Manager has not been initialized");
 
-        if(!this->_initialized)
+        if(!this->is_initialized())
         {
             return nullptr;
         }
@@ -207,7 +210,7 @@ public:
     }
 
     template <typename T>
-    void write_buffer(cl::Buffer& buffer,
+    void write_buffer(const cl::Buffer& buffer,
                       const T* data,
                       const std::size_t size,
                       std::size_t device_index = 0,
@@ -215,7 +218,7 @@ public:
     {
         STDROMANO_ASSERT(this->is_initialized(), "OpenCL Manager has not been initialized");
 
-        if(!this->_initialized)
+        if(!this->is_initialized())
         {
             return;
         }
@@ -237,8 +240,14 @@ public:
         }
     }
 
+    bool copy_buffer(const cl::Buffer& to,
+                     const cl::Buffer& from,
+                     std::size_t size,
+                     std::size_t device_index = 0,
+                     bool blocking = true) noexcept;
+
     template <typename T>
-    STDROMANO_NO_DISCARD bool read_buffer(cl::Buffer& buffer,
+    STDROMANO_NO_DISCARD bool read_buffer(const cl::Buffer& buffer,
                                           T* data,
                                           std::size_t count,
                                           std::size_t device_index = 0,
@@ -251,11 +260,11 @@ public:
             return false;
         }
 
-        cl_int err = _queues[device_index].enqueueReadBuffer(buffer,
-                                                             blocking ? CL_TRUE : CL_FALSE,
-                                                             0,
-                                                             sizeof(T) * count,
-                                                             data);
+        cl_int err = this->_queues[device_index].enqueueReadBuffer(buffer,
+                                                                   blocking ? CL_TRUE : CL_FALSE,
+                                                                   0,
+                                                                   sizeof(T) * count,
+                                                                   data);
         
         if(err != CL_SUCCESS)
         {
@@ -297,6 +306,10 @@ public:
         this->_program_cache.clear();
     }
 
+    const StringD& get_kernel_source(const StringD& name) const noexcept;
+
+    bool has_kernel_source(const StringD& name) const noexcept;
+
 private:
     OpenCLManager() = default;
 
@@ -316,7 +329,7 @@ private:
         this->_devices.clear();
         this->_device_info.clear();
         this->_program_cache.clear();
-        this->_initialized = false;
+        this->_initialized.store(false);
     }
 
     STDROMANO_NO_DISCARD bool setup_platform_and_devices() noexcept;
@@ -340,12 +353,25 @@ private:
     HashMap<ProgramCacheKey, cl::Program, ProgramCacheKeyHash> _program_cache;
     mutable std::mutex _cache_mutex;
 
-    std::atomic<size_t> _queue_counter{0};
+    atomic<size_t> _queue_counter{0};
 
-    std::atomic<bool> _initialized{false};
+    atomic<bool> _initialized{false};
     std::mutex _init_mutex;
 };
 
+#define opencl_manager OpenCLManager::get_instance()
+
 STDROMANO_NAMESPACE_END
+
+#if defined(STDROMANO_WIN)
+STDROMANO_EXPIMP_TEMPLATE template class STDROMANO_API stdromano::HashMap<stdromano::OpenCLManager::ProgramCacheKey,
+                                                                          cl::Program,
+                                                                          stdromano::OpenCLManager::ProgramCacheKeyHash>;
+
+STDROMANO_EXPIMP_TEMPLATE template class STDROMANO_API std::vector<cl::CommandQueue>;
+STDROMANO_EXPIMP_TEMPLATE template class STDROMANO_API std::vector<stdromano::DeviceInfo>;
+STDROMANO_EXPIMP_TEMPLATE template class STDROMANO_API std::vector<cl::Device>;
+STDROMANO_EXPIMP_TEMPLATE template class STDROMANO_API std::vector<cl::Event>;
+#endif /* defined(STDROMANO_WIN) */
 
 #endif /* !defined(__STDROMANO_OPENCL) */

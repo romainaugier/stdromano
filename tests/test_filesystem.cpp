@@ -24,7 +24,7 @@ TEST_CASE(TestFilename)
 
 TEST_CASE(TestExpandExecutable)
 {
-    stdromano::log_info(stdromano::expand_from_executable_dir("test/expand/file.c"));
+    stdromano::log_info(stdromano::fs_expand_from_executable_dir("test/expand/file.c"));
 }
 
 TEST_CASE(TestLoadFileContent)
@@ -54,7 +54,7 @@ TEST_CASE(TestFileDialog)
     const stdromano::String<> file_path =
                    stdromano::open_file_dialog(stdromano::FileDialogMode_OpenFile,
                                                "Open A File",
-                                               stdromano::expand_from_executable_dir(""),
+                                               stdromano::fs_expand_from_executable_dir(""),
                                                "*.cpp|*.h|*.txt");
 
     stdromano::log_debug("Chosen file: {}", file_path.empty() ? "None" : file_path.c_str());
@@ -63,7 +63,7 @@ TEST_CASE(TestFileDialog)
     const stdromano::String<> dir_path =
                    stdromano::open_file_dialog(stdromano::FileDialogMode_OpenDir,
                                                "Select A Directory",
-                                               stdromano::expand_from_executable_dir(""),
+                                               stdromano::fs_expand_from_executable_dir(""),
                                                "");
 
     stdromano::log_debug("Chosen directory: {}", dir_path.empty() ? "None" : dir_path.c_str());

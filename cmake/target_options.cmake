@@ -31,7 +31,8 @@ function(set_target_options target_name)
         # 4710 is "Function not inlined", we don't care it pollutes more than tells useful information about the code
         # 5045 is "Compiler will insert Spectre mitigation for memory load if /Qspectre switch specified", again we don't care
         # 4324 is " structure was padded due to alignment specifier", again we don't care (it appears only in HashSet::Bucket for now)
-        set(COMPILE_OPTIONS /W4 /wd4710 /wd5045 /wd4324 /utf-8 ${AVX_FLAGS} $<$<CONFIG:Debug,RelWithDebInfo>:/fsanitize=address> $<$<CONFIG:Release,RelWithDebInfo>:/O2 /GF /Ot /Oy /GT /GL /Oi /Zi /Gm- /Zc:inline /Qpar>)
+        # 4146 is " unary minus operator applied to unsigned type", again we don't care (it appears only in lsb_u64)
+        set(COMPILE_OPTIONS /W4 /wd4710 /wd5045 /wd4324 /wd4146 /utf-8 ${AVX_FLAGS} $<$<CONFIG:Debug,RelWithDebInfo>:/fsanitize=address> $<$<CONFIG:Release,RelWithDebInfo>:/O2 /GF /Ot /Oy /GT /GL /Oi /Zi /Gm- /Zc:inline /Qpar>)
 
         target_compile_options(${target_name} PRIVATE $<$<COMPILE_LANGUAGE:CXX>:${COMPILE_OPTIONS}>)
 

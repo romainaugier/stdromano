@@ -29,7 +29,9 @@ STDROMANO_API StringD fs_current_dir() noexcept;
 
 STDROMANO_API void fs_mkdir(const StringD& dir_path) noexcept;
 
-STDROMANO_API String<> expand_from_executable_dir(const String<>& path_to_expand) noexcept;
+STDROMANO_API String<> fs_expand_from_executable_dir(const String<>& path_to_expand) noexcept;
+
+STDROMANO_API String<> fs_expand_from_lib_dir(const String<>& path_to_expand) noexcept;
 
 STDROMANO_API String<> load_file_content(const String<>& file_path,
                                          const char* mode = "rb") noexcept;
@@ -203,5 +205,9 @@ private:
 };
  
 STDROMANO_NAMESPACE_END
+
+#if defined(STDROMANO_WIN)
+STDROMANO_EXPIMP_TEMPLATE template class STDROMANO_API std::queue<stdromano::StringD>;
+#endif /* defined(STDROMANO_WIN) */
 
 #endif // !defined(__STDROMANO_FILESYSTEM)

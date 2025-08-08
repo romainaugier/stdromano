@@ -6,10 +6,10 @@
 #define __STDROMANO_THREADING
 
 #include "stdromano/stdromano.hpp"
+#include "stdromano/atomic.hpp"
 
 #include "concurrentqueue.h"
 
-#include <atomic>
 #include <functional>
 
 #if defined(STDROMANO_WIN)
@@ -40,34 +40,6 @@ using thread_func = void (*)(void*);
 using thread_handle = pthread_t;
 using thread_func = void* (*)(void*);
 #endif /* defined(STDROMANO_WIN) */
-
-class Mutex
-{
-    std::atomic<bool> _flag;
-
-public:
-    Mutex()
-    {
-        this->_flag.store(false);
-    }
-
-    STDROMANO_FORCE_INLINE void lock() noexcept
-    {
-        while(this->_flag.exchange(true, std::memory_order_relaxed))
-            ;
-        std::atomic_thread_fence(std::memory_order_acquire);
-    }
-
-    STDROMANO_FORCE_INLINE void unlock() noexcept
-    {
-        std::atomic_thread_fence(std::memory_order_release);
-        this->_flag.store(false, std::memory_order_relaxed);
-    }
-};
-
-class ScopedLock
-{
-};
 
 class STDROMANO_API Thread
 {
@@ -176,12 +148,12 @@ class STDROMANO_API ThreadPoolWaiter
     friend class ThreadPoolWork;
 
     std::size_t _expected = 0;
-    std::atomic<std::size_t> _done = 0;
+    atomic<std::size_t> _done = 0;
 
 public:
     ThreadPoolWaiter() {}
 
-    void wait() const noexcept
+    void wait() noexcept
     {
         while(this->_done.load() != this->_expected)
         {
@@ -247,7 +219,7 @@ public:
         return this->add_work(work, waiter);
     }
 
-    void wait() const noexcept;
+    void wait() noexcept;
 
     STDROMANO_FORCE_INLINE bool is_started() const noexcept
     {
@@ -259,7 +231,7 @@ public:
         return this->_stop.load();
     }
 
-    STDROMANO_FORCE_INLINE std::size_t num_workers() const noexcept
+    STDROMANO_FORCE_INLINE std::size_t num_workers() noexcept
     {
         return this->_num_workers.load();
     }
@@ -273,14 +245,14 @@ private:
     moodycamel::ConcurrentQueue<ThreadPoolWork*> _work_queue;
     Thread* _workers;
 
-    std::atomic<std::size_t> _num_workers;
-    std::atomic<std::size_t> _num_active_workers;
+    atomic<std::size_t> _num_workers;
+    atomic<std::size_t> _num_active_workers;
 
-    std::atomic<std::size_t> _max_active_workers;
+    atomic<std::size_t> _max_active_workers;
 
-    std::atomic<bool> _stop;
+    atomic<bool> _stop;
 
-    std::atomic<bool> _started;
+    atomic<bool> _started;
 
     void init(const int64_t workers_count) noexcept;
 };
@@ -303,7 +275,7 @@ public:
         return this->_tp->add_work(std::forward<std::function<void()>>(work), waiter);
     }
 
-    void wait() const noexcept
+    void wait() noexcept
     {
         return this->_tp->wait();
     }
