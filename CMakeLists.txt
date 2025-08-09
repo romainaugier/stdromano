@@ -112,7 +112,67 @@ else()
 endif()
 
 # OpenCL
-find_package(OpenCL CONFIG REQUIRED)
+if(UNIX)
+    find_package(PkgConfig QUIET)
+
+    if(PkgConfig_FOUND)
+        pkg_check_modules(OPENCL_PKG QUIET OpenCL)
+    endif()
+
+    find_library(SYSTEM_OPENCL_LIB
+        NAMES OpenCL OpenCL.so OpenCL.so.1
+        HINTS /usr/lib64 /lib64 /usr/lib /usr/local/lib
+    )
+
+    find_path(SYSTEM_OPENCL_INCLUDE_DIR
+        NAMES CL/cl.h
+        HINTS /usr/include /usr/local/include /usr/include/CL
+    )
+
+    if(SYSTEM_OPENCL_LIB AND SYSTEM_OPENCL_INCLUDE_DIR)
+        message(STATUS "Found system OpenCL: ${SYSTEM_OPENCL_LIB}, includes: ${SYSTEM_OPENCL_INCLUDE_DIR}")
+
+        if(TARGET OpenCL::OpenCL)
+            message(STATUS "Overriding existing OpenCL::OpenCL imported target to system OpenCL")
+
+            set_target_properties(OpenCL::OpenCL PROPERTIES
+                IMPORTED_LOCATION "${SYSTEM_OPENCL_LIB}"
+                INTERFACE_INCLUDE_DIRECTORIES "${SYSTEM_OPENCL_INCLUDE_DIR}"
+            )
+        else()
+            add_library(OpenCL::OpenCL UNKNOWN IMPORTED GLOBAL)
+
+            set_target_properties(OpenCL::OpenCL PROPERTIES
+                IMPORTED_LOCATION "${SYSTEM_OPENCL_LIB}"
+                INTERFACE_INCLUDE_DIRECTORIES "${SYSTEM_OPENCL_INCLUDE_DIR}"
+            )
+        endif()
+    else()
+        message(STATUS "System OpenCL not found via find_library/find_path; will try find_package or vcpkg fallback")
+
+        find_package(OpenCL QUIET)
+
+        if(NOT TARGET OpenCL::OpenCL AND OpenCL_LIBRARY)
+            add_library(OpenCL::OpenCL UNKNOWN IMPORTED GLOBAL)
+            set_target_properties(OpenCL::OpenCL PROPERTIES
+                IMPORTED_LOCATION "${OpenCL_LIBRARY}"
+                INTERFACE_INCLUDE_DIRECTORIES "${OpenCL_INCLUDE_DIR}"
+            )
+        endif()
+    endif()
+
+elseif(WIN32)
+    # Usually OpenCL comes with CUDA on windows (this is how I install it) so we ask for Cuda toolkit and 
+    # then use the OpenCL provided by Nvidia
+    find_package(CUDAToolkit)
+
+    set(OpenCL_ROOT "${CUDA_TOOLKIT_ROOT_DIR}")
+
+    find_package(OpenCL)
+endif()
+
+# OpenCL cpp bindings
+include_directories(ext/opencl_hpp/include)
 
 add_subdirectory(src)
 

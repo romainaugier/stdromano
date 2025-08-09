@@ -1,6 +1,5 @@
 {
     "dependencies": [
-        "jemalloc",
-        "opencl"
+        "jemalloc"
     ]
 }

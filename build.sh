@@ -87,6 +87,9 @@ if [[ ! -d "vcpkg" ]]; then
     cd ..
 fi
 
+# For OpenCL
+export ASAN_OPTIONS=protect_shadow_gap=0
+
 export VCPKG_ROOT=$PWD/vcpkg
 export CMAKE_TOOLCHAIN_FILE=$VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake
 
