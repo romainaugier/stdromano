@@ -16,12 +16,6 @@ foreach(test_file ${TEST_FILES})
     set_target_options(${TESTNAME})
     set_target_properties(${TESTNAME} PROPERTIES CXX_STANDARD 17)
     target_link_libraries(${TESTNAME} ${PROJECT_NAME})
-
-    list(FIND NEEDS_OPENCL_LINKING ${TESTNAME} FOUND)
-
-    if(FOUND GREATER_EQUAL 0)
-        target_link_libraries(${TESTNAME} OpenCL::OpenCL)
-    endif()
     
     # Special case for command line parser test
     if(${TESTNAME} STREQUAL "test_command_line_parser")

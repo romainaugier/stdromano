@@ -29,7 +29,7 @@ elseif(WIN32)
 endif()
 
 target_link_libraries(${PROJECT_NAME} PRIVATE jemalloc)
-target_link_libraries(${PROJECT_NAME} PRIVATE OpenCL::OpenCL)
+target_link_libraries(${PROJECT_NAME} PUBLIC OpenCL::OpenCL)
 
 target_include_directories(${PROJECT_NAME}
                            PUBLIC
@@ -73,7 +73,7 @@ install(
 )
 
 install(
-    DIRECTORY ${OpenCL_INCLUDE_DIR}
+    DIRECTORY ${OpenCL_INCLUDE_DIR}/CL
     DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/CL
     FILES_MATCHING PATTERN "*.h"
 )
