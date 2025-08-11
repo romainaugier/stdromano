@@ -29,7 +29,7 @@ elseif(WIN32)
 endif()
 
 target_link_libraries(${PROJECT_NAME} PRIVATE jemalloc)
-target_link_libraries(${PROJECT_NAME} PUBLIC OpenCL::OpenCL)
+target_link_libraries(${PROJECT_NAME} PRIVATE OpenCL::OpenCL)
 
 target_include_directories(${PROJECT_NAME}
                            PUBLIC
@@ -70,6 +70,18 @@ install(
           ${concurrentqueue_INCLUDE_DIRS}/blockingconcurrentqueue.h
           ${concurrentqueue_INCLUDE_DIRS}/lightweightsemaphore.h
     DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
+)
+
+install(
+    DIRECTORY ${OpenCL_INCLUDE_DIR}
+    DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/CL
+    FILES_MATCHING PATTERN "*.h"
+)
+
+install(
+    DIRECTORY ${OpenCLHPP_INCLUDE_DIR}
+    DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/CL
+    FILES_MATCHING PATTERN "*.hpp"
 )
 
 install(

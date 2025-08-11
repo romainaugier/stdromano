@@ -147,6 +147,8 @@ if(UNIX)
                 INTERFACE_INCLUDE_DIRECTORIES "${SYSTEM_OPENCL_INCLUDE_DIR}"
             )
         endif()
+
+        set(OpenCL_INCLUDE_DIR ${SYSTEM_OPENCL_INCLUDE_DIR})
     else()
         message(STATUS "System OpenCL not found via find_library/find_path; will try find_package or vcpkg fallback")
 
@@ -171,8 +173,10 @@ elseif(WIN32)
     find_package(OpenCL)
 endif()
 
-# OpenCL cpp bindings
-include_directories(ext/opencl_hpp/include)
+include_directories(${OpenCL_INCLUDE_DIR})
+
+set(OpenCLHPP_INCLUDE_DIR "${CMAKE_SOURCE_DIR}/ext/opencl_hpp/include")
+include_directories(${OpenCLHPP_INCLUDE_DIR})
 
 add_subdirectory(src)
 

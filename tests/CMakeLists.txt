@@ -6,6 +6,8 @@ include(target_options)
 
 file(GLOB_RECURSE TEST_FILES *.cpp)
 
+set(NEEDS_OPENCL_LINKING test_densematrix test_opencl)
+
 foreach(test_file ${TEST_FILES})
     get_filename_component(TESTNAME ${test_file} NAME_WLE)
     message(STATUS "Adding stdromano test : ${TESTNAME}")
@@ -14,6 +16,12 @@ foreach(test_file ${TEST_FILES})
     set_target_options(${TESTNAME})
     set_target_properties(${TESTNAME} PROPERTIES CXX_STANDARD 17)
     target_link_libraries(${TESTNAME} ${PROJECT_NAME})
+
+    list(FIND NEEDS_OPENCL_LINKING ${TESTNAME} FOUND)
+
+    if(FOUND GREATER_EQUAL 0)
+        target_link_libraries(${TESTNAME} OpenCL::OpenCL)
+    endif()
     
     # Special case for command line parser test
     if(${TESTNAME} STREQUAL "test_command_line_parser")
