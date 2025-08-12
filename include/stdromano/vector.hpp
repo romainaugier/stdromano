@@ -16,6 +16,7 @@
 #include <algorithm>
 #include <cstdint>
 #include <functional>
+#include <initializer_list>
 
 STDROMANO_NAMESPACE_BEGIN
 
@@ -96,10 +97,9 @@ public:
     using pointer = value_type*;
     using const_pointer = const value_type*;
 
-    Vector()
-        : _data(nullptr),
-          _capacity(0),
-          _size(0)
+    Vector() : _data(nullptr),
+               _capacity(0),
+               _size(0)
     {
     }
 
@@ -140,6 +140,17 @@ public:
             }
 
             this->set_size(count);
+        }
+    }
+
+    Vector(std::initializer_list<value_type> init)
+    {
+        if(init.size() > 0)
+        {
+            for(const auto& item : init)
+            {
+                this->emplace_back(item);
+            }
         }
     }
 
@@ -739,19 +750,80 @@ public:
             this->grow();
         }
 
-        std::memmove(this->at(position + count),
-                     this->at(position),
-                     (this->size() - position) * sizeof(T));
         uint32_t offset = 0;
 
-        for(auto it = first; it != last; ++it, ++offset)
+        if(pos == this->cend())
         {
-            ::new(this->at(position + offset)) T(*it);
+            for(auto it = first; it != last; ++it)
+            {
+                this->emplace_back(*it);
+                ++offset;
+            }
+        }
+        else
+        {
+            std::memmove(this->at(position + count),
+                        this->at(position),
+                        (this->size() - position) * sizeof(T));
+
+            for(auto it = first; it != last; ++it, ++offset)
+            {
+                ::new(this->at(position + offset)) T(*it);
+            }
+
+            this->set_size(new_size);
         }
 
-        this->set_size(new_size);
-
         return iterator(this, position);
+    }
+
+    iterator insert(const_iterator pos, std::initializer_list<T> list) noexcept
+    {
+#if STDROMANO_NULL_VECTOR_ASSERTIONS
+        STDROMANO_ASSERT(this->_data != nullptr, "Vector has not been allocated");
+#endif /* STDROMANO_NULL_VECTOR_ASSERTIONS */
+
+        const uint32_t position = pos.index;
+
+        if(position > this->size())
+        {
+            return this->end();
+        }
+
+        const size_t count = list.size();
+        const size_t new_size = this->size() + count;
+
+        while(this->capacity() < new_size)
+        {
+            this->grow();
+        }
+
+        uint32_t offset = 0;
+
+        if(pos == this->cend())
+        {
+            for(const auto& item : list)
+            {
+                this->emplace_back(item);
+                ++offset;
+            }
+        }
+        else 
+        {
+            std::memmove(this->at(position + count),
+                        this->at(position),
+                        (this->size() - position) * sizeof(T));
+
+            for(const auto& item : list)
+            {
+                ::new(this->at(position + offset)) T(item);
+                ++offset;
+            }
+
+            this->set_size(new_size);
+        }
+
+        return iterator(this, position + offset);
     }
 
     iterator erase(const_iterator pos) noexcept

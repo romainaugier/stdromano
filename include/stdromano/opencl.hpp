@@ -4,10 +4,10 @@
 
 #pragma once
 
-#include "stdromano/stdromano.hpp"
 #if !defined(__STDROMANO_OPENCL)
 #define __STDROMANO_OPENCL
 
+#include "stdromano/stdromano.hpp"
 #include "stdromano/hashmap.hpp"
 #include "stdromano/string.hpp"
 #include "stdromano/logger.hpp"
