@@ -195,7 +195,6 @@ GlobalThreadPool::GlobalThreadPool()
         }
 
         this->_tp = new ThreadPool(max_threads);
-        g_global_threadpool_started = true;
     }
 }
 
@@ -213,6 +212,7 @@ GlobalThreadPool& GlobalThreadPool::get_instance() noexcept
     if(!g_global_threadpool_started)
     {
         std::atexit(atexit_handler_global_threadpool);
+        g_global_threadpool_started = true;
     }
 
     static GlobalThreadPool tp;
@@ -225,6 +225,7 @@ void atexit_handler_global_threadpool() noexcept
     if(g_global_threadpool_started)
     {
         global_threadpool.stop();
+        g_global_threadpool_started = false;
     }
 }
 
