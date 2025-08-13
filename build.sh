@@ -11,6 +11,10 @@ EXPORTCOMPILECOMMANDS=0
 VERSION="0.0.0"
 INSTALLDIR="$PWD/install"
 INSTALL=0
+THREADSAN=0
+UBSAN=0
+ADDRSAN=0
+LEAKSAN=0
 
 # Little function to parse command line arguments
 parse_args()
@@ -24,6 +28,14 @@ parse_args()
     [ "$1" == "--clean" ] && REMOVEOLDDIR=1
 
     [ "$1" == "--install" ] && INSTALL=1
+
+    [ "$1" == "--threadsan" ] && THREADSAN=1
+
+    [ "$1" == "--ubsan" ] && UBSAN=1
+
+    [ "$1" == "--addrsan" ] && ADDRSAN=1
+
+    [ "$1" == "--leaksan" ] && LEAKSAN=1
 
     [ "$1" == "--export-compile-commands" ] && EXPORTCOMPILECOMMANDS=1
 
@@ -79,6 +91,23 @@ do
     parse_args "$arg"
 done
 
+if [[ $UBSAN -eq 1 ]]; then
+    if [[ $ADDRSAN -eq 1 ]]; then
+        log_error "Undefined Behavior Sanitizer and Address Sanitizer are not compatible"
+        exit 1
+    fi
+
+    if [[ $LEAKSAN -eq 1 ]]; then
+        log_error "Undefined Behavior Sanitizer and Leak Sanitizer are not compatible"
+        exit 1
+    fi
+
+    if [[ $THREADSAN -eq 1 ]]; then
+        log_error "Undefined Behavior Sanitizer and Thread Sanitizer are not compatible"
+        exit 1
+    fi
+fi
+
 if [[ ! -d "vcpkg" ]]; then
     log_info "Vcpkg can't be found, cloning and preparing it"
     git clone https://github.com/romainaugier/vcpkg.git
@@ -111,7 +140,14 @@ if [[ -d "install" && $REMOVEOLDDIR -eq 1 ]]; then
     rm -rf install
 fi
 
-cmake -S . -B build -DRUN_TESTS=$RUNTESTS -DCMAKE_EXPORT_COMPILE_COMMANDS=$EXPORTCOMPILECOMMANDS -DCMAKE_BUILD_TYPE=$BUILDTYPE -DVERSION=$VERSION
+cmake -S . -B build -DRUN_TESTS=$RUNTESTS \
+                    -DCMAKE_EXPORT_COMPILE_COMMANDS=$EXPORTCOMPILECOMMANDS \
+                    -DCMAKE_BUILD_TYPE=$BUILDTYPE \
+                    -DVERSION=$VERSION \
+                    -DTHREADSAN=$THREADSAN \
+                    -DUBSAN=$UBSAN \
+                    -DADDRSAN=$ADDRSAN \
+                    -DLEAKSAN=LEAK$SAN
 
 if [[ $? -ne 0 ]]; then
     log_error "Error during CMake configuration"

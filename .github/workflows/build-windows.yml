@@ -1,0 +1,27 @@
+name: Build  Linux
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+      - uses: actions/checkout@v2
+
+      - name: get-cmake
+        uses: lukka/get-cmake@latest
+
+      - name: Pull & update submodules recursively
+        run: |
+          git submodule update --init --recursive
+          git submodule update --recursive --remote
+
+      - name: build and test with addr sanitizer
+        run: |
+          ./build.sh --tests --reldebug --addrsan
+          cat build/Testing/Temporary/LastTest.log
