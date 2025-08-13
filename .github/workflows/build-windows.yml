@@ -21,6 +21,14 @@ jobs:
           git submodule update --init --recursive
           git submodule update --recursive --remote
 
+      - name: Cache vcpkg
+        uses: actions/cache@v4
+        with:
+          path: vcpkg
+          key: vcpkg-${{ runner.os }}-${{ hashFiles('vcpkg.json') }}
+          restore-keys: |
+            vcpkg-${{ runner.os }}-
+
       - name: build and test with addr sanitizer
         run: |
           ./build.bat --tests --reldebug --addrsan

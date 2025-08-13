@@ -183,8 +183,9 @@ elseif(WIN32)
 
         execute_process(
             COMMAND vcpkg install
-            WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/vcpkg
+            WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/vcpkg
         )
+        set(OpenCL_DIR "${CMAKE_SOURCE_DIR}/vcpkg/packages/opencl_x64-windows/share/opencl")
     else()
         set(OpenCL_ROOT "${CUDA_TOOLKIT_ROOT_DIR}")
     endif()
