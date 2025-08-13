@@ -88,7 +88,6 @@ ThreadPool::~ThreadPool()
         for(size_t i = 0; i < num_workers; i++)
         {
             this->_workers[i].join();
-            this->_workers[i].~Thread();
         }
 
         mem_free(this->_workers);
@@ -110,15 +109,8 @@ void ThreadPool::init(const int64_t workers_count) noexcept
             {
                 ThreadPool* tp = this;
 
-                while(true)
+                while(!tp->_stop.load())
                 {
-                    const bool stop = tp->_stop.load();
-
-                    if(stop)
-                    {
-                        break;
-                    }
-
                     if(tp->_num_active_workers.load() >= tp->_max_active_workers.load())
                     {
                         continue;
