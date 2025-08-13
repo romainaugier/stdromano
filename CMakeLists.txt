@@ -173,7 +173,7 @@ elseif(WIN32)
 
         file(READ ${CMAKE_SOURCE_DIR}/vcpkg.json JSON_CONTENT)
 
-        string(REPLACE "\"jemalloc\"", "\"jemalloc\", \"opencl\"" JSON_CONTENT_MODIFIED "${JSON_CONTENT}")
+        string(REPLACE "\"jemalloc\"" "\"jemalloc\", \"opencl\"" JSON_CONTENT_MODIFIED "${JSON_CONTENT}")
 
         file(WRITE ${CMAKE_SOURCE_DIR}/vcpkg.json "${JSON_CONTENT_MOFIFIED}")
 
