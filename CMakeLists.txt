@@ -171,8 +171,14 @@ elseif(WIN32)
     if(NOT ${CUDAToolkit_FOUND})
         message(STATUS "Cannot find OpenCL via Cuda Toolkit, downloading it using vcpkg")
 
+        file(READ ${CMAKE_SOURCE_DIR}/vcpkg.json JSON_CONTENT)
+
+        string(REPLACE "\"jemalloc\"", "\"jemalloc\", \"opencl\"" JSON_CONTENT_MODIFIED "${JSON_CONTENT}")
+
+        file(WRITE ${CMAKE_SOURCE_DIR}/vcpkg.json "${JSON_CONTENT_MOFIFIED}")
+
         execute_process(
-            COMMAND vcpkg install opencl
+            COMMAND vcpkg install
             WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/vcpkg
         )
     else()
