@@ -166,7 +166,7 @@ if(UNIX)
 elseif(WIN32)
     # Usually OpenCL comes with CUDA on windows (this is how I install it) so we ask for Cuda toolkit and 
     # then use the OpenCL provided by Nvidia
-    # find_package(CUDAToolkit)
+    find_package(CUDAToolkit)
 
     if(NOT ${CUDAToolkit_FOUND})
         message(STATUS "Cannot find OpenCL via Cuda Toolkit, downloading it using vcpkg")
