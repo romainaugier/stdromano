@@ -166,16 +166,20 @@ if(UNIX)
 elseif(WIN32)
     # Usually OpenCL comes with CUDA on windows (this is how I install it) so we ask for Cuda toolkit and 
     # then use the OpenCL provided by Nvidia
-    find_package(CUDAToolkit)
+    # find_package(CUDAToolkit)
 
     if(NOT ${CUDAToolkit_FOUND})
         message(STATUS "Cannot find OpenCL via Cuda Toolkit, downloading it using vcpkg")
 
         file(READ ${CMAKE_SOURCE_DIR}/vcpkg.json JSON_CONTENT)
 
-        string(REPLACE "\"jemalloc\"" "\"jemalloc\", \"opencl\"" JSON_CONTENT_MODIFIED "${JSON_CONTENT}")
+        string(REGEX REPLACE
+               "(\"dependencies\"[ \t]*:[ \t]*\\[[^]]*)(\\])"
+               "\\1, \"opencl\"\\2"
+               JSON_CONTENT
+               "${JSON_CONTENT}")
 
-        file(WRITE ${CMAKE_SOURCE_DIR}/vcpkg.json "${JSON_CONTENT_MOFIFIED}")
+        file(WRITE ${CMAKE_SOURCE_DIR}/vcpkg.json "${JSON_CONTENT}")
 
         execute_process(
             COMMAND vcpkg install
