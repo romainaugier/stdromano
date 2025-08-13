@@ -1,4 +1,4 @@
-name: Build  Linux
+name: Build Windows
 
 on:
   push:
@@ -23,5 +23,5 @@ jobs:
 
       - name: build and test with addr sanitizer
         run: |
-          ./build.sh --tests --reldebug --addrsan
-          cat build/Testing/Temporary/LastTest.log
+          build.bat --tests --reldebug --addrsan
+          type build/Testing/Temporary/LastTest.log

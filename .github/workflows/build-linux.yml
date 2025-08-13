@@ -1,4 +1,4 @@
-name: Build  Linux
+name: Build Linux
 
 on:
   push:
@@ -21,17 +21,23 @@ jobs:
           git submodule update --init --recursive
           git submodule update --recursive --remote
 
-      - name: build and test with addr/leak sanitizer
+      - name: Install dependencies
+        run: |
+          sudo apt-get install -y libgtk-4-dev
+          sudo apt-get install -y ocl-icd-opencl-dev
+          sudo apt-get install -y pocl-opencl-icd
+
+      - name: Build and test with addr/leak sanitizer
         run: |
           ./build.sh --tests --reldebug --addrsan --leaksan
           cat build/Testing/Temporary/LastTest.log
 
-      - name: build and test with ub sanitizer
+      - name: Build and test with ub sanitizer
         run: |
           ./build.sh --tests --clean --reldebug --ubsan
           cat build/Testing/Temporary/LastTest.log
 
-      - name: build and test with thread sanitizer
+      - name: Build and test with thread sanitizer
         run: |
           ./build.sh --tests --clean --reldebug --threadsan
           cat build/Testing/Temporary/LastTest.log
