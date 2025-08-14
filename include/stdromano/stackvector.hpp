@@ -326,7 +326,7 @@ public:
             } 
             else if(this->uses_heap()) 
             {
-                T* new_storage = static_cast<T*>(mem_aligned_alloc(new_capacity), alignof(T));
+                T* new_storage = static_cast<T*>(mem_aligned_alloc(new_capacity, alignof(T)));
 
                 if(new_storage == nullptr)
                 {
