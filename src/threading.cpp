@@ -200,11 +200,7 @@ GlobalThreadPool::GlobalThreadPool()
 
 GlobalThreadPool::~GlobalThreadPool()
 {
-    if(this->_tp != nullptr)
-    {
-        delete this->_tp;
-        this->_tp = nullptr;
-    }
+    this->stop();
 }
 
 GlobalThreadPool& GlobalThreadPool::get_instance() noexcept
@@ -218,6 +214,15 @@ GlobalThreadPool& GlobalThreadPool::get_instance() noexcept
     static GlobalThreadPool tp;
 
     return tp;
+}
+
+void GlobalThreadPool::stop() noexcept
+{
+    if(this->_tp != nullptr)
+    {
+        delete this->_tp;
+        this->_tp = nullptr;
+    }
 }
 
 void atexit_handler_global_threadpool() noexcept

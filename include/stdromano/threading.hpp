@@ -280,10 +280,7 @@ public:
         return this->_tp->wait();
     }
 
-    void stop() noexcept
-    {
-        this->~GlobalThreadPool();
-    }
+    void stop() noexcept;
 
     STDROMANO_FORCE_INLINE std::size_t num_workers() const noexcept
     {
