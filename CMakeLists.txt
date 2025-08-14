@@ -166,7 +166,9 @@ if(UNIX)
 elseif(WIN32)
     # Usually OpenCL comes with CUDA on windows (this is how I install it) so we ask for Cuda toolkit and 
     # then use the OpenCL provided by Nvidia
-    find_package(CUDAToolkit)
+    # find_package(CUDAToolkit)
+
+    set(CUDAToolkit_FOUND FALSE)
 
     if(NOT ${CUDAToolkit_FOUND})
         message(STATUS "Cannot find OpenCL via Cuda Toolkit, downloading it using vcpkg")
@@ -185,7 +187,7 @@ elseif(WIN32)
             COMMAND vcpkg install
             WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/vcpkg
         )
-        set(OpenCL_DIR "${CMAKE_SOURCE_DIR}/vcpkg/packages/opencl_x64-windows/share/opencl")
+        set(OpenCL_ROOT "${CMAKE_SOURCE_DIR}/vcpkg/packages/opencl_x64-windows")
     else()
         set(OpenCL_ROOT "${CUDA_TOOLKIT_ROOT_DIR}")
     endif()
