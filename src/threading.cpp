@@ -180,58 +180,11 @@ void ThreadPool::wait() noexcept
     }
 }
 
-static bool g_global_threadpool_started = false;
-
-GlobalThreadPool::GlobalThreadPool()
+ThreadPool& ThreadPool::get_global_threadpool() noexcept
 {
-    if(this->_tp == nullptr)
-    {
-        const char* max_threads_env = std::getenv("STDROMANO_MAX_THREADS");
-        std::int64_t max_threads = -1;
+    static ThreadPool g_threadpool;
 
-        if(max_threads_env != nullptr)
-        {
-            max_threads = std::atoll(max_threads_env);
-        }
-
-        this->_tp = new ThreadPool(max_threads);
-    }
-}
-
-GlobalThreadPool::~GlobalThreadPool()
-{
-    this->stop();
-}
-
-GlobalThreadPool& GlobalThreadPool::get_instance() noexcept
-{
-    if(!g_global_threadpool_started)
-    {
-        std::atexit(atexit_handler_global_threadpool);
-        g_global_threadpool_started = true;
-    }
-
-    static GlobalThreadPool tp;
-
-    return tp;
-}
-
-void GlobalThreadPool::stop() noexcept
-{
-    if(this->_tp != nullptr)
-    {
-        delete this->_tp;
-        this->_tp = nullptr;
-    }
-}
-
-void atexit_handler_global_threadpool() noexcept
-{
-    if(g_global_threadpool_started)
-    {
-        global_threadpool.stop();
-        g_global_threadpool_started = false;
-    }
+    return g_threadpool;
 }
 
 STDROMANO_NAMESPACE_END

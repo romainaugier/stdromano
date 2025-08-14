@@ -142,7 +142,7 @@ STDROMANO_FORCE_INLINE void thread_yield() noexcept
 class ThreadPool;
 class ThreadPoolWork;
 
-class STDROMANO_API ThreadPoolWaiter
+class ThreadPoolWaiter
 {
     friend class ThreadPool;
     friend class ThreadPoolWork;
@@ -162,7 +162,7 @@ public:
     }
 };
 
-class STDROMANO_API ThreadPoolWork
+class ThreadPoolWork
 {
     friend class ThreadPool;
 
@@ -182,17 +182,14 @@ public:
     virtual void execute() = 0;
 };
 
-class STDROMANO_API ThreadPool
+class ThreadPool
 {
-    class STDROMANO_API LambdaWork : public ThreadPoolWork
+    class LambdaWork : public ThreadPoolWork
     {
         std::function<void()> _func;
 
     public:
-        explicit LambdaWork(std::function<void()> func)
-            : _func(std::move(func))
-        {
-        }
+        explicit LambdaWork(std::function<void()> func) : _func(std::move(func)) {}
 
         ~LambdaWork() override = default;
 
@@ -206,11 +203,12 @@ class STDROMANO_API ThreadPool
     };
 
 public:
-    ThreadPool(const int64_t workers_count = -1);
+    STDROMANO_API ThreadPool(const int64_t workers_count = -1);
 
-    ~ThreadPool();
+    STDROMANO_API ~ThreadPool();
 
-    bool add_work(ThreadPoolWork* work, ThreadPoolWaiter* waiter = nullptr) noexcept;
+    STDROMANO_API bool add_work(ThreadPoolWork* work,
+                                ThreadPoolWaiter* waiter = nullptr) noexcept;
 
     STDROMANO_FORCE_INLINE bool add_work(std::function<void()>&& func,
                                          ThreadPoolWaiter* waiter = nullptr) noexcept
@@ -219,7 +217,7 @@ public:
         return this->add_work(work, waiter);
     }
 
-    void wait() noexcept;
+    STDROMANO_API void wait() noexcept;
 
     STDROMANO_FORCE_INLINE bool is_started() const noexcept
     {
@@ -241,6 +239,8 @@ public:
         this->_max_active_workers.store(max_workers);
     }
 
+    STDROMANO_API static ThreadPool& get_global_threadpool() noexcept;
+
 private:
     moodycamel::ConcurrentQueue<ThreadPoolWork*> _work_queue;
     Thread* _workers;
@@ -257,52 +257,8 @@ private:
     void init(const int64_t workers_count) noexcept;
 };
 
-class STDROMANO_API GlobalThreadPool
-{
-public:
-    static GlobalThreadPool& get_instance() noexcept;
-
-    GlobalThreadPool(const GlobalThreadPool&) = delete;
-    GlobalThreadPool& operator=(const GlobalThreadPool&) = delete;
-
-    bool add_work(ThreadPoolWork* work, ThreadPoolWaiter* waiter = nullptr) noexcept
-    {
-        return this->_tp->add_work(std::forward<ThreadPoolWork*>(work), waiter);
-    }
-
-    bool add_work(std::function<void()>&& work, ThreadPoolWaiter* waiter = nullptr) noexcept
-    {
-        return this->_tp->add_work(std::forward<std::function<void()>>(work), waiter);
-    }
-
-    void wait() noexcept
-    {
-        return this->_tp->wait();
-    }
-
-    void stop() noexcept;
-
-    STDROMANO_FORCE_INLINE std::size_t num_workers() const noexcept
-    {
-        return this->_tp->num_workers();
-    }
-
-    STDROMANO_FORCE_INLINE void set_max_active_workers(std::size_t max_active_workers) noexcept
-    {
-        this->_tp->set_max_active_workers(max_active_workers);
-    }
-
-private:
-    GlobalThreadPool();
-    ~GlobalThreadPool();
-
-    ThreadPool* _tp = nullptr;
-};
-
 /* Macro to make the code more understandable and readable */
-#define global_threadpool GlobalThreadPool::get_instance()
-
-STDROMANO_API void atexit_handler_global_threadpool() noexcept;
+#define global_threadpool() ThreadPool::get_global_threadpool()
 
 STDROMANO_NAMESPACE_END
 

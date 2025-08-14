@@ -1562,7 +1562,7 @@ void pack_blockB(const float* __restrict B,
     for(std::size_t j = 0; j < nc; j += 6)
     {
 #if MULTITHREAD
-        global_threadpool.add_work(
+        global_threadpool().add_work(
             [=]() -> void
             {
 #endif /* MULTITHREAD */
@@ -1610,7 +1610,7 @@ void pack_blockA(const float* __restrict A,
     for(std::size_t i = 0; i < mc; i += 16)
     {
 #if MULTITHREAD
-        global_threadpool.add_work(
+        global_threadpool().add_work(
             [=]() -> void
             {
 #endif /* MULTITHREAD */
@@ -1634,9 +1634,9 @@ void matmat_mulf_avx2_kernel(const float* __restrict A,
                              std::size_t K,
                              std::size_t N) noexcept
 {
-    global_threadpool.set_max_active_workers(16);
+    global_threadpool().set_max_active_workers(16);
 
-    const std::size_t nthreads = global_threadpool.num_workers();
+    const std::size_t nthreads = global_threadpool().num_workers();
 
     const std::size_t KC = 256;
     const std::size_t MC = 16 * std::max(std::size_t(1), 42 / nthreads) * nthreads;
@@ -1665,7 +1665,7 @@ void matmat_mulf_avx2_kernel(const float* __restrict A,
             for(std::size_t jr = 0; jr < nc; jr += 6)
             {
 #if MULTITHREAD
-                global_threadpool.add_work(
+                global_threadpool().add_work(
                     [=]() -> void
                     {
 #endif /* MULTITHREAD */
@@ -1714,7 +1714,7 @@ void matmat_mulf_avx2_kernel(const float* __restrict A,
                 for(std::size_t jr = 0; jr < nc; jr += 6)
                 {
 #if MULTITHREAD
-                    global_threadpool.add_work(
+                    global_threadpool().add_work(
                         [=]() -> void
                         {
 #endif /* MULTITHREAD */
