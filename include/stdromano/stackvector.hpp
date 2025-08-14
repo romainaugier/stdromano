@@ -57,7 +57,7 @@ private:
             return;
         }
 
-        this->_heap_storage = static_cast<T*>(mem_alloc(new_capacity));
+        this->_heap_storage = static_cast<T*>(mem_aligned_alloc(new_capacity, alignof(T)));
 
         if(this->_heap_storage == nullptr)
         {
@@ -67,7 +67,7 @@ private:
         for(size_t i = 0; i < this->_size; i++) 
         {
             ::new(this->_heap_storage + i) T(std::move_if_noexcept(reinterpret_cast<const T*>(this->_stack_storage)[i]));
-            reinterpret_cast<const T*>(this->_stack_storage)[i].~T();
+            reinterpret_cast<T*>(this->_stack_storage)[i].~T();
         }
         
         this->_capacity = new_capacity;
@@ -85,7 +85,7 @@ private:
             } 
             else 
             {
-                T* new_storage = static_cast<T*>(mem_alloc(new_capacity));
+                T* new_storage = static_cast<T*>(mem_aligned_alloc(new_capacity, alignof(T)));
 
                 if(new_storage == nullptr)
                 {
@@ -98,7 +98,7 @@ private:
                     this->data()[i].~T();
                 }
 
-                mem_free(this->_heap_storage);
+                mem_aligned_free(this->_heap_storage);
 
                 this->_heap_storage = new_storage;
                 this->_capacity = new_capacity;
@@ -214,7 +214,7 @@ public:
 
             if(this->uses_heap()) 
             {
-                mem_free(this->_heap_storage);
+                mem_aligned_free(this->_heap_storage);
                 this->_heap_storage = nullptr;
             }
 
@@ -253,7 +253,7 @@ public:
 
         if(this->uses_heap())
         {
-            mem_free(this->_heap_storage);
+            mem_aligned_free(this->_heap_storage);
             this->_heap_storage = nullptr;
         }
     }
@@ -326,7 +326,7 @@ public:
             } 
             else if(this->uses_heap()) 
             {
-                T* new_storage = static_cast<T*>(mem_alloc(new_capacity));
+                T* new_storage = static_cast<T*>(mem_aligned_alloc(new_capacity), alignof(T));
 
                 if(new_storage == nullptr)
                 {
@@ -339,7 +339,7 @@ public:
                     this->_heap_storage[i].~T();
                 }
 
-                mem_free(this->_heap_storage);
+                mem_aligned_free(this->_heap_storage);
 
                 this->_heap_storage = new_storage;
                 this->_capacity = new_capacity;
@@ -370,7 +370,7 @@ public:
     {
         this->grow_if_needed();
 
-        ::new(this->data() + this->_size) T(std::move(value));
+        ::new(this->data() + this->_size) T(std::move_if_noexcept(value));
 
         this->_size++;
     }

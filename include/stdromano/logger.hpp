@@ -17,10 +17,10 @@ enum LogLevel : uint32_t
     Debug = spdlog::level::debug,
 };
 
-class STDROMANO_API Logger
+class Logger
 {
 public:
-    static Logger& get_instance() noexcept;
+    STDROMANO_API static Logger& get_instance() noexcept;
 
     Logger(const Logger&) = delete;
     Logger& operator=(const Logger&) = delete;
@@ -73,8 +73,8 @@ public:
     }
 
 private:
-    Logger();
-    ~Logger();
+    STDROMANO_API Logger();
+    STDROMANO_API ~Logger();
 
     spdlog::logger _logger;
 };
