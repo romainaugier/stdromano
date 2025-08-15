@@ -44,7 +44,8 @@ void mem_free(void* ptr) noexcept
 
 void* mem_aligned_alloc(const size_t size, const size_t alignment) noexcept
 {
-    return je_aligned_alloc(alignment, size);
+    const size_t correct_size = (size + (alignment - 1)) & ~(alignment - 1);
+    return je_aligned_alloc(alignment, correct_size);
 }
 
 void mem_aligned_free(void* ptr) noexcept

@@ -53,8 +53,8 @@ inline void fma_loop_00(const float* __restrict blockA_packed,
 
     for(std::size_t p = 0; p < kc; p++)
     {
-        *a0_packFloat8 = _mm256_load_ps(blockA_packed);
-        *a1_packFloat8 = _mm256_load_ps(blockA_packed + 8);
+        *a0_packFloat8 = _mm256_loadu_ps(blockA_packed);
+        *a1_packFloat8 = _mm256_loadu_ps(blockA_packed + 8);
 
         *b_packFloat8 = _mm256_broadcast_ss(blockB_packed);
         *C_accum_00 = _mm256_fmadd_ps(*a0_packFloat8, *b_packFloat8, *C_accum_00);
@@ -79,8 +79,8 @@ inline void fma_loop_01(const float* __restrict blockA_packed,
 
     for(std::size_t p = 0; p < kc; p++)
     {
-        *a0_packFloat8 = _mm256_load_ps(blockA_packed);
-        *a1_packFloat8 = _mm256_load_ps(blockA_packed + 8);
+        *a0_packFloat8 = _mm256_loadu_ps(blockA_packed);
+        *a1_packFloat8 = _mm256_loadu_ps(blockA_packed + 8);
 
         *b_packFloat8 = _mm256_broadcast_ss(blockB_packed);
         *C_accum_00 = _mm256_fmadd_ps(*a0_packFloat8, *b_packFloat8, *C_accum_00);
@@ -111,8 +111,8 @@ inline void fma_loop_02(const float* __restrict blockA_packed,
 
     for(std::size_t p = 0; p < kc; p++)
     {
-        *a0_packFloat8 = _mm256_load_ps(blockA_packed);
-        *a1_packFloat8 = _mm256_load_ps(blockA_packed + 8);
+        *a0_packFloat8 = _mm256_loadu_ps(blockA_packed);
+        *a1_packFloat8 = _mm256_loadu_ps(blockA_packed + 8);
 
         *b_packFloat8 = _mm256_broadcast_ss(blockB_packed);
         *C_accum_00 = _mm256_fmadd_ps(*a0_packFloat8, *b_packFloat8, *C_accum_00);
@@ -149,8 +149,8 @@ inline void fma_loop_03(const float* __restrict blockA_packed,
 
     for(std::size_t p = 0; p < kc; p++)
     {
-        *a0_packFloat8 = _mm256_load_ps(blockA_packed);
-        *a1_packFloat8 = _mm256_load_ps(blockA_packed + 8);
+        *a0_packFloat8 = _mm256_loadu_ps(blockA_packed);
+        *a1_packFloat8 = _mm256_loadu_ps(blockA_packed + 8);
 
         *b_packFloat8 = _mm256_broadcast_ss(blockB_packed);
         *C_accum_00 = _mm256_fmadd_ps(*a0_packFloat8, *b_packFloat8, *C_accum_00);
@@ -193,8 +193,8 @@ inline void fma_loop_04(const float* __restrict blockA_packed,
 
     for(std::size_t p = 0; p < kc; p++)
     {
-        *a0_packFloat8 = _mm256_load_ps(blockA_packed);
-        *a1_packFloat8 = _mm256_load_ps(blockA_packed + 8);
+        *a0_packFloat8 = _mm256_loadu_ps(blockA_packed);
+        *a1_packFloat8 = _mm256_loadu_ps(blockA_packed + 8);
 
         *b_packFloat8 = _mm256_broadcast_ss(blockB_packed);
         *C_accum_00 = _mm256_fmadd_ps(*a0_packFloat8, *b_packFloat8, *C_accum_00);
@@ -243,8 +243,8 @@ inline void fma_loop_05(const float* __restrict blockA_packed,
 
     for(std::size_t p = 0; p < kc; p++)
     {
-        *a0_packFloat8 = _mm256_load_ps(blockA_packed);
-        *a1_packFloat8 = _mm256_load_ps(blockA_packed + 8);
+        *a0_packFloat8 = _mm256_loadu_ps(blockA_packed);
+        *a1_packFloat8 = _mm256_loadu_ps(blockA_packed + 8);
 
         *b_packFloat8 = _mm256_broadcast_ss(blockB_packed);
         *C_accum_00 = _mm256_fmadd_ps(*a0_packFloat8, *b_packFloat8, *C_accum_00);
@@ -412,8 +412,8 @@ inline void load_accum_00(const float* __restrict C,
                           __m256* C_accum_01,
                           STDROMANO_MAYBE_UNUSED std::size_t M)
 {
-    *C_accum_00 = _mm256_load_ps(C);
-    *C_accum_01 = _mm256_load_ps(&C[8]);
+    *C_accum_00 = _mm256_loadu_ps(C);
+    *C_accum_01 = _mm256_loadu_ps(&C[8]);
 }
 
 inline void load_accum_01(const float* __restrict C,
@@ -423,10 +423,10 @@ inline void load_accum_01(const float* __restrict C,
                           __m256* C_accum_11,
                           std::size_t M)
 {
-    *C_accum_00 = _mm256_load_ps(C);
-    *C_accum_01 = _mm256_load_ps(&C[8]);
-    *C_accum_10 = _mm256_load_ps(&C[M]);
-    *C_accum_11 = _mm256_load_ps(&C[M + 8]);
+    *C_accum_00 = _mm256_loadu_ps(C);
+    *C_accum_01 = _mm256_loadu_ps(&C[8]);
+    *C_accum_10 = _mm256_loadu_ps(&C[M]);
+    *C_accum_11 = _mm256_loadu_ps(&C[M + 8]);
 }
 
 inline void load_accum_02(const float* __restrict C,
@@ -438,12 +438,12 @@ inline void load_accum_02(const float* __restrict C,
                           __m256* C_accum_21,
                           std::size_t M)
 {
-    *C_accum_00 = _mm256_load_ps(C);
-    *C_accum_01 = _mm256_load_ps(&C[8]);
-    *C_accum_10 = _mm256_load_ps(&C[M]);
-    *C_accum_11 = _mm256_load_ps(&C[M + 8]);
-    *C_accum_20 = _mm256_load_ps(&C[2 * M]);
-    *C_accum_21 = _mm256_load_ps(&C[2 * M + 8]);
+    *C_accum_00 = _mm256_loadu_ps(C);
+    *C_accum_01 = _mm256_loadu_ps(&C[8]);
+    *C_accum_10 = _mm256_loadu_ps(&C[M]);
+    *C_accum_11 = _mm256_loadu_ps(&C[M + 8]);
+    *C_accum_20 = _mm256_loadu_ps(&C[2 * M]);
+    *C_accum_21 = _mm256_loadu_ps(&C[2 * M + 8]);
 }
 
 inline void load_accum_03(const float* __restrict C,
@@ -457,14 +457,14 @@ inline void load_accum_03(const float* __restrict C,
                           __m256* C_accum_31,
                           std::size_t M)
 {
-    *C_accum_00 = _mm256_load_ps(C);
-    *C_accum_01 = _mm256_load_ps(&C[8]);
-    *C_accum_10 = _mm256_load_ps(&C[M]);
-    *C_accum_11 = _mm256_load_ps(&C[M + 8]);
-    *C_accum_20 = _mm256_load_ps(&C[2 * M]);
-    *C_accum_21 = _mm256_load_ps(&C[2 * M + 8]);
-    *C_accum_30 = _mm256_load_ps(&C[3 * M]);
-    *C_accum_31 = _mm256_load_ps(&C[3 * M + 8]);
+    *C_accum_00 = _mm256_loadu_ps(C);
+    *C_accum_01 = _mm256_loadu_ps(&C[8]);
+    *C_accum_10 = _mm256_loadu_ps(&C[M]);
+    *C_accum_11 = _mm256_loadu_ps(&C[M + 8]);
+    *C_accum_20 = _mm256_loadu_ps(&C[2 * M]);
+    *C_accum_21 = _mm256_loadu_ps(&C[2 * M + 8]);
+    *C_accum_30 = _mm256_loadu_ps(&C[3 * M]);
+    *C_accum_31 = _mm256_loadu_ps(&C[3 * M + 8]);
 }
 
 inline void load_accum_04(const float* __restrict C,
@@ -480,16 +480,16 @@ inline void load_accum_04(const float* __restrict C,
                           __m256* C_accum_41,
                           std::size_t M)
 {
-    *C_accum_00 = _mm256_load_ps(C);
-    *C_accum_01 = _mm256_load_ps(&C[8]);
-    *C_accum_10 = _mm256_load_ps(&C[M]);
-    *C_accum_11 = _mm256_load_ps(&C[M + 8]);
-    *C_accum_20 = _mm256_load_ps(&C[2 * M]);
-    *C_accum_21 = _mm256_load_ps(&C[2 * M + 8]);
-    *C_accum_30 = _mm256_load_ps(&C[3 * M]);
-    *C_accum_31 = _mm256_load_ps(&C[3 * M + 8]);
-    *C_accum_40 = _mm256_load_ps(&C[4 * M]);
-    *C_accum_41 = _mm256_load_ps(&C[4 * M + 8]);
+    *C_accum_00 = _mm256_loadu_ps(C);
+    *C_accum_01 = _mm256_loadu_ps(&C[8]);
+    *C_accum_10 = _mm256_loadu_ps(&C[M]);
+    *C_accum_11 = _mm256_loadu_ps(&C[M + 8]);
+    *C_accum_20 = _mm256_loadu_ps(&C[2 * M]);
+    *C_accum_21 = _mm256_loadu_ps(&C[2 * M + 8]);
+    *C_accum_30 = _mm256_loadu_ps(&C[3 * M]);
+    *C_accum_31 = _mm256_loadu_ps(&C[3 * M + 8]);
+    *C_accum_40 = _mm256_loadu_ps(&C[4 * M]);
+    *C_accum_41 = _mm256_loadu_ps(&C[4 * M + 8]);
 }
 
 inline void load_accum_05(const float* __restrict C,
@@ -507,18 +507,18 @@ inline void load_accum_05(const float* __restrict C,
                           __m256* C_accum_51,
                           std::size_t M)
 {
-    *C_accum_00 = _mm256_load_ps(C);
-    *C_accum_01 = _mm256_load_ps(&C[8]);
-    *C_accum_10 = _mm256_load_ps(&C[M]);
-    *C_accum_11 = _mm256_load_ps(&C[M + 8]);
-    *C_accum_20 = _mm256_load_ps(&C[2 * M]);
-    *C_accum_21 = _mm256_load_ps(&C[2 * M + 8]);
-    *C_accum_30 = _mm256_load_ps(&C[3 * M]);
-    *C_accum_31 = _mm256_load_ps(&C[3 * M + 8]);
-    *C_accum_40 = _mm256_load_ps(&C[4 * M]);
-    *C_accum_41 = _mm256_load_ps(&C[4 * M + 8]);
-    *C_accum_50 = _mm256_load_ps(&C[5 * M]);
-    *C_accum_51 = _mm256_load_ps(&C[5 * M + 8]);
+    *C_accum_00 = _mm256_loadu_ps(C);
+    *C_accum_01 = _mm256_loadu_ps(&C[8]);
+    *C_accum_10 = _mm256_loadu_ps(&C[M]);
+    *C_accum_11 = _mm256_loadu_ps(&C[M + 8]);
+    *C_accum_20 = _mm256_loadu_ps(&C[2 * M]);
+    *C_accum_21 = _mm256_loadu_ps(&C[2 * M + 8]);
+    *C_accum_30 = _mm256_loadu_ps(&C[3 * M]);
+    *C_accum_31 = _mm256_loadu_ps(&C[3 * M + 8]);
+    *C_accum_40 = _mm256_loadu_ps(&C[4 * M]);
+    *C_accum_41 = _mm256_loadu_ps(&C[4 * M + 8]);
+    *C_accum_50 = _mm256_loadu_ps(&C[5 * M]);
+    *C_accum_51 = _mm256_loadu_ps(&C[5 * M + 8]);
 }
 
 inline void store_accum_00(float* __restrict C,
@@ -1634,9 +1634,9 @@ void matmat_mulf_avx2_kernel(const float* __restrict A,
                              std::size_t K,
                              std::size_t N) noexcept
 {
-    global_threadpool().set_max_active_workers(16);
-
-    const std::size_t nthreads = global_threadpool().num_workers();
+    const std::size_t nthreads = std::min(std::size_t(16),
+                                          static_cast<std::size_t>(get_num_procs() * 0.75));
+    global_threadpool().set_max_active_workers(nthreads);
 
     const std::size_t KC = 256;
     const std::size_t MC = 16 * std::max(std::size_t(1), 42 / nthreads) * nthreads;
