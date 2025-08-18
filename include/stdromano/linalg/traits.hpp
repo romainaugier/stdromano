@@ -31,6 +31,18 @@ template<> struct type_to_cl_kernel_ext<std::int32_t> { static constexpr const c
 template<typename T>
 constexpr const char* type_to_cl_kernel_ext_v = type_to_cl_kernel_ext<T>::value;
 
+template<typename T>
+struct make_zero { static constexpr T value = static_cast<T>(0); };
+
+template<typename T>
+constexpr T make_zero_v = make_zero<T>::value;
+
+template<typename T>
+struct make_one { static constexpr T value = static_cast<T>(1); };
+
+template<typename T>
+constexpr T make_one_v = make_one<T>::value;
+
 STDROMANO_NAMESPACE_END
 
 #endif /* !defined(__STDROMANO_LINALG_TRAITS) */
