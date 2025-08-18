@@ -58,8 +58,8 @@ struct constants<float>
     static constexpr float max_float = std::numeric_limits<float>::max();
     static constexpr float very_far = max_float;
 
-    static constexpr float flt_large_epsilon = 0.001f;
-    static constexpr float flt_epsilon = std::numeric_limits<float>::epsilon();
+    static constexpr float large_epsilon = 0.001f;
+    static constexpr float epsilon = std::numeric_limits<float>::epsilon();
 };
 
 template<>
@@ -94,8 +94,8 @@ struct constants<double>
     static constexpr double max_double = std::numeric_limits<double>::max();
     static constexpr double very_far = max_double;
 
-    static constexpr double flt_large_epsilon = 0.001f;
-    static constexpr double flt_epsilon = std::numeric_limits<double>::epsilon();
+    static constexpr double large_epsilon = 0.00001;
+    static constexpr double epsilon = std::numeric_limits<double>::epsilon();
 };
 
 #if defined(STDROMANO_WIN)
