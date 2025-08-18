@@ -185,10 +185,11 @@
 #define STDROMANO_DEBUG 0
 #endif /* defined(DEBUG_BUILD) */
 
-#define STDROMANO_NAMESPACE_BEGIN                                                                  \
-    namespace stdromano                                                                            \
-    {
+#define STDROMANO_NAMESPACE_BEGIN namespace stdromano {
 #define STDROMANO_NAMESPACE_END }
+
+#define DETAIL_NAMESPACE_BEGIN namespace detail {
+#define DETAIL_NAMESPACE_END }
 
 #define STDROMANO_ATEXIT_REGISTER(func, do_exit)                                                   \
     int res_##func = std::atexit(func);                                                            \

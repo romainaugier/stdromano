@@ -6,7 +6,7 @@
 #define __STDROMANO_THREADING
 
 #include "stdromano/stdromano.hpp"
-#include "stdromano/Atomic.hpp"
+#include "stdromano/atomic.hpp"
 
 #include "concurrentqueue.h"
 
