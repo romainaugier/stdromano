@@ -55,7 +55,7 @@ using is_valid_for_atomic = std::conjunction<std::is_integral<T>,
                                                               std::bool_constant<sizeof(T) == 8>>>;                                         
 
 template<typename T>
-class atomic 
+class Atomic 
 {
     static_assert(is_valid_for_atomic<T>::value, "T must be integral and of size 4|8");
 
@@ -63,11 +63,11 @@ private:
     volatile T _value;
 
 public:
-    atomic() noexcept = default;
-    constexpr atomic(T value) noexcept : _value(value) {}
+    Atomic() noexcept = default;
+    constexpr Atomic(T value) noexcept : _value(value) {}
 
-    atomic(const atomic&) = delete;
-    atomic& operator=(const atomic&) = delete;
+    Atomic(const Atomic&) = delete;
+    Atomic& operator=(const Atomic&) = delete;
 
     T load(STDROMANO_MAYBE_UNUSED MemoryOrder order = MemoryOrder::SeqCst) noexcept 
     {
@@ -104,11 +104,14 @@ public:
     T exchange(T value, STDROMANO_MAYBE_UNUSED MemoryOrder order = MemoryOrder::SeqCst) noexcept 
     {
 #if defined(STDROMANO_WIN)
-        (void)order;
         if constexpr (sizeof(T) == 4)
+        {
             return _InterlockedExchange(reinterpret_cast<volatile long*>(&this->_value), value);
+        }
         else if constexpr (sizeof(T) == 8)
+        {
             return _InterlockedExchange64(reinterpret_cast<volatile __int64*>(&this->_value), value);
+        }
 #elif defined(STDROMANO_LINUX)
         return __atomic_exchange_n(&this->_value, value, to_gcc_memory_order(order));
 #endif /* defined(STDROMANO_WIN) */
@@ -156,9 +159,9 @@ public:
 #if defined(STDROMANO_WIN)
         if constexpr (sizeof(T) == 4) 
         {
-            long orig = _InterlockedCompareExchange(reinterpret_cast<volatile long*>(&_value),
-                                                    value,
-                                                    expected);
+            T orig = static_cast<T>(_InterlockedCompareExchange(reinterpret_cast<volatile long*>(&_value),
+                                                                value,
+                                                                expected));
             bool ok = (orig == expected);
 
             if(!ok)
@@ -170,10 +173,10 @@ public:
         } 
         else if constexpr (sizeof(T) == 8) 
         {
-            __int64 orig = _InterlockedCompareExchange64(reinterpret_cast<volatile __int64*>(&_value),
-                                                         value,
-                                                         expected);
-            bool ok = (orig == static_cast<__int64>(expected));
+            T orig = static_cast<T>(_InterlockedCompareExchange64(reinterpret_cast<volatile __int64*>(&_value),
+                                                                  value,
+                                                                  expected));
+            bool ok = (orig == expected);
 
             if(!ok) 
             {
@@ -214,17 +217,17 @@ public:
 };
 
 template<>
-class atomic<bool> 
+class Atomic<bool> 
 {
 private:
     volatile long _value;
 
 public:
-    atomic() noexcept : _value(0) {}
-    constexpr atomic(bool value) noexcept : _value(value ? 1 : 0) {}
+    Atomic() noexcept : _value(0) {}
+    constexpr Atomic(bool value) noexcept : _value(value ? 1 : 0) {}
 
-    atomic(const atomic&) = delete;
-    atomic& operator=(const atomic&) = delete;
+    Atomic(const Atomic&) = delete;
+    Atomic& operator=(const Atomic&) = delete;
 
     bool load(MemoryOrder order = MemoryOrder::SeqCst) const noexcept 
     {
@@ -298,8 +301,8 @@ public:
 };
 
 #if defined(STDROMANO_WIN)
-STDROMANO_EXPIMP_TEMPLATE template class STDROMANO_API atomic<std::size_t>;
-STDROMANO_EXPIMP_TEMPLATE template class STDROMANO_API atomic<std::uint32_t>;
+STDROMANO_EXPIMP_TEMPLATE template class STDROMANO_API Atomic<std::size_t>;
+STDROMANO_EXPIMP_TEMPLATE template class STDROMANO_API Atomic<std::uint32_t>;
 #endif /* defined(STDROMANO_WIN) */
 
 STDROMANO_NAMESPACE_END

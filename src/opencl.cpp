@@ -63,12 +63,19 @@ bool OpenCLManager::copy_buffer(const cl::Buffer& to,
         return false;
     }
 
-    cl_int err = this->_queues[device_index].enqueueCopyBuffer(from, to, 0, 0, size);
+    cl::Event event;
+
+    cl_int err = this->_queues[device_index].enqueueCopyBuffer(from, to, 0, 0, size, nullptr, &event);
 
     if(err != CL_SUCCESS)
     {
         log_error("OpenCL error: failed to copy buffer: {}", this->get_cl_error_string(err));
         return false;
+    }
+
+    if(blocking)
+    {
+        event.wait();
     }
 
     return true;

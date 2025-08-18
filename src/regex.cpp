@@ -90,10 +90,10 @@ struct RegexToken
     RegexToken(const char* data,
                std::uint32_t data_len,
                std::uint32_t type,
-               std::uint16_t encoding = 0) : data(data), 
-                                             data_len(data_len),
-                                             type(type),
-                                             encoding(encoding) {}
+               std::uint16_t encoding = std::uint16_t(0)) : data(data), 
+                                                            data_len(data_len),
+                                                            type(type),
+                                                            encoding(encoding) {}
 
     RegexToken(const RegexToken& other) : data(other.data),
                                           data_len(other.data_len),
@@ -394,7 +394,7 @@ std::tuple<bool, Vector<RegexToken>> parse_regex(const Vector<RegexToken>& token
             case RegexTokenType_GroupBegin:
             {
                 RegexToken group_token = token;
-                group_token.encoding = current_group_id++;
+                group_token.encoding = static_cast<std::uint16_t>(current_group_id++);
                 operators.push(group_token);
 
                 break;

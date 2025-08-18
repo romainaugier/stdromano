@@ -46,10 +46,35 @@ install(
     LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
 )
 
-install(
-    FILES $<TARGET_RUNTIME_DLLS:${PROJECT_NAME}>
-    DESTINATION ${CMAKE_INSTALL_BINDIR}
-)
+install(CODE [[
+    file(GET_RUNTIME_DEPENDENCIES
+         EXECUTABLES $<TARGET_FILE:stdromano>
+         RESOLVED_DEPENDENCIES_VAR RESOLVED_DEPS
+         UNRESOLVED_DEPENDENCIES_VAR UNRESOLVED_DEPS
+         PRE_EXCLUDE_REGEXES "api-ms-" "ext-ms-" "hvsifiletrust" "pdmutilities" "aclui")
+        #  POST_EXCLUDE_REGEXES ".*[Ss]ystem32/.*\\.dll")
+
+    set(FILTERED_DEPS "")
+    foreach(FILE ${RESOLVED_DEPS})
+        if(FILE MATCHES "[Ss]ystem32")
+            if(FILE MATCHES "OpenCL\\.dll$")
+                list(APPEND FILTERED_DEPS "${FILE}")
+            endif()
+        else()
+            list(APPEND FILTERED_DEPS "${FILE}")
+        endif()
+    endforeach()
+    set(RESOLVED_DEPS ${FILTERED_DEPS})
+
+    foreach(FILE ${RESOLVED_DEPS})
+        file(INSTALL
+             DESTINATION "${CMAKE_INSTALL_PREFIX}/bin"
+             TYPE SHARED_LIBRARY
+             FOLLOW_SYMLINK_CHAIN
+             FILES "${FILE}")
+                
+    endforeach()
+]])
 
 install(
     DIRECTORY "${PROJECT_SOURCE_DIR}/include/${PROJECT_NAME}"

@@ -6,7 +6,7 @@
 #define __STDROMANO_THREADING
 
 #include "stdromano/stdromano.hpp"
-#include "stdromano/atomic.hpp"
+#include "stdromano/Atomic.hpp"
 
 #include "concurrentqueue.h"
 
@@ -148,7 +148,7 @@ class ThreadPoolWaiter
     friend class ThreadPoolWork;
 
     std::size_t _expected = 0;
-    atomic<std::size_t> _done = 0;
+    Atomic<std::size_t> _done = 0;
 
 public:
     ThreadPoolWaiter() {}
@@ -245,14 +245,14 @@ private:
     moodycamel::ConcurrentQueue<ThreadPoolWork*> _work_queue;
     Thread* _workers;
 
-    atomic<std::size_t> _num_workers;
-    atomic<std::size_t> _num_active_workers;
+    Atomic<std::size_t> _num_workers;
+    Atomic<std::size_t> _num_active_workers;
 
-    atomic<std::size_t> _max_active_workers;
+    Atomic<std::size_t> _max_active_workers;
 
-    atomic<bool> _stop;
+    Atomic<bool> _stop;
 
-    atomic<bool> _started;
+    Atomic<bool> _started;
 
     void init(const int64_t workers_count) noexcept;
 };

@@ -353,9 +353,9 @@ private:
     HashMap<ProgramCacheKey, cl::Program, ProgramCacheKeyHash> _program_cache;
     mutable std::mutex _cache_mutex;
 
-    atomic<size_t> _queue_counter{0};
+    Atomic<size_t> _queue_counter{0};
 
-    atomic<bool> _initialized{false};
+    Atomic<bool> _initialized{false};
     std::mutex _init_mutex;
 };
 

@@ -549,24 +549,26 @@ public:
         return this->_data;
     }
 
-    STDROMANO_FORCE_INLINE T* at(const uint32_t index) noexcept
+    STDROMANO_FORCE_INLINE T* at(const std::size_t index) noexcept
     {
-        STDROMANO_ASSERT(index < this->size(), "Out of bounds access");
+        STDROMANO_ASSERT(index < static_cast<std::size_t>(this->size()),
+                         "Out of bounds access");
         return this->data() + index;
     }
 
-    STDROMANO_FORCE_INLINE const T* at(const uint32_t index) const noexcept
+    STDROMANO_FORCE_INLINE const T* at(const std::size_t index) const noexcept
     {
-        STDROMANO_ASSERT(index < this->size(), "Out of bounds access");
+        STDROMANO_ASSERT(index < static_cast<std::size_t>(this->size()),
+                         "Out of bounds access");
         return this->data() + index;
     }
 
-    STDROMANO_FORCE_INLINE T& operator[](const uint32_t i) noexcept
+    STDROMANO_FORCE_INLINE T& operator[](const std::size_t i) noexcept
     {
         return *this->at(i);
     }
 
-    STDROMANO_FORCE_INLINE const T& operator[](const uint32_t i) const noexcept
+    STDROMANO_FORCE_INLINE const T& operator[](const std::size_t i) const noexcept
     {
         return *this->at(i);
     }
