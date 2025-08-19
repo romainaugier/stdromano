@@ -31,126 +31,156 @@ struct Vector2
 
     T x, y;
 
-    Vector2() : x(make_zero_v<T>), y(make_zero_v<T>) {}
-    Vector2(T t) : x(t), y(t) {}
-    Vector2(T x, T y) : x(x), y(y) {}
+    constexpr Vector2() noexcept : x(make_zero_v<T>), y(make_zero_v<T>) {}
+    constexpr Vector2(T t) noexcept : x(t), y(t) {}
+    constexpr Vector2(T x, T y) noexcept : x(x), y(y) {}
 
-    Vector2 operator-() const noexcept { return Vector2(-this->x, -this->y); }
+    template<typename S>
+    constexpr Vector2(const Vector2<S>& v) noexcept : x(T(v.x)), y(T(v.y)) {}
 
-    const T& operator[](std::size_t i) const noexcept { return &(this->x)[i]; }
-    T& operator[](std::size_t i) noexcept { return &(this->x)[i]; }
+    template<typename V, std::enable_if_t<has_xy_v<V>>>
+    constexpr Vector2(const V& v) noexcept : x(T(v.x)), y(T(v.y)) {}
 
-    Vector2 operator+(const Vector2& other) const noexcept
+    template<typename V, std::enable_if_t<has_xy_v<V>>>
+    constexpr Vector2& operator=(const V& v) noexcept
+    {
+        this->x = T(v.x);
+        this->y = T(v.y);
+        return *this;
+    }
+
+    constexpr Vector2 operator-() const noexcept { return Vector2(-this->x, -this->y); }
+
+    constexpr const T& operator[](std::size_t i) const noexcept { return (&this->x)[i]; }
+    constexpr T& operator[](std::size_t i) noexcept { return (&this->x)[i]; }
+
+    constexpr Vector2 operator+(const Vector2& other) const noexcept
     {
         return Vector2(this->x + other.x, this->y + other.y);
     }
 
-    Vector2 operator-(const Vector2& other) const noexcept
+    constexpr Vector2 operator-(const Vector2& other) const noexcept
     {
         return Vector2(this->x - other.x, this->y - other.y);
     }
 
-    Vector2 operator*(const Vector2& other) const noexcept
+    constexpr Vector2 operator*(const Vector2& other) const noexcept
     {
         return Vector2(this->x * other.x, this->y * other.y);
     }
 
-    Vector2 operator/(const Vector2& other) const noexcept
+    constexpr Vector2 operator/(const Vector2& other) const noexcept
     {
         return Vector2(this->x / other.x, this->y / other.y);
     }
 
-    Vector2 operator+(const T& other) const noexcept
+    constexpr Vector2 operator+(const T& other) const noexcept
     {
         return Vector2(this->x + other, this->y + other);
     }
 
-    Vector2 operator-(const T& other) const noexcept
+    constexpr Vector2 operator-(const T& other) const noexcept
     {
         return Vector2(this->x - other, this->y - other);
     }
 
-    Vector2 operator*(const T& other) const noexcept
+    constexpr Vector2 operator*(const T& other) const noexcept
     {
         return Vector2(this->x * other, this->y * other);
     }
 
-    Vector2 operator/(const T& other) const noexcept
+    constexpr Vector2 operator/(const T& other) const noexcept
     {
         return Vector2(this->x / other, this->y / other);
     }
 
-    Vector2& operator+=(const Vector2& other) noexcept
+    constexpr Vector2& operator+=(const Vector2& other) noexcept
     {
         this->x += other.x;
         this->y += other.y;
         return *this;
     }
 
-    Vector2& operator-=(const Vector2& other) noexcept
+    constexpr Vector2& operator-=(const Vector2& other) noexcept
     {
         this->x -= other.x;
         this->y -= other.y;
         return *this;
     }
 
-    Vector2& operator*=(const Vector2& other) noexcept
+    constexpr Vector2& operator*=(const Vector2& other) noexcept
     {
         this->x *= other.x;
         this->y *= other.y;
         return *this;
     }
 
-    Vector2& operator/=(const Vector2& other) noexcept
+    constexpr Vector2& operator/=(const Vector2& other) noexcept
     {
         this->x /= other.x;
         this->y /= other.y;
         return *this;
     }
 
-    Vector2& operator+=(const T other) noexcept
+    constexpr Vector2& operator+=(const T other) noexcept
     {
         this->x += other;
         this->y += other;
         return *this;
     }
 
-    Vector2& operator-=(const T other) noexcept
+    constexpr Vector2& operator-=(const T other) noexcept
     {
         this->x -= other;
         this->y -= other;
         return *this;
     }
 
-    Vector2& operator*=(const T other) noexcept
+    constexpr Vector2& operator*=(const T other) noexcept
     {
         this->x *= other;
         this->y *= other;
         return *this;
     }
 
-    Vector2& operator/=(const T other) noexcept
+    constexpr Vector2& operator/=(const T other) noexcept
     {
         this->x /= other;
         this->y /= other;
         return *this;
     }
+
+    constexpr bool operator==(const Vector2<T>& other) const noexcept
+    {
+        return this->x == other.x && this->y == other.y;
+    }
+
+    constexpr bool operator!=(const Vector2<T>& other) const noexcept
+    {
+        return !this->operator==(other);
+    }
+
+    bool equal_with_abs_error(const Vector2<T>& other, const T err) const noexcept
+    {
+        return maths::equal_with_abs_error(this->x, other.x, err) &&
+               maths::equal_with_abs_error(this->y, other.y, err);
+    }
 };
 
 template<typename T>
-T operator*(const T t, const Vector2<T>& v) noexcept
+constexpr Vector2<T> operator*(const T t, const Vector2<T>& v) noexcept
 {
     return v * t;
 }
 
 template<typename T>
-T operator/(const T t, const Vector2<T>& v) noexcept
+constexpr Vector2<T> operator/(const T t, const Vector2<T>& v) noexcept
 {
     return Vector2<T>(t / v.x, t / v.y);
 }
 
 template<typename T>
-STDROMANO_FORCE_INLINE T dot(const Vector2<T>& lhs, const Vector2<T>& rhs) noexcept
+constexpr STDROMANO_FORCE_INLINE T dot(const Vector2<T>& lhs, const Vector2<T>& rhs) noexcept
 {
     return lhs.x * rhs.x + lhs.y * rhs.y;
 }
@@ -162,7 +192,7 @@ STDROMANO_FORCE_INLINE T length(const Vector2<T>& v) noexcept
 }
 
 template<typename T>
-STDROMANO_FORCE_INLINE T length2(const Vector2<T>& v) noexcept
+constexpr STDROMANO_FORCE_INLINE T length2(const Vector2<T>& v) noexcept
 {
     return dot(v, v);
 }
@@ -197,56 +227,71 @@ struct Vector3
 
     T x, y, z;
 
-    Vector3() : x(make_zero_v<T>), y(make_zero_v<T>), z(make_zero_v<T>) {}
-    Vector3(T t) : x(t), y(t), z(t) {}
-    Vector3(T x, T y, T z) : x(x), y(y), z(z) {}
+    constexpr Vector3() noexcept : x(make_zero_v<T>), y(make_zero_v<T>), z(make_zero_v<T>) {}
+    constexpr Vector3(T t) noexcept : x(t), y(t), z(t) {}
+    constexpr Vector3(T x, T y, T z) noexcept : x(x), y(y), z(z) {}
 
-    Vector3 operator-() const noexcept { return Vector3(-this->x, -this->y, -this->z); }
+    template<typename S>
+    constexpr Vector3(const Vector3<S>& v) noexcept : x(T(v.x)), y(T(v.y)), z(T(v.z)) {}
 
-    const T& operator[](std::size_t i) const noexcept { return &(this->x)[i]; }
-    T& operator[](std::size_t i) noexcept { return &(this->x)[i]; }
+    template<class V, std::enable_if_t<has_xyz_v<V>>>
+    constexpr Vector3(const V& v) noexcept : x(T(v.x)), y(T(v.y)), z(T(v.z)) {}
 
-    Vector3 operator+(const Vector3& other) const noexcept
+    template<class V, std::enable_if_t<has_xyz_v<V>>>
+    constexpr Vector3& operator=(const V& v) noexcept
+    {
+        this->x = T(v.x);
+        this->y = T(v.y);
+        this->z = T(v.z);
+        return *this;
+    }
+
+    constexpr Vector3 operator-() const noexcept { return Vector3(-this->x, -this->y, -this->z); }
+
+    constexpr const T& operator[](std::size_t i) const noexcept { return (&this->x)[i]; }
+    constexpr T& operator[](std::size_t i) noexcept { return (&this->x)[i]; }
+
+    constexpr Vector3 operator+(const Vector3& other) const noexcept
     {
         return Vector3(this->x + other.x, this->y + other.y, this->z + other.z);
     }
 
-    Vector3 operator-(const Vector3& other) const noexcept
+    constexpr Vector3 operator-(const Vector3& other) const noexcept
     {
         return Vector3(this->x - other.x, this->y - other.y, this->z - other.z);
     }
 
-    Vector3 operator*(const Vector3& other) const noexcept
+    constexpr Vector3 operator*(const Vector3& other) const noexcept
     {
         return Vector3(this->x * other.x, this->y * other.y, this->z * other.z);
     }
 
-    Vector3 operator/(const Vector3& other) const noexcept
+    constexpr Vector3 operator/(const Vector3& other) const noexcept
     {
         return Vector3(this->x / other.x, this->y / other.y, this->z / other.z);
     }
 
-    Vector3 operator+(const T& other) const noexcept
+    constexpr Vector3 operator+(const T& other) const noexcept
     {
         return Vector3(this->x + other, this->y + other, this->z + other);
     }
 
-    Vector3 operator-(const T& other) const noexcept
+    constexpr Vector3 operator-(const T& other) const noexcept
     {
         return Vector3(this->x - other, this->y - other, this->z - other);
     }
 
-    Vector3 operator*(const T& other) const noexcept
+    constexpr Vector3 operator*(const T& other) const noexcept
     {
         return Vector3(this->x * other, this->y * other, this->z * other);
     }
 
-    Vector3 operator/(const T& other) const noexcept
+    constexpr Vector3 operator/(const T& other) const noexcept
     {
         return Vector3(this->x / other, this->y / other, this->z / other);
     }
 
-    Vector3& operator+=(const Vector3& other) noexcept
+    constexpr Vector3& operator+=(const Vector3& other) noexcept
     {
         this->x += other.x;
         this->y += other.y;
@@ -254,7 +299,7 @@ struct Vector3
         return *this;
     }
 
-    Vector3& operator-=(const Vector3& other) noexcept
+    constexpr Vector3& operator-=(const Vector3& other) noexcept
     {
         this->x -= other.x;
         this->y -= other.y;
@@ -262,7 +307,7 @@ struct Vector3
         return *this;
     }
 
-    Vector3& operator*=(const Vector3& other) noexcept
+    constexpr Vector3& operator*=(const Vector3& other) noexcept
     {
         this->x *= other.x;
         this->y *= other.y;
@@ -270,7 +315,7 @@ struct Vector3
         return *this;
     }
 
-    Vector3& operator/=(const Vector3& other) noexcept
+    constexpr Vector3& operator/=(const Vector3& other) noexcept
     {
         this->x /= other.x;
         this->y /= other.y;
@@ -278,7 +323,7 @@ struct Vector3
         return *this;
     }
 
-    Vector3& operator+=(const T other) noexcept
+    constexpr Vector3& operator+=(const T other) noexcept
     {
         this->x += other;
         this->y += other;
@@ -286,7 +331,7 @@ struct Vector3
         return *this;
     }
 
-    Vector3& operator-=(const T other) noexcept
+    constexpr Vector3& operator-=(const T other) noexcept
     {
         this->x -= other;
         this->y -= other;
@@ -294,7 +339,7 @@ struct Vector3
         return *this;
     }
 
-    Vector3& operator*=(const T other) noexcept
+    constexpr Vector3& operator*=(const T other) noexcept
     {
         this->x *= other;
         this->y *= other;
@@ -302,29 +347,46 @@ struct Vector3
         return *this;
     }
 
-    Vector3& operator/=(const T other) noexcept
+    constexpr Vector3& operator/=(const T other) noexcept
     {
         this->x /= other;
         this->y /= other;
         this->z /= other;
         return *this;
     }
+
+    constexpr bool operator==(const Vector3<T>& other) const noexcept
+    {
+        return this->x == other.x && this->y == other.y && this->z == other.z;
+    }
+
+    constexpr bool operator!=(const Vector3<T>& other) const noexcept
+    {
+        return !this->operator==(other);
+    }
+
+    bool equal_with_abs_error(const Vector3<T>& other, const T err) const noexcept
+    {
+        return maths::equal_with_abs_error(this->x, other.x, err) &&
+               maths::equal_with_abs_error(this->y, other.y, err) &&
+               maths::equal_with_abs_error(this->z, other.z, err);
+    }
 };
 
 template<typename T>
-T operator*(const T t, const Vector3<T>& v) noexcept
+constexpr Vector3<T> operator*(const T t, const Vector3<T>& v) noexcept
 {
     return v * t;
 }
 
 template<typename T>
-T operator/(const T t, const Vector3<T>& v) noexcept
+constexpr Vector3<T> operator/(const T t, const Vector3<T>& v) noexcept
 {
     return Vector3<T>(t / v.x, t / v.y, t / v.z);
 }
 
 template<typename T>
-STDROMANO_FORCE_INLINE T dot(const Vector3<T>& lhs, const Vector3<T>& rhs) noexcept
+constexpr STDROMANO_FORCE_INLINE T dot(const Vector3<T>& lhs, const Vector3<T>& rhs) noexcept
 {
     return lhs.x * rhs.x + lhs.y * rhs.y + lhs.z * rhs.z;
 }
@@ -336,7 +398,7 @@ STDROMANO_FORCE_INLINE T length(const Vector3<T>& v) noexcept
 }
 
 template<typename T>
-STDROMANO_FORCE_INLINE T length2(const Vector3<T>& v) noexcept
+constexpr STDROMANO_FORCE_INLINE T length2(const Vector3<T>& v) noexcept
 {
     return dot(v, v);
 }
@@ -356,7 +418,7 @@ STDROMANO_FORCE_INLINE std::enable_if<std::is_same_v<T, float>, Vector3<float>> 
 }
 
 template<typename T>
-STDROMANO_FORCE_INLINE Vector3<T> cross(const Vector3<T>& lhs, const Vector3<T>& rhs) noexcept
+constexpr STDROMANO_FORCE_INLINE Vector3<T> cross(const Vector3<T>& lhs, const Vector3<T>& rhs) noexcept
 {
     return Vector3<T>(lhs.y * rhs.z - lhs.z * rhs.y,
                       lhs.z * rhs.x - lhs.x * rhs.z,
@@ -379,56 +441,72 @@ struct Vector4
 
     T x, y, z, w;
 
-    Vector4() : x(make_zero_v<T>), y(make_zero_v<T>), z(make_zero_v<T>), w(make_zero_v<T>) {}
-    Vector4(T t) : x(t), y(t), z(t), w(w) {}
-    Vector4(T x, T y, T z, T w) : x(x), y(y), z(z), w(w) {}
+    constexpr Vector4() noexcept : x(make_zero_v<T>), y(make_zero_v<T>), z(make_zero_v<T>), w(make_zero_v<T>) {}
+    constexpr Vector4(T t) noexcept : x(t), y(t), z(t), w(t) {}
+    constexpr Vector4(T x, T y, T z, T w) noexcept : x(x), y(y), z(z), w(w) {}
 
-    Vector4 operator-() const noexcept { return Vector4(-this->x, -this->y, -this->z, -this->w); }
+    template<typename S>
+    constexpr Vector4(const Vector4<S>& v) noexcept : x(T(v.x)), y(T(v.y)), z(T(v.z)), w(T(v.w)) {}
 
-    const T& operator[](std::size_t i) const noexcept { return &(this->x)[i]; }
-    T& operator[](std::size_t i) noexcept { return &(this->x)[i]; }
+    template<class V, std::enable_if_t<has_xyzw_v<V>>>
+    constexpr Vector4(const V& v) noexcept : x(T(v.x)), y(T(v.y)), z(T(v.z)), w(T(v.w)) {}
 
-    Vector4 operator+(const Vector4& other) const noexcept
+    template<class V, std::enable_if_t<has_xyzw_v<V>>>
+    constexpr Vector4& operator=(const V& v) noexcept
+    {
+        this->x = v.x;
+        this->y = v.y;
+        this->z = v.z;
+        this->w = v.w;
+        return *this;
+    }
+
+    constexpr Vector4 operator-() const noexcept { return Vector4(-this->x, -this->y, -this->z, -this->w); }
+
+    constexpr const T& operator[](std::size_t i) const noexcept { return (&this->x)[i]; }
+    constexpr T& operator[](std::size_t i) noexcept { return (&this->x)[i]; }
+
+    constexpr Vector4 operator+(const Vector4& other) const noexcept
     {
         return Vector4(this->x + other.x, this->y + other.y, this->z + other.z, this->w + other.w);
     }
 
-    Vector4 operator-(const Vector4& other) const noexcept
+    constexpr Vector4 operator-(const Vector4& other) const noexcept
     {
-        return Vector4(this->x - other.x, this->y - other.y, this->z - other.z, this->w + other.w);
+        return Vector4(this->x - other.x, this->y - other.y, this->z - other.z, this->w - other.w);
     }
 
-    Vector4 operator*(const Vector4& other) const noexcept
+    constexpr Vector4 operator*(const Vector4& other) const noexcept
     {
         return Vector4(this->x * other.x, this->y * other.y, this->z * other.z, this->w * other.w);
     }
 
-    Vector4 operator/(const Vector4& other) const noexcept
+    constexpr Vector4 operator/(const Vector4& other) const noexcept
     {
         return Vector4(this->x / other.x, this->y / other.y, this->z / other.z, this->w * other.w);
     }
 
-    Vector4 operator+(const T& other) const noexcept
+    constexpr Vector4 operator+(const T& other) const noexcept
     {
         return Vector4(this->x + other, this->y + other, this->z + other, this->w + other);
     }
 
-    Vector4 operator-(const T& other) const noexcept
+    constexpr Vector4 operator-(const T& other) const noexcept
     {
         return Vector4(this->x - other, this->y - other, this->z - other, this->w - other);
     }
 
-    Vector4 operator*(const T& other) const noexcept
+    constexpr Vector4 operator*(const T& other) const noexcept
     {
         return Vector4(this->x * other, this->y * other, this->z * other, this->w * other);
     }
 
-    Vector4 operator/(const T& other) const noexcept
+    constexpr Vector4 operator/(const T& other) const noexcept
     {
         return Vector4(this->x / other, this->y / other, this->z / other, this->w / other);
     }
 
-    Vector4& operator+=(const Vector4& other) noexcept
+    constexpr Vector4& operator+=(const Vector4& other) noexcept
     {
         this->x += other.x;
         this->y += other.y;
@@ -437,7 +515,7 @@ struct Vector4
         return *this;
     }
 
-    Vector4& operator-=(const Vector4& other) noexcept
+    constexpr Vector4& operator-=(const Vector4& other) noexcept
     {
         this->x -= other.x;
         this->y -= other.y;
@@ -446,7 +524,7 @@ struct Vector4
         return *this;
     }
 
-    Vector4& operator*=(const Vector4& other) noexcept
+    constexpr Vector4& operator*=(const Vector4& other) noexcept
     {
         this->x *= other.x;
         this->y *= other.y;
@@ -455,7 +533,7 @@ struct Vector4
         return *this;
     }
 
-    Vector4& operator/=(const Vector4& other) noexcept
+    constexpr Vector4& operator/=(const Vector4& other) noexcept
     {
         this->x /= other.x;
         this->y /= other.y;
@@ -464,7 +542,7 @@ struct Vector4
         return *this;
     }
 
-    Vector4& operator+=(const T other) noexcept
+    constexpr Vector4& operator+=(const T other) noexcept
     {
         this->x += other;
         this->y += other;
@@ -473,7 +551,7 @@ struct Vector4
         return *this;
     }
 
-    Vector4& operator-=(const T other) noexcept
+    constexpr Vector4& operator-=(const T other) noexcept
     {
         this->x -= other;
         this->y -= other;
@@ -482,7 +560,7 @@ struct Vector4
         return *this;
     }
 
-    Vector4& operator*=(const T other) noexcept
+    constexpr Vector4& operator*=(const T other) noexcept
     {
         this->x *= other;
         this->y *= other;
@@ -491,7 +569,7 @@ struct Vector4
         return *this;
     }
 
-    Vector4& operator/=(const T other) noexcept
+    constexpr Vector4& operator/=(const T other) noexcept
     {
         this->x /= other;
         this->y /= other;
@@ -500,26 +578,44 @@ struct Vector4
         return *this;
     }
 
-    std::tuple<Vector3<T>, T> as_axis_angle() const noexcept
+    constexpr bool operator==(const Vector4<T>& other) const noexcept
+    {
+        return this->x == other.x && this->y == other.y && this->z == other.z && this->w == other.w;
+    }
+
+    constexpr bool operator!=(const Vector4<T>& other) const noexcept
+    {
+        return !this->operator==(other);
+    }
+
+    bool equal_with_abs_error(const Vector4<T>& other, const T err) const noexcept
+    {
+        return maths::equal_with_abs_error(this->x, other.x, err) &&
+               maths::equal_with_abs_error(this->y, other.y, err) &&
+               maths::equal_with_abs_error(this->z, other.z, err) &&
+               maths::equal_with_abs_error(this->w, other.w, err);
+    }
+
+    constexpr std::tuple<Vector3<T>, T> as_axis_angle() const noexcept
     {
         return std::make_tuple(Vector3<T>(this->x, this->y, this->z), this->w);
     }
 };
 
 template<typename T>
-T operator*(const T t, const Vector4<T>& v) noexcept
+constexpr Vector4<T> operator*(const T t, const Vector4<T>& v) noexcept
 {
     return v * t;
 }
 
 template<typename T>
-T operator/(const T t, const Vector4<T>& v) noexcept
+constexpr Vector4<T> operator/(const T t, const Vector4<T>& v) noexcept
 {
     return Vector4(t / v.x, t / v.y, t / v.z, t / v.w);
 }
 
 template<typename T>
-STDROMANO_FORCE_INLINE T dot(const Vector4<T>& lhs, const Vector4<T>& rhs) noexcept
+constexpr STDROMANO_FORCE_INLINE T dot(const Vector4<T>& lhs, const Vector4<T>& rhs) noexcept
 {
     return lhs.x * rhs.x + lhs.y * rhs.y + lhs.z * rhs.z + lhs.w * rhs.w;
 }
@@ -531,7 +627,7 @@ STDROMANO_FORCE_INLINE T length(const Vector4<T>& v) noexcept
 }
 
 template<typename T>
-STDROMANO_FORCE_INLINE T length2(const Vector4<T>& v) noexcept
+constexpr STDROMANO_FORCE_INLINE T length2(const Vector4<T>& v) noexcept
 {
     return dot(v, v);
 }

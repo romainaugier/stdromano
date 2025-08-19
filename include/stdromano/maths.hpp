@@ -58,8 +58,8 @@ struct constants<float>
     static constexpr float max_float = std::numeric_limits<float>::max();
     static constexpr float very_far = max_float;
 
-    static constexpr float flt_large_epsilon = 0.001f;
-    static constexpr float flt_epsilon = std::numeric_limits<float>::epsilon();
+    static constexpr float large_epsilon = 0.001f;
+    static constexpr float epsilon = std::numeric_limits<float>::epsilon();
 };
 
 template<>
@@ -94,8 +94,8 @@ struct constants<double>
     static constexpr double max_double = std::numeric_limits<double>::max();
     static constexpr double very_far = max_double;
 
-    static constexpr double flt_large_epsilon = 0.001f;
-    static constexpr double flt_epsilon = std::numeric_limits<double>::epsilon();
+    static constexpr double large_epsilon = 0.00001;
+    static constexpr double epsilon = std::numeric_limits<double>::epsilon();
 };
 
 #if defined(STDROMANO_WIN)
@@ -162,7 +162,7 @@ STDROMANO_FORCE_INLINE bool isfinite(const double x) noexcept { return __builtin
 
 /******************************************/
 template<typename T>
-STDROMANO_FORCE_INLINE T sqr(const T x) noexcept { return x * x; }
+constexpr STDROMANO_FORCE_INLINE T sqr(const T x) noexcept { return x * x; }
 
 /******************************************/
 template<typename T>
@@ -189,64 +189,64 @@ STDROMANO_FORCE_INLINE double rcp(const double x) noexcept
 
 /******************************************/
 template<typename T>
-STDROMANO_FORCE_INLINE T rcp_safe(T a) noexcept { return constants<T>::one / a; }
+constexpr STDROMANO_FORCE_INLINE T rcp_safe(T a) noexcept { return constants<T>::one / a; }
 
 /******************************************/
 template<typename T>
-STDROMANO_FORCE_INLINE T min(T a, T b) noexcept { return a < b ? a : b; }
+constexpr STDROMANO_FORCE_INLINE T min(T a, T b) noexcept { return a < b ? a : b; }
 
 /******************************************/
 template<typename T>
-STDROMANO_FORCE_INLINE T max(T a, T b) noexcept { return a > b ? a : b; }
+constexpr STDROMANO_FORCE_INLINE T max(T a, T b) noexcept { return a > b ? a : b; }
 
 /******************************************/
 template<typename T>
-STDROMANO_FORCE_INLINE T fit(T s, T a1, T a2, T b1, T b2) noexcept
+constexpr STDROMANO_FORCE_INLINE T fit(T s, T a1, T a2, T b1, T b2) noexcept
 {
     return b1 + ((s - a1) * (b2 - b1)) / (a2 - a1);
 }
 
 /******************************************/
 template<typename T>
-STDROMANO_FORCE_INLINE T fit01(T x, T a, T b) noexcept
+constexpr STDROMANO_FORCE_INLINE T fit01(T x, T a, T b) noexcept
 {
     return x * (b - a) + a;
 }
 
 /******************************************/
 template<typename T>
-STDROMANO_FORCE_INLINE T lerp(T a, T b, T t) noexcept
+constexpr STDROMANO_FORCE_INLINE T lerp(T a, T b, T t) noexcept
 {
     return (constants<T>::one - t) * a + t * b;
 }
 
 /******************************************/
 template<typename T>
-STDROMANO_FORCE_INLINE T clamp(T x,
-                               T lower = constants<T>::zero,
-                               T upper = constants<T>::one) noexcept
+constexpr STDROMANO_FORCE_INLINE T clamp(T x,
+                                         T lower = constants<T>::zero,
+                                         T upper = constants<T>::one) noexcept
 {
     return max(lower, min(x, upper));
 }
 
 /******************************************/
 template<typename T>
-STDROMANO_FORCE_INLINE T clampz(T x, 
-                                T upper = constants<T>::one) noexcept
+constexpr STDROMANO_FORCE_INLINE T clampz(T x, 
+                                          T upper = constants<T>::one) noexcept
 {
     return max(constants<T>::zero, min(x, upper));
 }
 
 /******************************************/
 template<typename T>
-STDROMANO_FORCE_INLINE T deg2rad(T deg) noexcept
+constexpr STDROMANO_FORCE_INLINE T deg2rad(T deg) noexcept
 {
     return deg * constants<T>::pi / static_cast<T>(180);
 }
 
 /******************************************/
 template<typename T>
-STDROMANO_FORCE_INLINE T rad2deg(T rad) noexcept
+constexpr STDROMANO_FORCE_INLINE T rad2deg(T rad) noexcept
 {
     return rad * static_cast<T>(180) / constants<T>::pi;
 }
@@ -605,6 +605,13 @@ STDROMANO_FORCE_INLINE double nfms(double a, double b, double c) noexcept
 #else
     return -a * b - c;
 #endif /* defined(__AVX2__) */
+}
+
+/******************************************/
+template<typename T>
+STDROMANO_FORCE_INLINE bool equal_with_abs_error(const T lhs, const T rhs, const T err) noexcept 
+{
+    return abs(lhs - rhs) < err;
 }
 
 MATHS_NAMESPACE_END
