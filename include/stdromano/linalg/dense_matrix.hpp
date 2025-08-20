@@ -87,7 +87,7 @@ private:
                 mem_aligned_free(this->_data);
             }
 
-            this->_data = static_cast<T*>(mem_aligned_alloc(size, ALIGNMENT));
+            this->_data = mem_aligned_alloc<T>(size, ALIGNMENT);
 
             this->_gpu_data = nullptr;
         }

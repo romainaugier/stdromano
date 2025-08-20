@@ -49,8 +49,8 @@ private:
     {
         STDROMANO_ASSERT(!this->_is_ref, "Cannot modify a reference string");
 
-        char* new_data = (char*)mem_aligned_alloc((new_capacity + 1) * sizeof(char),
-                                                  STRING_ALIGNMENT);
+        char* new_data = mem_aligned_alloc<char>((new_capacity + 1) * sizeof(char),
+                                                 STRING_ALIGNMENT);
 
         const std::size_t copy_size = std::min(static_cast<std::size_t>(this->_size),
                                                new_capacity - 1);
@@ -140,8 +140,8 @@ public:
         {
             this->_is_local = 0;
             this->_capacity = other._capacity;
-            this->_heap_data = (char*)mem_aligned_alloc((this->_capacity + 1) * sizeof(char),
-                                                        STRING_ALIGNMENT);
+            this->_heap_data = mem_aligned_alloc<char>((this->_capacity + 1) * sizeof(char),
+                                                       STRING_ALIGNMENT);
             mem_cpy(this->_heap_data, other.data(), other._size + 1);
         }
     }
@@ -175,8 +175,8 @@ public:
         }
         else
         {
-            this->_heap_data = (char*)mem_aligned_alloc((this->_capacity + 1) * sizeof(char),   
-                                                        STRING_ALIGNMENT);
+            this->_heap_data = mem_aligned_alloc<char>((this->_capacity + 1) * sizeof(char),   
+                                                       STRING_ALIGNMENT);
             mem_cpy(this->_heap_data, other._heap_data, this->_size + 1);
         }
 
@@ -284,8 +284,8 @@ public:
         {
             this->_is_local = 0;
             this->_capacity = other._capacity;
-            this->_heap_data = (char*)mem_aligned_alloc((this->_capacity + 1) * sizeof(char),
-                                                        STRING_ALIGNMENT);
+            this->_heap_data = mem_aligned_alloc<char>((this->_capacity + 1) * sizeof(char),
+                                                       STRING_ALIGNMENT);
             mem_cpy(this->_heap_data, other.data(), other._size + 1);
         }
     }
@@ -321,8 +321,8 @@ public:
             {
                 this->_is_local = 0;
                 this->_capacity = other._capacity;
-                this->_heap_data = (char*)mem_aligned_alloc((this->_capacity + 1) * sizeof(char),
-                                                            STRING_ALIGNMENT);
+                this->_heap_data = mem_aligned_alloc<char>((this->_capacity + 1) * sizeof(char),
+                                                           STRING_ALIGNMENT);
                 mem_cpy(this->_heap_data, other.data(), other._size + 1);
             }
         }

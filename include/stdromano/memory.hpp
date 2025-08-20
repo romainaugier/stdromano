@@ -28,6 +28,8 @@ STDROMANO_NAMESPACE_BEGIN
 
 /* jemalloc wrappers */
 
+DETAIL_NAMESPACE_BEGIN
+
 STDROMANO_API void* mem_alloc(const size_t size) noexcept;
 
 STDROMANO_API void* mem_calloc(const size_t count, const size_t size) noexcept;
@@ -41,6 +43,50 @@ STDROMANO_API void mem_free(void* ptr) noexcept;
 STDROMANO_API void* mem_aligned_alloc(const size_t size, const size_t alignment) noexcept;
 
 STDROMANO_API void mem_aligned_free(void* ptr) noexcept;
+
+DETAIL_NAMESPACE_END
+
+template<typename T = void>
+STDROMANO_FORCE_INLINE T* mem_alloc(const size_t size) noexcept
+{
+    return reinterpret_cast<T*>(detail::mem_alloc(size));
+}
+
+template<typename T>
+STDROMANO_FORCE_INLINE T* mem_calloc(const size_t count, const size_t size) noexcept
+{
+    return reinterpret_cast<T*>(detail::mem_calloc(count, size));
+}
+
+template<typename T>
+STDROMANO_FORCE_INLINE T* mem_realloc(T* ptr, const size_t size) noexcept
+{
+    return reinterpret_cast<T*>(detail::mem_realloc(reinterpret_cast<void*>(ptr), size));
+}
+
+template<typename T>
+STDROMANO_FORCE_INLINE T* mem_crealloc(T* ptr, const size_t size) noexcept
+{
+    return reinterpret_cast<T*>(detail::mem_crealloc(reinterpret_cast<void*>(ptr), size));
+}
+
+template<typename T>
+STDROMANO_FORCE_INLINE void mem_free(T* ptr) noexcept
+{
+    detail::mem_free(reinterpret_cast<void*>(ptr));
+}
+
+template<typename T>
+STDROMANO_FORCE_INLINE T* mem_aligned_alloc(const size_t size, const size_t alignment) noexcept
+{
+    return reinterpret_cast<T*>(detail::mem_aligned_alloc(size, alignment));
+}
+
+template<typename T>
+STDROMANO_FORCE_INLINE void mem_aligned_free(T* ptr) noexcept
+{
+    detail::mem_aligned_free(reinterpret_cast<void*>(ptr));
+}
 
 /* Alloca functions */
 
@@ -81,7 +127,7 @@ public:
             throw std::bad_alloc();
         }
 
-        if(auto p = static_cast<T*>(mem_alloc(n * sizeof(T))))
+        if(auto p = mem_alloc<T>(n * sizeof(T)))
         {
             return p;
         }
@@ -125,7 +171,7 @@ public:
             throw std::bad_alloc();
         }
 
-        if(auto p = static_cast<T*>(mem_aligned_alloc(n * sizeof(T), Alignment)))
+        if(auto p = mem_aligned_alloc<T>(n * sizeof(T), Alignment))
         {
             return p;
         }

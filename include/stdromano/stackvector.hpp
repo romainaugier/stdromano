@@ -57,7 +57,7 @@ private:
             return;
         }
 
-        this->_heap_storage = static_cast<T*>(mem_aligned_alloc(new_capacity, alignof(T)));
+        this->_heap_storage = mem_aligned_alloc<T>(new_capacity, alignof(T));
 
         if(this->_heap_storage == nullptr)
         {
@@ -85,7 +85,7 @@ private:
             } 
             else 
             {
-                T* new_storage = static_cast<T*>(mem_aligned_alloc(new_capacity, alignof(T)));
+                T* new_storage = mem_aligned_alloc<T>(new_capacity, alignof(T));
 
                 if(new_storage == nullptr)
                 {
@@ -326,7 +326,7 @@ public:
             } 
             else if(this->uses_heap()) 
             {
-                T* new_storage = static_cast<T*>(mem_aligned_alloc(new_capacity, alignof(T)));
+                T* new_storage = mem_aligned_alloc<T>(new_capacity, alignof(T));
 
                 if(new_storage == nullptr)
                 {

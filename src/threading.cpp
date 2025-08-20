@@ -100,7 +100,7 @@ void ThreadPool::init(const int64_t workers_count) noexcept
     const size_t num_workers =
         workers_count < 1 ? get_num_procs() : static_cast<size_t>(workers_count);
 
-    this->_workers = static_cast<Thread*>(mem_alloc(num_workers * sizeof(Thread)));
+    this->_workers = mem_alloc<Thread>(num_workers * sizeof(Thread));
 
     for(size_t i = 0; i < num_workers; i++)
     {

@@ -10,6 +10,8 @@
 
 STDROMANO_NAMESPACE_BEGIN
 
+DETAIL_NAMESPACE_BEGIN
+
 void* mem_alloc(const size_t size) noexcept
 {
     return je_malloc(size);
@@ -52,6 +54,8 @@ void mem_aligned_free(void* ptr) noexcept
 {
     je_free(ptr);
 }
+
+DETAIL_NAMESPACE_END
 
 constexpr const char* units[4] = { "Bytes", "Gb", "Mb", "Kb" };
 

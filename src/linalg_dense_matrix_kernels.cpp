@@ -1642,8 +1642,8 @@ void matmat_mulf_avx2_kernel(const float* __restrict A,
     const std::size_t MC = 16 * std::max(std::size_t(1), 42 / nthreads) * nthreads;
     const std::size_t NC = (6 * (800 / nthreads)) * nthreads;
 
-    float* blockA_packed = static_cast<float*>(mem_aligned_alloc(MC * KC * sizeof(float), 32));
-    float* blockB_packed = static_cast<float*>(mem_aligned_alloc(NC * KC * sizeof(float), 32));
+    float* blockA_packed = mem_aligned_alloc<float>(MC * KC * sizeof(float), 32);
+    float* blockB_packed = mem_aligned_alloc<float>(NC * KC * sizeof(float), 32);
 
     for(std::size_t j = 0; j < N; j += NC)
     {
