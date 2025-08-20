@@ -76,7 +76,7 @@ STDROMANO_FORCE_INLINE void mem_free(T* ptr) noexcept
     detail::mem_free(reinterpret_cast<void*>(ptr));
 }
 
-template<typename T>
+template<typename T = void>
 STDROMANO_FORCE_INLINE T* mem_aligned_alloc(const size_t size, const size_t alignment) noexcept
 {
     return reinterpret_cast<T*>(detail::mem_aligned_alloc(size, alignment));
