@@ -13,6 +13,7 @@ foreach(test_file ${TEST_FILES})
     message(STATUS "Adding stdromano test : ${TESTNAME}")
 
     add_executable(${TESTNAME} ${test_file})
+    target_compile_definitions(${TESTNAME} PRIVATE -DTESTS_DATA_DIR="${TESTS_DATA_DIR}")
     set_target_options(${TESTNAME})
     set_target_properties(${TESTNAME} PROPERTIES CXX_STANDARD 17)
     target_link_libraries(${TESTNAME} ${PROJECT_NAME})

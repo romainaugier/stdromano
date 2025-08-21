@@ -201,5 +201,7 @@ include_directories(${OpenCLHPP_INCLUDE_DIR})
 add_subdirectory(src)
 
 if(RUN_TESTS EQUAL 1)
+    set(TESTS_DATA_DIR "${CMAKE_SOURCE_DIR}/tests_data")
+
     add_subdirectory(tests)
 endif()

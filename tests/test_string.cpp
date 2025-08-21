@@ -3,6 +3,7 @@
 // All rights reserved.
 
 #include "stdromano/string.hpp"
+#include "stdromano/logger.hpp"
 #include "test.hpp"
 
 using namespace stdromano;
@@ -511,6 +512,52 @@ TEST_CASE(TestIsDigit)
     ASSERT_EQUAL(false, mixed.is_digit());
 }
 
+struct UTF8TestCase {
+    const char* data;
+    bool expected_valid;
+    const char* description;
+};
+
+std::vector<UTF8TestCase> get_utf8_test_cases() {
+    return {
+        {
+            "Hello, world! This is a test string with UTF-8 characters like é, ü, and €.",
+            true,
+            "Euro symbol"
+        },
+        {
+            "This has an invalid sequence: \xC3" "A",
+            false,
+            "Invalid 0xC3 without a following continuation byte"
+        },
+        {
+            "This has an overlong sequence: \xC0\xAF",
+            false,
+            "Invalid overlong encoding of '/'"
+        },
+        {
+            "Start with a continuation byte: \x80",
+            false,
+            "Invalid continuation byte not preceded by a lead byte"
+        }
+    };
+}
+
+TEST_CASE(TestUTF8Validation)
+{
+    for(const auto& test : get_utf8_test_cases())
+    {
+        if(validate_utf8(reinterpret_cast<const char*>(test.data),
+                         std::strlen(test.data)) != test.expected_valid)
+        {
+            log_error("Invalid UTF-8 validation: expected {} for case {}",
+                      test.expected_valid,
+                      test.description);
+            STDROMANO_ASSERT(0, "Invalid UTF-8 validation");
+        }
+    }
+}
+
 int main()
 {
     TestRunner runner;
@@ -542,6 +589,7 @@ int main()
     runner.add_test("ShrinkToFit", TestShrinkToFit);
     runner.add_test("Insertion", TestInsertion);
     runner.add_test("IsDigit", TestIsDigit);
+    runner.add_test("UTF-8 Validation", TestUTF8Validation);
 
     runner.run_all();
 

@@ -15,6 +15,9 @@
 
 STDROMANO_NAMESPACE_BEGIN
 
+/* Validate a sequence of characters to be utf-8 */
+STDROMANO_API bool validate_utf8(const char* str, std::size_t size) noexcept;
+
 /* Finds the last occurence of needle in haystack (reverse strstr) */
 STDROMANO_API char* strrstr(const char* haystack, const char* needle) noexcept;
 
@@ -41,7 +44,7 @@ private:
     };
 
     std::uint32_t _size : 31;
-    std::uint32_t _capacity : 31;
+    std::uint32_t _capacity : 31; 
     std::uint32_t _is_local : 1;
     std::uint32_t _is_ref : 1;
 
@@ -141,7 +144,7 @@ public:
             this->_is_local = 0;
             this->_capacity = other._capacity;
             this->_heap_data = mem_aligned_alloc<char>((this->_capacity + 1) * sizeof(char),
-                                                       STRING_ALIGNMENT);
+                                                           STRING_ALIGNMENT);
             mem_cpy(this->_heap_data, other.data(), other._size + 1);
         }
     }
@@ -176,7 +179,7 @@ public:
         else
         {
             this->_heap_data = mem_aligned_alloc<char>((this->_capacity + 1) * sizeof(char),   
-                                                       STRING_ALIGNMENT);
+                                                           STRING_ALIGNMENT);
             mem_cpy(this->_heap_data, other._heap_data, this->_size + 1);
         }
 
@@ -285,7 +288,7 @@ public:
             this->_is_local = 0;
             this->_capacity = other._capacity;
             this->_heap_data = mem_aligned_alloc<char>((this->_capacity + 1) * sizeof(char),
-                                                       STRING_ALIGNMENT);
+                                                           STRING_ALIGNMENT);
             mem_cpy(this->_heap_data, other.data(), other._size + 1);
         }
     }
@@ -322,7 +325,7 @@ public:
                 this->_is_local = 0;
                 this->_capacity = other._capacity;
                 this->_heap_data = mem_aligned_alloc<char>((this->_capacity + 1) * sizeof(char),
-                                                           STRING_ALIGNMENT);
+                                                               STRING_ALIGNMENT);
                 mem_cpy(this->_heap_data, other.data(), other._size + 1);
             }
         }
@@ -484,6 +487,21 @@ public:
         return s;
     }
 
+    template <typename... Args>
+    static String make_fmt(fmt::format_string<Args...> fmt, Args&&... args)
+    {
+        String s;
+
+        fmt::format_to(std::back_inserter(s), fmt, std::forward<Args>(args)...);
+
+        if(s._size > 0 || s._is_local)
+        {
+            s.data()[s._size] = '\0';
+        }
+
+        return s;
+    }
+
     constexpr String copy() const noexcept
     {
         if(this->_is_ref) 
@@ -516,21 +534,27 @@ public:
 
     constexpr STDROMANO_FORCE_INLINE const char* back() const noexcept
     {
-        STDROMANO_ASSERT(this->_size > 0 || (this->_is_local || this->_heap_data != nullptr), "String must be valid to get back's address");
+        STDROMANO_ASSERT(this->_size > 0 || (this->_is_local || this->_heap_data != nullptr),
+                         "String must be valid to get back's address");
+
         return this->data() + this->_size;
     }
 
     constexpr STDROMANO_FORCE_INLINE char* back() noexcept
     {
-        STDROMANO_ASSERT(this->_size > 0 || (this->_is_local || this->_heap_data != nullptr), "String must be valid to get back's address");
+        STDROMANO_ASSERT(this->_size > 0 || (this->_is_local || this->_heap_data != nullptr),
+                         "String must be valid to get back's address");
+
         return this->data() + this->_size;
     }
 
+    /* Number of code units */
     constexpr STDROMANO_FORCE_INLINE size_t size() const noexcept
     {
         return this->_size;
     }
 
+    /* Number of code units */
     constexpr STDROMANO_FORCE_INLINE size_t length() const noexcept
     {
         return this->_size;
@@ -554,6 +578,8 @@ public:
     class iterator
     {
     public:
+        friend class const_iterator;
+
         using iterator_category = std::random_access_iterator_tag;
         using value_type = char;
         using difference_type = std::ptrdiff_t;
@@ -591,7 +617,6 @@ public:
 
     private:
         pointer _ptr;
-        friend class const_iterator;
     };
 
     class const_iterator
