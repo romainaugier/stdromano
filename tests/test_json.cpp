@@ -16,8 +16,13 @@ int main()
     stdromano::Json json;
     
     SCOPED_PROFILE_START(stdromano::ProfileUnit::MilliSeconds, json_loadf_canada);
-    json.loadf(stdromano::StringD("{}/json/canada.json", TESTS_DATA_DIR));
+    json.loadf(stdromano::StringD("{}/json/twitter.json", TESTS_DATA_DIR));
     SCOPED_PROFILE_STOP(json_loadf_canada);
+
+    stdromano::StringD out;
+    json.dumps(out);
+
+    stdromano::log_debug("Out json:\n{}", out);
 
     return 0;
 }

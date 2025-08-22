@@ -502,6 +502,34 @@ public:
         return s;
     }
 
+    static constexpr String make_from_c_str(const char* str, const std::size_t len = String::NPOS) noexcept
+    {
+        String s;
+
+        if(str == nullptr)
+        {
+            return s;
+        }
+
+        const std::size_t size = len == String::NPOS ? str_len(str) : len;
+
+        if(size == 0)
+        {
+            return s;
+        }
+
+        if(size > LocalCapacity)
+        {
+            s.reallocate(size);
+        }
+
+        mem_cpy(s.data(), str, size + 1);
+        s._size = static_cast<std::uint32_t>(size);
+        s.data()[s._size] = '\0';
+
+        return s;
+    }
+
     constexpr String copy() const noexcept
     {
         if(this->_is_ref) 
@@ -1333,7 +1361,7 @@ public:
 
     bool to_bool() const noexcept
     {
-        if (this->empty()) return false;
+        if(this->empty()) return false;
         
         if(this->size() == 1) 
         {

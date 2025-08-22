@@ -6,369 +6,455 @@
 #include "stdromano/logger.hpp"
 #include "stdromano/filesystem.hpp"
 
+#define STDROMANO_ENABLE_PROFILING
+#include "stdromano/profiling.hpp"
+
+#include <stack>
+
 STDROMANO_NAMESPACE_BEGIN
 
 /* JSON Load */
 
-bool lex_number(char** s, std::size_t* size, bool* is_float) noexcept
+void _parse_number(const char* s,
+                   const char* end,
+                   std::int64_t* i_val,
+                   double* d_val,
+                   bool* is_double,
+                   std::size_t* parse_size) noexcept 
 {
-    if(is_digit(**s) || **s == '-')
+    const char* p = s;
+
+    bool neg = false;
+
+    if(p < end && *p == '-') 
     {
-        char* start = *s;
-        *size = 1;
+        neg = true;
+        ++p;
+    }
 
-        (*s)++;
+    uint64_t int_val = 0;
+    double float_val = 0.0;
+    int frac_exp = 0;
+    bool is_float = false;
 
-        *is_float = false;
+    while(p < end && *p >= '0' && *p <= '9') 
+    {
+        std::uint64_t digit = static_cast<std::uint64_t>(*p - '0');
 
-        while(*s != '\0')
+        if(!is_float &&
+           (int_val > (static_cast<uint64_t>(std::numeric_limits<int64_t>::max()) - digit) / 10))
         {
-            if(is_digit(**s))
-            {
-                (*s)++;
-                (*size)++;
-            }
-            else if(**s == '.')
-            {
-                if(*is_float)
-                {
-                    return false;
-                }
-
-                *is_float = true;
-
-                (*s)++;
-                (*size)++;
-            }
-            else
-            {
-                break;
-            }
+            is_float = true;
+            float_val = static_cast<double>(int_val);
+            frac_exp = 0;
         }
 
-        return true;
-    }
-    else
-    {
-        return false;
-    }
-}
-
-struct StackFrame 
-{
-    JsonObject* container;
-    bool is_dict;
-    bool expecting_key;
-    StringD current_key;
-    
-    StackFrame(JsonObject* cont, bool dict) 
-        : container(cont), is_dict(dict), expecting_key(dict) {}
-};
-
-bool add_value_to_current_container(Vector<StackFrame>& stack,
-                                    JsonObject*& current_value,
-                                    JsonObject&& value,
-                                    bool& root_set) noexcept
-{
-    if(stack.empty()) 
-    {
-        if(root_set) 
+        if(!is_float) 
         {
-            log_error("Invalid JSON: Multiple root values");
-            return false;
+            int_val = int_val * 10 + digit;
+        } 
+        else 
+        {
+            float_val = float_val * 10.0 + digit;
+            frac_exp--;
         }
 
-        *current_value = std::move(value);
+        ++p;
+    }
 
-        root_set = true;
+    if(p < end && *p == '.') 
+    {
+        is_float = true;
+        if (float_val == 0.0) float_val = static_cast<double>(int_val);
+
+        ++p;
+
+        while(p < end && *p >= '0' && *p <= '9') 
+        {
+            float_val = float_val * 10.0 + (*p - '0');
+            frac_exp--;
+            ++p;
+        }
+    }
+
+    int exp_val = 0;
+    bool exp_neg = false;
+
+    if(p < end && (*p == 'e' || *p == 'E')) 
+    {
+        is_float = true;
+        if (float_val == 0.0 && !is_float) float_val = static_cast<double>(int_val);
+
+        ++p;
+
+        if(p < end && (*p == '+' || *p == '-')) 
+        {
+            exp_neg = (*p == '-');
+            ++p;
+        }
+
+        while(p < end && *p >= '0' && *p <= '9') 
+        {
+            exp_val = exp_val * 10 + (*p - '0');
+            ++p;
+        }
+    }
+
+    if(exp_neg)
+        exp_val = -exp_val;
+
+    if(!is_float) 
+    {
+        std::int64_t result = neg ? -static_cast<std::int64_t>(int_val) :
+                                     static_cast<std::int64_t>(int_val);
+        *i_val = result;
     } 
     else 
     {
-        StackFrame& frame = stack.back();
+        double val = float_val * std::pow(10.0, frac_exp + exp_val);
 
-        if(frame.is_dict) 
+        if(neg)
+            val = -val;
+
+        *d_val = val;
+    }
+
+    *parse_size = p - s;
+    *is_double = is_float;
+}
+
+class JsonParser
+{
+private:
+    const char* text;
+    const char* current;
+    const char* end;
+    
+    enum ParseContext
+    {
+        Context_Root,
+        Context_Dict,
+        Context_List
+    };
+    
+    struct StackFrame
+    {
+        ParseContext context;
+        JsonObject* object;
+        StringD key;
+        bool expecting_value;
+        
+        StackFrame(ParseContext ctx, JsonObject* obj) : context(ctx),
+                                                        object(obj),
+                                                        expecting_value(false) {}
+    };
+    
+    std::stack<StackFrame> parse_stack;
+
+public:
+    JsonParser(const char* json_text) : text(json_text),
+                                        current(json_text),
+                                        end(json_text + std::strlen(json_text)) {}
+    
+    JsonParser(const char* json_text, std::size_t length) : text(json_text),
+                                                            current(json_text),
+                                                            end(json_text + length) {}
+    
+    bool parse(JsonObject& root) noexcept
+    {
+        this->current = text;
+
+        while(!this->parse_stack.empty()) 
         {
-            if(frame.expecting_key) 
+            this->parse_stack.pop();
+        }
+        
+        this->skip_whitespace();
+
+        if(this->current >= this->end) 
+        {
+            return false;
+        }
+        
+        return this->parse_value(root);
+    }
+
+private:
+    STDROMANO_FORCE_INLINE void skip_whitespace() noexcept
+    {
+        while(this->current < this->end && 
+              (*this->current == ' ' ||
+               *this->current == '\t' || 
+               *this->current == '\n' || 
+               *this->current == '\r')) 
+        {
+            this->current++;
+        }
+    }
+    
+    bool parse_value(JsonObject& obj) noexcept
+    {
+        this->skip_whitespace();
+
+        if(this->current >= this->end) 
+        {
+            return false;
+        }
+        
+        switch(*this->current)
+        {
+            case '"':
+                return this->parse_string(obj);
+            case '{':
+                return this->parse_dict(obj);
+            case '[':
+                return this->parse_list(obj);
+            case 't':
+                return this->parse_literal(obj, "true", 4, true);
+            case 'f':
+                return this->parse_literal(obj, "false", 5, false);
+            case 'n':
+                return this->parse_null(obj);
+            case '-':
+            case '0': case '1': case '2': case '3': case '4':
+            case '5': case '6': case '7': case '8': case '9':
+                return this->parse_number(obj);
+            default:
+                return false;
+        }
+    }
+    
+    bool parse_string(JsonObject& obj) noexcept
+    {
+        if(this->current >= this->end || *this->current != '"') 
+        {
+            return false;
+        }
+        
+        this->current++;
+        const char* start = this->current;
+        
+        while(this->current < this->end && *this->current != '"') 
+        {
+            if(*this->current == '\\') 
             {
-                log_error("Invalid JSON: Expected key in object");
+                this->current++;
+
+                if(this->current >= this->end) 
+                {
+                    return false;
+                }
+            }
+
+            this->current++;
+        }
+        
+        if(this->current >= this->end || *this->current != '"')
+        {
+            return false;
+        }
+        
+        std::size_t length = this->current - start;
+        StringD str = StringD::make_from_c_str(start, length);
+        obj.set(std::move(str));
+        
+        this->current++;
+        return true;
+    }
+    
+    bool parse_number(JsonObject& obj) noexcept
+    {
+        std::int64_t int_val = 0;
+        double double_val = 0.0;
+        bool is_double = false;
+        std::size_t parsed_size = 0;
+
+        _parse_number(this->current, this->end, &int_val, &double_val, &is_double, &parsed_size);
+        
+        if(is_double) 
+        {
+            obj.set(double_val);
+        }
+        else 
+        {
+            obj.set(int_val);
+        }
+
+        this->current += parsed_size;
+        
+        return true;
+    }
+    
+    bool parse_literal(JsonObject& obj, const char* literal, std::size_t len, bool value) noexcept
+    {
+        if(this->current + len > end || std::strncmp(current, literal, len) != 0) 
+        {
+            return false;
+        }
+        
+        obj.set(value);
+        this->current += len;
+        return true;
+    }
+    
+    bool parse_null(JsonObject& obj)
+    {
+        if(this->current + 4 > this->end || std::strncmp(this->current, "null", 4) != 0) 
+        {
+            return false;
+        }
+        
+        this->current += 4;
+
+        return true;
+    }
+    
+    bool parse_list(JsonObject& obj) noexcept
+    {
+        if(this->current >= this->end || *this->current != '[') 
+        {
+            return false;
+        }
+        
+        this->current++;
+        this->skip_whitespace();
+        
+        JsonList list;
+        obj.set(std::move(list));
+        
+        if(this->current < this->end && *this->current == ']') 
+        {
+            this->current++;
+            return true;
+        }
+        
+        while(true)
+        {
+            JsonObject element;
+
+            if(!this->parse_value(element)) 
+            {
+                return false;
+            }
+            
+            obj.get<JsonList>().push_back(std::move(element));
+            
+            this->skip_whitespace();
+
+            if(this->current >= this->end) 
+            {
+                return false;
+            }
+            
+            if(*this->current == ']') 
+            {
+                this->current++;
+                break;
+            }
+            else if(*this->current == ',') 
+            {
+                this->current++;
+                this->skip_whitespace();
+                
+                if(this->current < this->end && *this->current == ']') 
+                {
+                    return false;
+                }
+            } 
+            else 
+            {
+                return false;
+            }
+        }
+        
+        return true;
+    }
+    
+    bool parse_dict(JsonObject& obj) noexcept
+    {
+        if(this->current >= this->end || *this->current != '{') 
+        {
+            return false;
+        }
+        
+        this->current++;
+        this->skip_whitespace();
+        
+        JsonDict dict;
+        obj.set(std::move(dict));
+        
+        if(this->current < this->end && *this->current == '}') 
+        {
+            this->current++;
+            return true;
+        }
+        
+        while (true)
+        {
+            this->skip_whitespace();
+
+            if(this->current >= this->end || *this->current != '"') 
+            {
+                return false;
+            }
+            
+            JsonObject key_obj;
+
+            if(!this->parse_string(key_obj)) 
+            {
                 return false;
             }
 
-            frame.container->get<JsonDict>()[frame.current_key] = std::move(value);
-        } 
-        else
-        {
-            frame.container->get<JsonList>().push_back(std::move(value));
-        }
-    }
+            StringD key = key_obj.get<StringD>();
+            
+            this->skip_whitespace();
 
-    return true;
-}
-
-bool json_parse(const char* text, JsonObject& json) noexcept
-{
-    char* s = const_cast<char*>(text);
-    
-    Vector<StackFrame> stack;
-    JsonObject* current_value = &json;
-    bool root_set = false;
-    
-    while(*s != '\0')
-    {
-        if(*s == ' ' || *s == '\t' || *s == '\n' || *s == '\r') 
-        {
-            s++;
-            continue;
-        }
-        
-        switch (*s)
-        {
-            case '{':
+            if(this->current >= this->end || *this->current != ':') 
             {
-                JsonDict new_dict;
-                current_value->set(std::move(new_dict));
-                
-                stack.emplace_back(current_value, true);
-                root_set = true;
-                
-                break;
+                return false;
             }
-                
-            case '[':
+
+            this->current++;
+            
+            JsonObject value;
+
+            if(!this->parse_value(value)) 
             {
-                JsonList new_list;
-                current_value->set(std::move(new_list));
-                
-                stack.emplace_back(current_value, false);
-                root_set = true;
-
-                break;
+                return false;
             }
-                
-            case '}':
+            
+            obj.get<JsonDict>()[std::move(key)] = std::move(value);
+            
+            this->skip_whitespace();
+            if(current >= end) 
             {
-                if(stack.empty() || !stack.back().is_dict)
-                {
-                    log_error("Invalid JSON: Unexpected }} at char {}",
-                              static_cast<size_t>(s - text));
-
-                    return false;
-                }
-
-                stack.pop_back();
-
-                break;
+                return false;
             }
-                
-            case ']':
+            
+            if(*this->current == '}') 
             {
-                if(stack.empty() || stack.back().is_dict)
-                {
-                    log_error("Invalid JSON: Unexpected ] at char {}",
-                              static_cast<size_t>(s - text));
-                    return false;
-                }
-
-                stack.pop_back();
-
+                this->current++;
                 break;
-            }
-                
-            case ':':
+            } 
+            else if(*this->current == ',') 
             {
-                if(stack.empty() || !stack.back().is_dict || !stack.back().expecting_key) 
+                this->current++;
+                this->skip_whitespace();
+                
+                if(current < end && *current == '}') 
                 {
-                    log_error("Invalid JSON: Unexpected : at char {}",
-                              static_cast<size_t>(s - text));
-
                     return false;
                 }
-
-                stack.back().expecting_key = false;
-
-                break;
-            }
-                
-            case ',':
+            } 
+            else 
             {
-                if(stack.empty()) 
-                {
-                    log_error("Invalid JSON: Unexpected , at char {}",
-                              static_cast<size_t>(s - text));
-
-                    return false;
-                }
-
-                if(stack.back().is_dict) 
-                {
-                    stack.back().expecting_key = true;
-                }
-
-                break;
+                return false;
             }
-                
-            case '"':
-            {
-                s++;
-                char* start = s;
-                size_t size = 0;
-                
-                while(*s != '\0' && *s != '"') 
-                {
-                    if(*s == '\\' && *(s+1) != '\0') 
-                    {
-                        s++;
-                    }
-
-                    size++;
-                    s++;
-                }
-                
-                if(*s != '"') 
-                {
-                    log_error("Invalid JSON: Unterminated string at char {}",
-                              static_cast<size_t>(start - text - 1));
-                    return false;
-                }
-                
-                StringD str_value(start, size);
-                
-                if(!stack.empty() && stack.back().is_dict && stack.back().expecting_key) 
-                {
-                    stack.back().current_key = std::move(str_value);
-                }
-                else 
-                {
-                    if(!add_value_to_current_container(stack,
-                                                       current_value,
-                                                       JsonObject(std::move(str_value)),
-                                                       root_set))
-                    {
-                        return false;
-                    }
-                }
-
-                break;
-            }
-                
-            case 't':
-                if(std::strncmp("true", s, 4) != 0) 
-                {
-                    log_error("Invalid JSON: Unknown token starting with t at char {}",
-                              static_cast<size_t>(s - text));
-                    return false;
-                }
-                
-                if(!add_value_to_current_container(stack,
-                                                   current_value,
-                                                   JsonObject(true),
-                                                   root_set)) 
-                {
-                    return false;
-                }
-
-                s += 3;
-                
-                break;
-                
-            case 'f':
-                if(std::strncmp("false", s, 5) != 0) 
-                {
-                    log_error("Invalid JSON: Unknown token starting with f at char {}",
-                              static_cast<size_t>(s - text));
-                    return false;
-                }
-                
-                if(!add_value_to_current_container(stack,
-                                                   current_value,
-                                                   JsonObject(false),
-                                                   root_set)) 
-                {
-                    return false;
-                }
-
-                s += 4;
-
-                break;
-                
-            case 'n':
-                if(std::strncmp("null", s, 4) != 0) 
-                {
-                    log_error("Invalid JSON: Unknown token starting with n at char {}",
-                              static_cast<size_t>(s - text));
-                    return false;
-                }
-                
-                if(!add_value_to_current_container(stack, current_value, JsonObject(), root_set)) 
-                {
-                    return false;
-                }
-
-                s += 3;
-                break;
-                
-            case '-':
-                if(!is_digit(*(s + 1))) 
-                {
-                    log_error("Invalid JSON: Invalid number starting with - at char {}",
-                              static_cast<size_t>(s - text));
-                    return false;
-                }
-                
-            default:
-                if(*s == '-' || is_digit(*s)) 
-                {
-                    char* start = s;
-                    size_t size = 0;
-                    bool is_float = false;
-                    
-                    if(!lex_number(&s, &size, &is_float)) 
-                    {
-                        return false;
-                    }
-                    
-                    JsonObject num_value;
-
-                    if(is_float) 
-                    {
-                        double val = std::strtod(start, nullptr);
-                        num_value.set(val);
-                    }
-                    else 
-                    {
-                        int64_t val = std::strtoll(start, nullptr, 10);
-                        num_value.set(val);
-                    }
-                    
-                    if(!add_value_to_current_container(stack,
-                                                       current_value,
-                                                       std::move(num_value),
-                                                       root_set)) 
-                    {
-                        return false;
-                    }
-
-                    s--;
-                } 
-                else 
-                {
-                    log_error("Invalid JSON: Unknown character \"{}\" ({}) at {}", *s, static_cast<int>(*s), static_cast<size_t>(s - text));
-                    return false;
-                }
-                break;
         }
         
-        s++;
+        return true;
     }
-    
-    if(!stack.empty())
-    {
-        log_error("Invalid JSON: Unmatched opening bracket");
-        return false;
-    }
-    
-    return true;
-}
+};
 
 bool Json::loadf(const StringD& file_path,
                  bool do_utf8_validation) noexcept
@@ -386,29 +472,26 @@ bool Json::loadf(const StringD& file_path,
 bool Json::loads(const StringD& text,
                  bool do_utf8_validation) noexcept
 {
+    SCOPED_PROFILE_START(ProfileUnit::MilliSeconds, json_loads);
+
     if(do_utf8_validation && !validate_utf8(text.c_str(), text.size()))
     {
         log_error("JSON input contains invalid utf-8");
         return false;
     }
 
-    if(json_parse(text.c_str(), this->_root))
-    {
-        return true;
-    }
+    JsonParser parser(text.c_str(), text.size());
 
-    this->_root = std::move(JsonObject());
-
-    return false;
+    return parser.parse(this->_root);
 }
 
 /* JSON Dump */
 
-bool dumps_list(StringD& text, JsonObject& list) noexcept;
+bool dumps_list(StringD& text, const JsonObject& list) noexcept;
 
-bool dumps_dict(StringD& text, JsonObject& dict) noexcept;
+bool dumps_dict(StringD& text, const JsonObject& dict) noexcept;
 
-bool dumps_list(StringD& text, JsonObject& list) noexcept
+bool dumps_list(StringD& text, const JsonObject& list) noexcept
 {
     if(list.type() != JsonObjectType_List)
     {
@@ -417,9 +500,11 @@ bool dumps_list(StringD& text, JsonObject& list) noexcept
 
     text.push_back('[');
 
-    for(uint64_t i = 0; i < list.get<Vector<JsonObject>>().size(); i++)
+    const JsonList& l = list.get<JsonList>();
+
+    for(uint64_t i = 0; i < l.size(); i++)
     {
-        JsonObject* value = list.get<Vector<JsonObject>>().at(i);
+        const JsonObject* value = l.at(i);
 
         switch(value->type())
         {
@@ -452,7 +537,7 @@ bool dumps_list(StringD& text, JsonObject& list) noexcept
     return true;
 }
 
-bool dumps_dict(StringD& text, JsonObject& dict) noexcept
+bool dumps_dict(StringD& text, const JsonObject& dict) noexcept
 {
     if(dict.type() != JsonObjectType_Dict)
     {
@@ -461,14 +546,13 @@ bool dumps_dict(StringD& text, JsonObject& dict) noexcept
 
     text.push_back('{');
 
-    for(auto it : dict.get<HashMap<StringD, JsonObject>>())
-    {
-        const StringD& key = it.first;
-        JsonObject& value = it.second;
+    const JsonDict& d = dict.get<JsonDict>();
 
+    for(const auto& [key, value] : dict.get<JsonDict>())
+    {
         text.appendf("\"{}\":", key);
 
-        switch(it.second.type())
+        switch(value.type())
         {
             case JsonObjectType_List:
                 if(!dumps_list(text, value))

@@ -44,9 +44,9 @@ class JsonObject
 
 private: 
     typename std::aligned_storage<STORAGE_MAX_SIZE, STORAGE_ALIGNMENT>::type _data;
-    std::uint32_t _type = 0;
+    std::uint32_t _type;
 
-    void clear(const bool clear_if_string = true) noexcept 
+    void clear() noexcept 
     {
         switch(this->_type) 
         {
@@ -74,10 +74,8 @@ public:
         this->clear();
     }
 
-    JsonObject(const JsonObject& other) : _type(0) 
+    JsonObject(const JsonObject& other)
     {
-        this->clear();
-
         switch(other._type) 
         {
             case JsonObjectType_ValueInt:
@@ -140,7 +138,8 @@ public:
                 case JsonObjectType_ValueNull:
                     break;
             }
-            _type = other._type;
+
+            this->_type = other._type;
         }
         return *this;
     }
@@ -171,17 +170,19 @@ public:
     template<typename T>
     JsonObject(T&& value) : _type(0) 
     {
-        constexpr size_t type_id = json_traits<T>::id;
+        using U = std::decay_t<T>;
+
+        constexpr size_t type_id = json_traits<U>::id;
         static_assert(type_id > 0 && type_id < 8, "Unsupported type for JsonObject");
         
-        ::new (&this->_data) T(value);
+        ::new (&this->_data) U(std::forward<T>(value));
         this->_type = type_id;
     }
 
     template<typename T>
     const T& get() const 
     {
-        if(_type != json_traits<T>::id) 
+        if(this->_type != json_traits<T>::id) 
         {
             throw std::runtime_error("Type mismatch in JsonObject::get");
         }
@@ -224,21 +225,14 @@ public:
     }
 
     template<typename T>
-    void set(const T& value)
-    {
-        this->clear();
-
-        ::new (&this->_data) T(value);
-        this->_type = json_traits<T>::id;
-    }
-
-    template<typename T>
     void set(T&& value)
     {
         this->clear();
 
-        ::new (&this->_data) std::decay_t<T>(std::forward<T>(value));
-        this->_type = json_traits<T>::id;
+        using U = std::decay_t<T>;
+
+        ::new (&this->_data) U(std::forward<T>(value));
+        this->_type = json_traits<U>::id;
     }
 
     STDROMANO_FORCE_INLINE bool is_null() const { return _type == JsonObjectType_ValueNull; }
