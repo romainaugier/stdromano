@@ -6,13 +6,16 @@
 #include "stdromano/logger.hpp"
 #include "test.hpp"
 
+#define STDROMANO_ENABLE_PROFILING
+#include "stdromano/profiling.hpp"
+
 using namespace stdromano;
 
-String<> create_large_string(size_t size)
+String<> create_large_string(std::size_t size)
 {
     String<> result;
 
-    for(size_t i = 0; i < size; ++i)
+    for(std::size_t i = 0; i < size; ++i)
     {
         result.push_back(static_cast<char>('A' + (i % 26)));
     }
@@ -65,6 +68,25 @@ TEST_CASE(TestComparison)
     String<> empty_str;
     ASSERT(!(empty_str == str1));
     ASSERT(empty_str == empty_str);
+
+    StringD large = create_large_string(4096);
+    StringD large_copy = large.copy();
+
+    StringD large2 = large.copy();
+    large2[2048] = ' ';
+
+    for(std::size_t i = 0; i < 10; ++i)
+    {
+        SCOPED_PROFILE_START(ProfileUnit::Cycles, large_str_cmp_impl);
+        ASSERT(large == large_copy);
+        ASSERT(large != large2);
+        SCOPED_PROFILE_STOP(large_str_cmp_impl);
+
+        SCOPED_PROFILE_START(ProfileUnit::Cycles, large_str_cmp_memcmp);
+        ASSERT(std::memcmp(large.c_str(), large_copy.c_str(), large.size()) == 0);
+        ASSERT(std::memcmp(large.c_str(), large2.c_str(), large.size()) != 0);
+        SCOPED_PROFILE_STOP(large_str_cmp_memcmp);
+    }
 }
 
 TEST_CASE(TestPushBack)

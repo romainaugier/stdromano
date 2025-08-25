@@ -7,9 +7,28 @@ include(target_options)
 
 file(GLOB_RECURSE src_files *.cpp)
 
+if(WIN32)
+    enable_language(ASM_MASM)
+    file(GLOB_RECURSE asm_files asm/x64_windows/*.asm)
+
+    add_library(asm_objects OBJECT ${asm_files})
+
+    set_target_properties(asm_objects PROPERTIES MASM_FLAGS "")
+    set(asm_objects $<TARGET_OBJECTS:asm_objects>)
+elseif(UNIX)
+    set(asm_files asm/x64_linux/*.s)
+else()
+    message(FATAL_ERROR "Platform not supported")
+endif()
+
 add_definitions(-DSTDROMANO_BUILD_SHARED)
 
-add_library(${PROJECT_NAME} SHARED ${src_files})
+if(WIN32)
+    add_library(${PROJECT_NAME} SHARED ${src_files} ${asm_objects})
+else()
+    add_library(${PROJECT_NAME} SHARED ${src_files})
+endif()
+
 set_target_properties(${PROJECT_NAME} PROPERTIES PREFIX "")
 set_target_properties(${PROJECT_NAME} PROPERTIES CXX_STANDARD 17)
 set_target_properties(${PROJECT_NAME} PROPERTIES DEBUG_POSTFIX "d")

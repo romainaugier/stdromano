@@ -103,6 +103,21 @@ STDROMANO_FORCE_INLINE float _mm256_hsum_ps(const __m256 x) noexcept
     return _mm_cvtss_f32(sum);
 }
 
+STDROMANO_FORCE_INLINE __m256i _mm256_cmplt_epi8(const __m256i a, const __m256i b) noexcept
+{
+    return _mm256_cmpgt_epi8(b, a);
+}
+
+STDROMANO_FORCE_INLINE __m256i _mm256_cmple_epi8(const __m256i a, const __m256i b) noexcept
+{
+    return _mm256_xor_si256(_mm256_cmpgt_epi8(a, b), _mm256_set1_epi8(-1));
+}
+
+STDROMANO_FORCE_INLINE __m256i _mm256_cmpge_epi8(const __m256i a, const __m256i b) noexcept
+{
+    return _mm256_xor_si256(_mm256_cmpgt_epi8(b, a), _mm256_set1_epi8(-1));
+}
+
 STDROMANO_NAMESPACE_END
 
 #endif /* !defined(__STDROMANO_SIMD) */

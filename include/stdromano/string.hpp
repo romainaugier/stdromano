@@ -15,6 +15,19 @@
 
 STDROMANO_NAMESPACE_BEGIN
 
+DETAIL_NAMESPACE_BEGIN
+
+STDROMANO_API void tolower(char* str, std::size_t length) noexcept;
+
+STDROMANO_API void tolower(const char* src, char* dst, std::size_t length) noexcept;
+
+STDROMANO_API bool strcmp(const char* __restrict lhs,
+                          const char* __restrict rhs,
+                          const std::size_t length,
+                          const bool case_sensitive = true) noexcept;
+
+DETAIL_NAMESPACE_END
+
 /* Validate a sequence of characters to be utf-8 */
 STDROMANO_API bool validate_utf8(const char* str, std::size_t size) noexcept;
 
@@ -427,7 +440,7 @@ public:
         return this->data()[i];
     }
 
-    constexpr bool operator==(const String<>& other) const
+    /* constexpr */ bool operator==(const String<>& other) const
     {
         if(this->size() != other.size()) 
         {
@@ -439,7 +452,12 @@ public:
             return true;
         }
 
-        return std::memcmp(this->c_str(), other.c_str(), this->size()) == 0;
+        /* 
+            TODO: when switching to C++20 use std::is_constant_evaluated()
+            to use a constexpr friendly algorithm
+        */
+
+        return detail::strcmp(this->c_str(), other.c_str(), this->length());
     }
 
     constexpr bool operator!=(const String<>& other) const
@@ -1004,7 +1022,7 @@ public:
         return result;
     }
 
-    constexpr String lower() const noexcept
+    /* constexpr */ String lower() const noexcept
     {
         if(this->empty())
         {
@@ -1015,6 +1033,11 @@ public:
 
         STDROMANO_ASSERT(!result.is_ref(), "Copy should not be a reference for modification");
 
+        detail::tolower(result.c_str(), result.size());
+
+        /* TODO: switch to C++20 and use std::is_constant_evaluated() */
+
+        /*
         for(uint32_t i = 0; i < result.size(); i++)
         {
             if(is_letter(result[i]))
@@ -1022,6 +1045,7 @@ public:
                 result[i] = to_lower(result[i]);
             }
         }
+        */
 
         return result;
     }
@@ -1084,7 +1108,6 @@ public:
 
         return String::make_ref(start_ptr, static_cast<size_t>(current_end_ptr - start_ptr));
     }
-
 
     String strip(char c = ' ') const noexcept
     {
@@ -1392,7 +1415,7 @@ public:
     }
 };
 
-/* Returns -1 if lhs < rhs, 0 if lhs == rhs, 1 if lhs > rhs */
+/* Returns -1 if lhs < rhs, 0 if lhs == rhs, 1 if lhs > rhs (uses lexicographical compare) */
 STDROMANO_API int strcmp(const String<>& lhs, const String<>& rhs, bool case_sensitive = true) noexcept;
 
 /* String dynamically sized */

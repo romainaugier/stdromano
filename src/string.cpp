@@ -5,7 +5,291 @@
 #include "stdromano/string.hpp"
 #include "stdromano/simd.hpp"
 
+extern "C" bool asm__detail_strcmp_cs(const char* lhs,
+                                      const char* rhs,
+                                      std::size_t length) noexcept;
+
+extern "C" bool asm__detail_strcmp_avx_cs(const char* lhs,
+                                          const char* rhs,
+                                          size_t length) noexcept;
+
 STDROMANO_NAMESPACE_BEGIN
+
+/*  
+    tolower with simd kernels for fast conversion. based on 
+    https://lemire.me/blog/2024/08/03/converting-ascii-strings-to-lower-case-at-crazy-speeds-with-avx-512/
+*/
+
+STDROMANO_FORCE_INLINE __m128i tolower16(const __m128i c) noexcept
+{
+    const __m128i A = _mm_set1_epi8('A' - 1);
+    const __m128i Z = _mm_set1_epi8('Z' + 1);
+    const __m128i to_lower = _mm_set1_epi8('a' - 'A');
+    const __m128i ge_A = _mm_cmpgt_epi8(c, A);
+    const __m128i le_Z = _mm_cmplt_epi8(c, Z);
+    const __m128i is_upper = _mm_and_si128(ge_A, le_Z);
+    const __m128i mask = _mm_and_si128(to_lower, is_upper);
+
+    return _mm_or_si128(c, mask);
+}
+
+STDROMANO_FORCE_INLINE __m256i tolower32(const __m256i c) noexcept
+{
+    const __m256i A = _mm256_set1_epi8('A');
+    const __m256i Z = _mm256_set1_epi8('Z');
+    const __m256i to_lower = _mm256_set1_epi8('a' - 'A');
+    const __m256i ge_A = _mm256_cmpge_epi8(c, A);
+    const __m256i le_Z = _mm256_cmple_epi8(c, Z);
+    const __m256i is_upper = _mm256_and_si256(ge_A, le_Z);
+    const __m256i mask = _mm256_and_si256(to_lower, is_upper);
+
+    return _mm256_or_si256(c, mask);
+}
+
+void tolower_scalar_kernel(char* str, std::size_t length) noexcept
+{
+    for(std::size_t i = 0; i < length; ++i)
+    {
+        str[i] = to_lower(static_cast<unsigned int>(str[i]));
+    }
+}
+
+void tolower_sse_kernel(char* str, std::size_t length) noexcept
+{
+    constexpr std::size_t simd_width = 16;
+    const std::size_t simd_loop_size = length - length % simd_width;
+
+    std::size_t i = 0;
+
+    for(; i < simd_loop_size; i += simd_width)
+    {
+        const __m128i res = tolower16(_mm_load_si128(reinterpret_cast<const __m128i*>(std::addressof(str[i]))));
+
+        _mm_store_si128(reinterpret_cast<__m128i*>(std::addressof(str[i])), res);
+    }
+
+    for(; i < length; ++i)
+    {
+        str[i] = to_lower(static_cast<unsigned int>(str[i]));
+    }
+}
+
+void tolower_avx_kernel(char* str, std::size_t length) noexcept
+{
+    constexpr std::size_t simd_width = 32;
+    const std::size_t simd_loop_size = length - length % simd_width;
+
+    std::size_t i = 0;
+
+    for(; i < simd_loop_size; i += simd_width)
+    {
+        const __m256i res = tolower32(_mm256_load_si256(reinterpret_cast<const __m256i*>(std::addressof(str[i]))));
+
+        _mm256_store_si256(reinterpret_cast<__m256i*>(std::addressof(str[i])), res);
+    }
+
+    for(; i < length; ++i)
+    {
+        str[i] = to_lower(static_cast<unsigned int>(str[i]));
+    }
+}
+
+DETAIL_NAMESPACE_BEGIN
+
+void tolower(char* str, std::size_t length) noexcept
+{
+    switch(simd_get_vectorization_mode())
+    {
+        case VectorizationMode_Scalar:
+            return tolower_scalar_kernel(str, length);
+        case VectorizationMode_SSE:
+            return tolower_sse_kernel(str, length);
+        case VectorizationMode_AVX:
+        case VectorizationMode_AVX2:
+            return tolower_avx_kernel(str, length);
+    }
+
+    STDROMANO_ASSERT(false, "Should be unreachable");
+}
+
+DETAIL_NAMESPACE_END
+
+/* strcmp with simd kernels for fast comparison */
+
+bool strcmp_scalar_kernel(const char* __restrict lhs,
+                          const char* __restrict rhs,
+                          const std::size_t length,
+                          const bool case_sensitive) noexcept
+{
+    if(case_sensitive)
+    {
+        return asm__detail_strcmp_cs(lhs, rhs, length);
+    }
+
+    for(std::size_t i = 0; i < length; ++i)
+    {
+        if(to_lower(lhs[i]) != to_lower(rhs[i]))
+        {
+            return false;
+        }
+    }
+
+    return true;
+}
+
+bool strcmp_sse_kernel_case_sensitive(const char* __restrict lhs,
+                                      const char* __restrict rhs,
+                                      const std::size_t length) noexcept
+{
+    constexpr std::size_t simd_width = 16;
+    const std::size_t simd_loop_size = length - length % simd_width;
+    const std::size_t remaining_size = length - simd_loop_size;
+
+    std::size_t i = 0;
+
+    for(; i < simd_loop_size; i += simd_width)
+    {
+        const __m128i _lhs = _mm_load_si128(reinterpret_cast<const __m128i*>(std::addressof(lhs[i])));
+        const __m128i _rhs = _mm_load_si128(reinterpret_cast<const __m128i*>(std::addressof(rhs[i])));
+        const __m128i res = _mm_cmpeq_epi8(_lhs, _rhs);
+
+        if(_mm_movemask_epi8(res) != 0xFFFF)
+        {
+            return false;
+        }
+    }
+
+    return std::memcmp(std::addressof(lhs[i]), std::addressof(rhs[i]), remaining_size) == 0;
+}
+
+bool strcmp_sse_kernel_case_insensitive(const char* __restrict lhs,
+                                        const char* __restrict rhs,
+                                        const std::size_t length) noexcept
+{
+    constexpr std::size_t simd_width = 16;
+    const std::size_t simd_loop_size = length - length % simd_width;
+    const std::size_t remaining_size = length - simd_loop_size;
+
+    std::size_t i = 0;
+
+    for(; i < simd_loop_size; i += simd_width)
+    {
+        const __m128i _lhs = tolower16(_mm_load_si128(reinterpret_cast<const __m128i*>(std::addressof(lhs[i]))));
+        const __m128i _rhs = tolower16(_mm_load_si128(reinterpret_cast<const __m128i*>(std::addressof(rhs[i]))));
+        const __m128i res = _mm_cmpeq_epi8(_lhs, _rhs);
+
+        if(_mm_movemask_epi8(res) != 0xFFFF)
+        {
+            return false;
+        }
+    }
+
+    char __lhs[simd_width];
+    std::memcpy(__lhs, std::addressof(lhs[i]), remaining_size);
+    std::memset(__lhs + remaining_size, ' ', simd_width - remaining_size);
+    const __m128i ___lhs = tolower16(_mm_loadu_si128(reinterpret_cast<const __m128i*>(__lhs)));
+
+    char __rhs[simd_width];
+    std::memcpy(__rhs, std::addressof(rhs[i]), remaining_size);
+    std::memset(__rhs + remaining_size, ' ', simd_width - remaining_size);
+    const __m128i ___rhs = tolower16(_mm_loadu_si128(reinterpret_cast<const __m128i*>(__rhs)));
+
+    const __m128i _res = _mm_cmpeq_epi8(___lhs, ___rhs);
+
+    return _mm_movemask_epi8(_res) == 0xFFFF;
+}
+
+bool strcmp_avx_kernel_case_sensitive(const char* __restrict lhs,
+                                      const char* __restrict rhs,
+                                      const std::size_t length) noexcept
+{
+    constexpr std::size_t simd_width = 32;
+    const std::size_t simd_loop_size = length - length % simd_width;
+    const std::size_t remaining_size = length - simd_loop_size;
+
+    std::size_t i = 0;
+
+    for(; i < simd_loop_size; i += simd_width)
+    {
+        _mm_prefetch(std::addressof(lhs[i + simd_width * 6]), _MM_HINT_T0);
+        _mm_prefetch(std::addressof(rhs[i + simd_width * 6]), _MM_HINT_T0);
+
+        const __m256i _lhs = _mm256_load_si256(reinterpret_cast<const __m256i*>(std::addressof(lhs[i])));
+        const __m256i _rhs = _mm256_load_si256(reinterpret_cast<const __m256i*>(std::addressof(rhs[i])));
+        const __m256i res = _mm256_cmpeq_epi8(_lhs, _rhs);
+
+        if(_mm256_movemask_epi8(res) != 0xFFFFFFFF)
+        {
+            return false;
+        }
+    }
+
+    return std::memcmp(std::addressof(lhs[i]), std::addressof(rhs[i]), remaining_size) == 0;
+}
+
+bool strcmp_avx_kernel_case_insensitive(const char* __restrict lhs,
+                                        const char* __restrict rhs,
+                                        const std::size_t length) noexcept
+{
+    constexpr std::size_t simd_width = 32;
+    const std::size_t simd_loop_size = length - length % simd_width;
+    const std::size_t remaining_size = length - simd_loop_size;
+
+    std::size_t i = 0;
+
+    for(; i < simd_loop_size; i += simd_width)
+    {
+        const __m256i _lhs = tolower32(_mm256_load_si256(reinterpret_cast<const __m256i*>(std::addressof(lhs[i]))));
+        const __m256i _rhs = tolower32(_mm256_load_si256(reinterpret_cast<const __m256i*>(std::addressof(rhs[i]))));
+        const __m256i res = _mm256_cmpeq_epi8(_lhs, _rhs);
+
+        if(_mm256_movemask_epi8(res) != 0xFFFFFFFF)
+        {
+            return false;
+        }
+    }
+
+    char __lhs[simd_width];
+    std::memcpy(__lhs, std::addressof(lhs[i]), remaining_size);
+    std::memset(__lhs + remaining_size, ' ', simd_width - remaining_size);
+    const __m256i ___lhs = tolower32(_mm256_loadu_si256(reinterpret_cast<const __m256i*>(__lhs)));
+
+    char __rhs[simd_width];
+    std::memcpy(__rhs, std::addressof(rhs[i]), remaining_size);
+    std::memset(__rhs + remaining_size, ' ', simd_width - remaining_size);
+    const __m256i ___rhs = tolower32(_mm256_loadu_si256(reinterpret_cast<const __m256i*>(__rhs)));
+
+    const __m256i _res = _mm256_cmpeq_epi8(___lhs, ___rhs);
+
+    return _mm256_movemask_epi8(_res) == 0xFFFFFFFF;
+}
+
+DETAIL_NAMESPACE_BEGIN
+
+bool strcmp(const char* __restrict lhs,
+            const char* __restrict rhs,
+            const std::size_t length,
+            const bool case_sensitive) noexcept
+{
+    switch(simd_get_vectorization_mode())
+    {
+        case VectorizationMode_SSE:
+            return case_sensitive ? strcmp_sse_kernel_case_sensitive(lhs, rhs, length) : 
+                                    strcmp_sse_kernel_case_insensitive(lhs, rhs, length);
+        case VectorizationMode_AVX:
+        case VectorizationMode_AVX2:
+            return case_sensitive ? asm__detail_strcmp_avx_cs(lhs, rhs, length) : 
+                                    strcmp_avx_kernel_case_insensitive(lhs, rhs, length);
+        default:
+            return strcmp_scalar_kernel(lhs, rhs, length, case_sensitive);
+    }
+
+    STDROMANO_ASSERT(false, "Should be unreachable");
+
+    return false;
+}
+
+DETAIL_NAMESPACE_END
 
 /* UTF-8 validation based on the paper of John Keiser and Daniel Lemire */
 

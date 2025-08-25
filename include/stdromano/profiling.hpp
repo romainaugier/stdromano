@@ -96,7 +96,8 @@ class ScopedProfile
 {
     char* _name = nullptr;
     std::chrono::steady_clock::time_point _start;
-    bool stopped = false;
+    bool _stopped = false;
+    std::uint64_t _time = 0;
 
 public:
     ScopedProfile(const char* name)
@@ -108,23 +109,31 @@ public:
 
     ~ScopedProfile()
     {
-        if(!stopped)
+        if(!_stopped)
         {
             this->stop();
         }
     }
 
+    std::uint64_t time() const noexcept
+    {
+        return this->_time;
+    }
+
     STDROMANO_FORCE_INLINE void stop() noexcept
     {
-        if(!stopped)
+        if(!this->_stopped)
         {
+            this->_time = std::chrono::duration_cast<std::chrono::duration<float, Unit>>(
+                          std::chrono::steady_clock::now() - this->_start)
+                          .count();
+
             log_debug("Scoped profile \"{}\" -> {} {}",
                       this->_name,
-                      std::chrono::duration_cast<std::chrono::duration<float, Unit>>(
-                          std::chrono::steady_clock::now() - this->_start)
-                          .count(),
+                      this->_time,
                       UnitName<Unit>().get_name());
-            this->stopped = true;
+
+            this->_stopped = true;
         }
     }
 };
@@ -133,8 +142,9 @@ template <>
 class ScopedProfile<ProfileUnit::Cycles>
 {
     char* _name = nullptr;
-    uint64_t _start = 0;
-    bool stopped = false;
+    std::uint64_t _start = 0;
+    bool _stopped = false;
+    std::uint64_t _time = 0;
 
 public:
     ScopedProfile(const char* name)
@@ -144,9 +154,14 @@ public:
         this->_start = cpu_rdtsc();
     }
 
+    std::uint64_t time() const noexcept
+    {
+        return this->_time;
+    }
+
     ~ScopedProfile()
     {
-        if(!stopped)
+        if(!this->_stopped)
         {
             this->stop();
         }
@@ -154,13 +169,16 @@ public:
 
     STDROMANO_FORCE_INLINE void stop() noexcept
     {
-        if(!stopped)
+        if(!this->_stopped)
         {
+            this->_time = (uint64_t)(cpu_rdtsc() - this->_start);
+
             log_debug("Scoped profile \"{}\" -> {} {}",
                       this->_name,
-                      (uint64_t)(cpu_rdtsc() - this->_start),
+                      this->_time,
                       UnitName<ProfileUnit::Cycles>().get_name());
-            this->stopped = true;
+
+            this->_stopped = true;
         }
     }
 };
@@ -217,6 +235,7 @@ STDROMANO_NAMESPACE_END
 #define SCOPED_PROFILE_START(profile_unit, name)                                                   \
     stdromano::ScopedProfile<profile_unit> __profile_##name(#name)
 #define SCOPED_PROFILE_STOP(name) __profile_##name.stop()
+#define SCOPED_PROFILE_GET_TIME(name) __profile_##name.time()
 
 #define PROFILE_FUNC(profile_unit, func, ...)                                                      \
     stdromano::_func_timer<profile_unit>(#func, func, ##__VA_ARGS__)
@@ -239,6 +258,7 @@ STDROMANO_NAMESPACE_END
 #else
 #define SCOPED_PROFILE_START(profile_unit, name)
 #define SCOPED_PROFILE_STOP(name)
+#define SCOPED_PROFILE_GET_TIME(name)
 
 #define PROFILE_FUNC(profile_unit, func, ...) func(##__VA_ARGS__)
 
