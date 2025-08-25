@@ -122,7 +122,7 @@ const char* simd_get_vectorization_mode_as_string() noexcept
     }
 }
 
-bool simd_force_vectorization_mode(const VectorizationMode mode) noexcept
+bool simd_force_vectorization_mode(std::uint32_t mode) noexcept
 {
     if(mode > g_max_vectorization_mode)
     {

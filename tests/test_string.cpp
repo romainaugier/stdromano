@@ -4,6 +4,7 @@
 
 #include "stdromano/string.hpp"
 #include "stdromano/logger.hpp"
+#include "stdromano/simd.hpp"
 #include "test.hpp"
 
 #define STDROMANO_ENABLE_PROFILING
@@ -75,17 +76,24 @@ TEST_CASE(TestComparison)
     StringD large2 = large.copy();
     large2[2048] = ' ';
 
-    for(std::size_t i = 0; i < 10; ++i)
+    for(std::uint32_t mode = VectorizationMode_Scalar; mode < VectorizationMode_Max; ++mode)
     {
-        SCOPED_PROFILE_START(ProfileUnit::Cycles, large_str_cmp_impl);
-        ASSERT(large == large_copy);
-        ASSERT(large != large2);
-        SCOPED_PROFILE_STOP(large_str_cmp_impl);
+        simd_force_vectorization_mode(mode);
 
-        SCOPED_PROFILE_START(ProfileUnit::Cycles, large_str_cmp_memcmp);
-        ASSERT(std::memcmp(large.c_str(), large_copy.c_str(), large.size()) == 0);
-        ASSERT(std::memcmp(large.c_str(), large2.c_str(), large.size()) != 0);
-        SCOPED_PROFILE_STOP(large_str_cmp_memcmp);
+        log_debug("strcmp vectorization mode: {}", simd_get_vectorization_mode_as_string());
+
+        for(std::size_t i = 0; i < 10; ++i)
+        {
+            SCOPED_PROFILE_START(ProfileUnit::Cycles, large_str_cmp_impl);
+            ASSERT(large == large_copy);
+            ASSERT(large != large2);
+            SCOPED_PROFILE_STOP(large_str_cmp_impl);
+
+            SCOPED_PROFILE_START(ProfileUnit::Cycles, large_str_cmp_memcmp);
+            ASSERT(std::memcmp(large.c_str(), large_copy.c_str(), large.size()) == 0);
+            ASSERT(std::memcmp(large.c_str(), large2.c_str(), large.size()) != 0);
+            SCOPED_PROFILE_STOP(large_str_cmp_memcmp);
+        }
     }
 }
 

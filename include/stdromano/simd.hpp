@@ -17,9 +17,10 @@ STDROMANO_NAMESPACE_BEGIN
 enum VectorizationMode : uint32_t
 {
     VectorizationMode_Scalar = 0,
-    VectorizationMode_SSE = 1,
-    VectorizationMode_AVX = 2,
-    VectorizationMode_AVX2 = 3,
+    VectorizationMode_SSE,
+    VectorizationMode_AVX,
+    VectorizationMode_AVX2,
+    VectorizationMode_Max,
 };
 
 void simd_check_vectorization() noexcept;
@@ -38,7 +39,7 @@ STDROMANO_API VectorizationMode simd_get_vectorization_mode() noexcept;
 
 STDROMANO_API const char* simd_get_vectorization_mode_as_string() noexcept;
 
-STDROMANO_API bool simd_force_vectorization_mode(const VectorizationMode mode) noexcept;
+STDROMANO_API bool simd_force_vectorization_mode(std::uint32_t mode) noexcept;
 
 /* SIMD helper functions */
 
