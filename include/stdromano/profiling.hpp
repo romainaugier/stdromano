@@ -97,7 +97,7 @@ class ScopedProfile
     char* _name = nullptr;
     std::chrono::steady_clock::time_point _start;
     bool _stopped = false;
-    std::uint64_t _time = 0;
+    double _time = 0;
 
 public:
     ScopedProfile(const char* name)
@@ -115,7 +115,7 @@ public:
         }
     }
 
-    std::uint64_t time() const noexcept
+    double time() const noexcept
     {
         return this->_time;
     }
@@ -124,7 +124,7 @@ public:
     {
         if(!this->_stopped)
         {
-            this->_time = std::chrono::duration_cast<std::chrono::duration<float, Unit>>(
+            this->_time = std::chrono::duration_cast<std::chrono::duration<double, Unit>>(
                           std::chrono::steady_clock::now() - this->_start)
                           .count();
 
@@ -144,7 +144,7 @@ class ScopedProfile<ProfileUnit::Cycles>
     char* _name = nullptr;
     std::uint64_t _start = 0;
     bool _stopped = false;
-    std::uint64_t _time = 0;
+    double _time = 0;
 
 public:
     ScopedProfile(const char* name)
@@ -154,7 +154,7 @@ public:
         this->_start = cpu_rdtsc();
     }
 
-    std::uint64_t time() const noexcept
+    double time() const noexcept
     {
         return this->_time;
     }
@@ -171,9 +171,9 @@ public:
     {
         if(!this->_stopped)
         {
-            this->_time = (uint64_t)(cpu_rdtsc() - this->_start);
+            this->_time = static_cast<double>(cpu_rdtsc() - this->_start);
 
-            log_debug("Scoped profile \"{}\" -> {} {}",
+            log_debug("Scoped profile \"{}\" -> {:.3f} {}",
                       this->_name,
                       this->_time,
                       UnitName<ProfileUnit::Cycles>().get_name());

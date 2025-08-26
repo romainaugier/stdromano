@@ -7,6 +7,7 @@
 
 #include "stdromano/stdromano.hpp"
 #include "stdromano/atomic.hpp"
+#include "stdromano/memory.hpp"
 
 #include "concurrentqueue.h"
 
@@ -17,7 +18,6 @@
 #elif defined(STDROMANO_LINUX)
 #include <syscall.h>
 #include <unistd.h>
-
 #endif /* defined(STDROMANO_WIN) */
 
 STDROMANO_NAMESPACE_BEGIN
@@ -41,7 +41,7 @@ using thread_handle = pthread_t;
 using thread_func = void* (*)(void*);
 #endif /* defined(STDROMANO_WIN) */
 
-class STDROMANO_API Thread
+class Thread
 {
 private:
     thread_handle _handle;
@@ -90,13 +90,60 @@ public:
         }
     }
 
-    ~Thread();
+    ~Thread()
+    {
+        if(this->_running)
+        {
+            this->join();
+        }
+    }
 
-    void start() noexcept;
+    void start() noexcept
+    {
+    #if defined(STDROMANO_WIN)
+        ResumeThread(this->_handle);
+    #elif defined(STDROMANO_LINUX)
+        pthread_create(&this->_handle, NULL, ThreadProc, this);
+    #endif /* defined(STDROMANO_WIN) */
 
-    void detach() noexcept;
+        this->_running = true;
+    }
 
-    void join() noexcept;
+    void detach() noexcept
+    {
+    #if defined(STDROMANO_WIN)
+        if(_handle)
+        {
+            CloseHandle(this->_handle);
+            this->_handle = nullptr;
+        }
+    #elif defined(STDROMANO_LINUX)
+        if(this->_handle)
+        {
+            pthread_detach(this->_handle);
+            this->_handle = 0;
+        }
+    #endif /* defined(STDROMANO_WIN) */
+    }
+
+    void join() noexcept
+    {
+        if(!this->_running)
+        {
+            return;
+        }
+
+    #if defined(STDROMANO_WIN)
+        WaitForSingleObject(this->_handle, INFINITE);
+        CloseHandle(this->_handle);
+        this->_handle = nullptr;
+    #elif defined(STDROMANO_LINUX)
+        pthread_join(this->_handle, NULL);
+        this->_handle = 0;
+    #endif /* defined(STDROMANO_WIN) */
+
+        this->_running = false;
+    }
 
     STDROMANO_FORCE_INLINE bool joined() noexcept
     {
@@ -147,7 +194,7 @@ class ThreadPoolWaiter
     friend class ThreadPool;
     friend class ThreadPoolWork;
 
-    std::size_t _expected = 0;
+    Atomic<std::size_t> _expected = 0;
     Atomic<std::size_t> _done = 0;
 
 public:
@@ -155,7 +202,7 @@ public:
 
     void wait() noexcept
     {
-        while(this->_done.load() != this->_expected)
+        while(this->_done.load() != this->_expected.load())
         {
             thread_yield();
         }
@@ -203,12 +250,54 @@ class ThreadPool
     };
 
 public:
-    STDROMANO_API ThreadPool(const int64_t workers_count = -1);
+    explicit ThreadPool(const int64_t workers_count = -1)
+    {
+        this->_num_workers.store(0);
+        this->_num_active_workers.store(0);
 
-    STDROMANO_API ~ThreadPool();
+        this->_stop.store(false);
+        this->_started.store(false);
 
-    STDROMANO_API bool add_work(ThreadPoolWork* work,
-                                ThreadPoolWaiter* waiter = nullptr) noexcept;
+        this->_workers = nullptr;
+
+        this->init(workers_count);
+    }
+
+    ~ThreadPool()
+    {
+        if(this->_workers != nullptr)
+        {
+            const size_t num_workers = this->_num_workers.load();
+
+            this->_stop.store(true);
+
+            for(size_t i = 0; i < num_workers; i++)
+            {
+                this->_workers[i].join();
+            }
+
+            mem_free(this->_workers);
+
+            this->_workers = nullptr;
+        }
+    }
+
+    bool add_work(ThreadPoolWork* work, ThreadPoolWaiter* waiter = nullptr) noexcept
+    {
+        work->_waiter = waiter;
+
+        if(!this->_work_queue.enqueue(work))
+        {
+            return false;
+        }
+
+        if(waiter != nullptr)
+        {
+            ++waiter->_expected;
+        }
+
+        return true;
+    }
 
     STDROMANO_FORCE_INLINE bool add_work(std::function<void()>&& func,
                                          ThreadPoolWaiter* waiter = nullptr) noexcept
@@ -217,7 +306,13 @@ public:
         return this->add_work(work, waiter);
     }
 
-    STDROMANO_API void wait() noexcept;
+    STDROMANO_FORCE_INLINE void wait() noexcept
+    {
+        while(this->_work_queue.size_approx() > 0 || this->_num_active_workers.load() > 0)
+        {
+            thread_yield();
+        }
+    }
 
     STDROMANO_FORCE_INLINE bool is_started() const noexcept
     {
@@ -243,6 +338,7 @@ public:
 
 private:
     moodycamel::ConcurrentQueue<ThreadPoolWork*> _work_queue;
+
     Thread* _workers;
 
     Atomic<std::size_t> _num_workers;
@@ -254,7 +350,64 @@ private:
 
     Atomic<bool> _started;
 
-    void init(const int64_t workers_count) noexcept;
+    void init(const int64_t workers_count) noexcept
+    {
+        const size_t num_workers = workers_count < 1 ? get_num_procs() :
+                                                       static_cast<size_t>(workers_count);
+
+        this->_workers = mem_alloc<Thread>(num_workers * sizeof(Thread));
+
+        for(size_t i = 0; i < num_workers; i++)
+        {
+            ::new(std::addressof(this->_workers[i])) Thread(
+                [&]()
+                {
+                    ThreadPool* tp = this;
+
+                    while(!tp->_stop.load())
+                    {
+                        if(tp->_num_active_workers.load() >= tp->_max_active_workers.load())
+                        {
+                            continue;
+                        }
+
+                        if(tp->_work_queue.size_approx() > 0)
+                        {
+                            ThreadPoolWork* work = nullptr;
+
+                            if(tp->_work_queue.try_dequeue(work))
+                            {
+                                tp->_num_active_workers++;
+
+                                try
+                                {
+                                    if(work != nullptr)
+                                    {
+                                        work->execute();
+
+                                        delete work;
+                                    }
+                                }
+                                catch(const std::exception& e)
+                                {
+                                    std::fprintf(stderr,
+                                                "Error caught while executing threadpool work %s",
+                                                e.what());
+                                }
+
+                                tp->_num_active_workers--;
+                            }
+                        }
+                    }
+                });
+
+            this->_workers[i].start();
+            this->_num_workers++;
+            this->_max_active_workers++;
+        }
+
+        this->_started.store(true);
+    }
 };
 
 /* Macro to make the code more understandable and readable */
