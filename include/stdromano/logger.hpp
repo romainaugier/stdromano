@@ -1,3 +1,5 @@
+#pragma once
+
 #if !defined(__STDROMANO_SPDLOGUTILS)
 #define __STDROMANO_SPDLOGUTILS
 
