@@ -10,7 +10,7 @@ STDROMANO_NAMESPACE_BEGIN
 
 DETAIL_NAMESPACE_BEGIN
 
-void log(std::uint32_t lvl, const StringD& msg) noexcept;
+STDROMANO_API void log(std::uint32_t lvl, const StringD& msg) noexcept;
 
 DETAIL_NAMESPACE_END
 
