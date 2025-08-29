@@ -5,9 +5,23 @@
 #include "stdromano/logger.hpp"
 #include "stdromano/memory.hpp"
 
+#include "spdlog/sinks/basic_file_sink.h"
+#include "spdlog/sinks/stdout_color_sinks.h"
+
 STDROMANO_NAMESPACE_BEGIN
 
-Logger::Logger() : _logger("null")
+static spdlog::logger g_logger("stdromano");
+
+DETAIL_NAMESPACE_BEGIN
+
+void log(std::uint32_t lvl, const StringD& msg) noexcept
+{
+    g_logger.log(spdlog::level::level_enum(lvl), spdlog::string_view_t(msg.c_str(), msg.size()));
+}
+
+DETAIL_NAMESPACE_END
+
+Logger::Logger()
 {
 #if defined(STDROMANO_WIN)
     SetConsoleCP(65001);
@@ -63,15 +77,26 @@ Logger::Logger() : _logger("null")
     file_sink->set_pattern("[%l] %H:%M:%S:%e : %v");
     file_sink->set_level(spdlog::level::debug);
 
-    this->_logger = spdlog::logger("main_logger", {console_sink, file_sink});
-    this->_logger.set_level(spdlog::level::debug);
+    g_logger = spdlog::logger("main_logger", {console_sink, file_sink});
+    g_logger.set_level(spdlog::level::debug);
 
     spdlog::flush_on(spdlog::level::info);
 }
 
 Logger::~Logger()
 {
-    this->_logger.flush();
+    g_logger.flush();
+}
+
+void Logger::set_level(std::uint32_t log_level) noexcept
+{
+    g_logger.set_level(static_cast<spdlog::level::level_enum>(log_level));
+    g_logger.sinks()[0]->set_level(static_cast<spdlog::level::level_enum>(log_level));
+}
+
+void Logger::flush() noexcept
+{
+    g_logger.flush();
 }
 
 Logger& Logger::get_instance() noexcept

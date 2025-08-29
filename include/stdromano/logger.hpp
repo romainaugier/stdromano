@@ -2,12 +2,17 @@
 #define __STDROMANO_SPDLOGUTILS
 
 #include "stdromano/stdromano.hpp"
+#include "stdromano/string.hpp"
 
-#include "spdlog/sinks/basic_file_sink.h"
-#include "spdlog/sinks/stdout_color_sinks.h"
 #include "spdlog/spdlog.h"
 
 STDROMANO_NAMESPACE_BEGIN
+
+DETAIL_NAMESPACE_BEGIN
+
+void log(std::uint32_t lvl, const StringD& msg) noexcept;
+
+DETAIL_NAMESPACE_END
 
 enum LogLevel : uint32_t
 {
@@ -28,55 +33,46 @@ public:
     template <typename... Args>
     void error(Args&&... args) noexcept
     {
-        this->_logger.error(std::forward<Args>(args)...);
+        detail::log(spdlog::level::err, StringD::make_fmt(std::forward<Args>(args)...));
     }
 
     template <typename... Args>
     void warn(Args&&... args) noexcept
     {
-        this->_logger.warn(std::forward<Args>(args)...);
+        detail::log(spdlog::level::warn, StringD::make_fmt(std::forward<Args>(args)...));
     }
 
     template <typename... Args>
     void info(Args&&... args) noexcept
     {
-        this->_logger.info(std::forward<Args>(args)...);
+        detail::log(spdlog::level::info, StringD::make_fmt(std::forward<Args>(args)...));
     }
 
     template <typename... Args>
     void debug(Args&&... args) noexcept
     {
-        this->_logger.debug(std::forward<Args>(args)...);
+        detail::log(spdlog::level::debug, StringD::make_fmt(std::forward<Args>(args)...));
     }
 
     template <typename... Args>
     void trace(Args&&... args) noexcept
     {
-        this->_logger.trace(std::forward<Args>(args)...);
+        detail::log(spdlog::level::trace, StringD::make_fmt(std::forward<Args>(args)...));
     }
 
     template <typename... Args>
     void critical(Args&&... args) noexcept
     {
-        this->_logger.critical(std::forward<Args>(args)...);
+        detail::log(spdlog::level::critical, StringD::make_fmt(std::forward<Args>(args)...));
     }
 
-    void set_level(uint8_t log_level) noexcept
-    {
-        this->_logger.set_level(static_cast<spdlog::level::level_enum>(log_level));
-        this->_logger.sinks()[0]->set_level(static_cast<spdlog::level::level_enum>(log_level));
-    }
+    STDROMANO_API void set_level(std::uint32_t log_level) noexcept;
 
-    void flush() noexcept
-    {
-        this->_logger.flush();
-    }
+    STDROMANO_API void flush() noexcept;
 
 private:
     STDROMANO_API Logger();
     STDROMANO_API ~Logger();
-
-    spdlog::logger _logger;
 };
 
 #define log_error(...) Logger::get_instance().error(__VA_ARGS__)
