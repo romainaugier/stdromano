@@ -35,37 +35,91 @@ public:
     template <typename... Args>
     void error(Args&&... args) noexcept
     {
-        detail::log(spdlog::level::err, StringD::make_fmt(std::forward<Args>(args)...));
+        if constexpr (sizeof...(Args) == 1 &&
+                      std::is_same_v<std::decay_t<std::tuple_element_t<0, std::tuple<Args...>>>, StringD>)
+        {
+            auto&& first = std::get<0>(std::forward_as_tuple(args...));
+            detail::log(spdlog::level::err, std::forward<decltype(first)>(first));
+        }
+        else
+        {
+            detail::log(spdlog::level::err, StringD::make_fmt(std::forward<Args>(args)...));
+        }
     }
 
     template <typename... Args>
     void warn(Args&&... args) noexcept
     {
-        detail::log(spdlog::level::warn, StringD::make_fmt(std::forward<Args>(args)...));
+        if constexpr (sizeof...(Args) == 1 &&
+                      std::is_same_v<std::decay_t<std::tuple_element_t<0, std::tuple<Args...>>>, StringD>)
+        {
+            auto&& first = std::get<0>(std::forward_as_tuple(args...));
+            detail::log(spdlog::level::warn, std::forward<decltype(first)>(first));
+        }
+        else
+        {
+            detail::log(spdlog::level::warn, StringD::make_fmt(std::forward<Args>(args)...));
+        }
     }
 
     template <typename... Args>
     void info(Args&&... args) noexcept
     {
-        detail::log(spdlog::level::info, StringD::make_fmt(std::forward<Args>(args)...));
+        if constexpr (sizeof...(Args) == 1 &&
+                      std::is_same_v<std::decay_t<std::tuple_element_t<0, std::tuple<Args...>>>, StringD>)
+        {
+            auto&& first = std::get<0>(std::forward_as_tuple(args...));
+            detail::log(spdlog::level::info, std::forward<decltype(first)>(first));
+        }
+        else
+        {
+            detail::log(spdlog::level::info, StringD::make_fmt(std::forward<Args>(args)...));
+        }
     }
 
     template <typename... Args>
     void debug(Args&&... args) noexcept
     {
-        detail::log(spdlog::level::debug, StringD::make_fmt(std::forward<Args>(args)...));
+        if constexpr (sizeof...(Args) == 1 &&
+                      std::is_same_v<std::decay_t<std::tuple_element_t<0, std::tuple<Args...>>>, StringD>)
+        {
+            auto&& first = std::get<0>(std::forward_as_tuple(args...));
+            detail::log(spdlog::level::debug, std::forward<decltype(first)>(first));
+        }
+        else
+        {
+            detail::log(spdlog::level::debug, StringD::make_fmt(std::forward<Args>(args)...));
+        }
     }
 
     template <typename... Args>
     void trace(Args&&... args) noexcept
     {
-        detail::log(spdlog::level::trace, StringD::make_fmt(std::forward<Args>(args)...));
+        if constexpr (sizeof...(Args) == 1 &&
+                      std::is_same_v<std::decay_t<std::tuple_element_t<0, std::tuple<Args...>>>, StringD>)
+        {
+            auto&& first = std::get<0>(std::forward_as_tuple(args...));
+            detail::log(spdlog::level::trace, std::forward<decltype(first)>(first));
+        }
+        else
+        {
+            detail::log(spdlog::level::trace, StringD::make_fmt(std::forward<Args>(args)...));
+        }
     }
 
     template <typename... Args>
     void critical(Args&&... args) noexcept
     {
-        detail::log(spdlog::level::critical, StringD::make_fmt(std::forward<Args>(args)...));
+        if constexpr (sizeof...(Args) == 1 &&
+                      std::is_same_v<std::decay_t<std::tuple_element_t<0, std::tuple<Args...>>>, StringD>)
+        {
+            auto&& first = std::get<0>(std::forward_as_tuple(args...));
+            detail::log(spdlog::level::critical, std::forward<decltype(first)>(first));
+        }
+        else
+        {
+            detail::log(spdlog::level::critical, StringD::make_fmt(std::forward<Args>(args)...));
+        }
     }
 
     STDROMANO_API void set_level(std::uint32_t log_level) noexcept;

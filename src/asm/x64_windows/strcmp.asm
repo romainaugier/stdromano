@@ -3,6 +3,7 @@ PUBLIC asm__detail_strcmp_avx_cs
 
 .code
 
+; scalar variant
 asm__detail_strcmp_cs PROC
 ; RCX = lhs, RDX = rhs, R8 = length
     xor r9, r9
@@ -26,7 +27,62 @@ _fail:
 
 asm__detail_strcmp_cs ENDP
 
+; sse variant
+asm__detail_strcmp_sse_cs PROC
+; rcx = lhs, rdx = rhs, r8 = length
+
+    ; simd_loop_size = length & ~15
+    mov r10, r8
+    and r10, -16 ; r10 = simd_loop_size
+    xor r9, r9 ; r9d = i
+
+    test r10, r10
+    je _tail
+
+_simd:
+    prefetcht0 byte ptr [rcx + r9 + 96]
+    prefetcht0 byte ptr [rdx + r9 + 96]
+
+    movdqa xmm0, xmmword ptr [rcx + r9]
+    movdqa xmm1, xmmword ptr [rdx + r9]
+    pcmpeqb xmm0, xmm1 ; sse2
+    pmovmskb eax, xmm0
+    cmp eax, 0000FFFFh 
+    jne _mismatch
+
+    add r9, 16
+    cmp r9, r10
+    jb _simd
+
+_tail:
+    mov r11, r8
+    sub r11, r10
+    jz _equal
+
+_tail_loop:
+    mov al, byte ptr [rcx + r10]
+    cmp al, byte ptr [rdx + r10]
+    jne _mismatch
+    inc r10
+    dec r11
+    jnz _tail_loop
+
+_equal:
+    vzeroupper
+    mov eax, 1
+    ret
+
+_mismatch:
+    vzeroupper
+    xor eax, eax
+    ret
+
+asm__detail_strcmp_sse_cs ENDP
+
+; avx variant
 asm__detail_strcmp_avx_cs PROC
+; rcx = lhs, rdx = rhs, r8 = length
+
     ; simd_loop_size = length & ~31
     mov     r10, r8
     and     r10, -32                 ; r10 = simd_loop_size

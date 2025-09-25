@@ -9,6 +9,10 @@ extern "C" bool asm__detail_strcmp_cs(const char* lhs,
                                       const char* rhs,
                                       std::size_t length) noexcept;
 
+extern "C" bool asm__detail_strcmp_sse_cs(const char* lhs,
+                                          const char* rhs,
+                                          size_t length) noexcept;
+
 extern "C" bool asm__detail_strcmp_avx_cs(const char* lhs,
                                           const char* rhs,
                                           size_t length) noexcept;
@@ -274,7 +278,7 @@ bool strcmp(const char* __restrict lhs,
     switch(simd_get_vectorization_mode())
     {
         case VectorizationMode_SSE:
-            return case_sensitive ? strcmp_sse_kernel_case_sensitive(lhs, rhs, length) : 
+            return case_sensitive ? asm__detail_strcmp_sse_cs(lhs, rhs, length) : 
                                     strcmp_sse_kernel_case_insensitive(lhs, rhs, length);
         case VectorizationMode_AVX:
         case VectorizationMode_AVX2:
@@ -283,10 +287,6 @@ bool strcmp(const char* __restrict lhs,
         default:
             return strcmp_scalar_kernel(lhs, rhs, length, case_sensitive);
     }
-
-    STDROMANO_ASSERT(false, "Should be unreachable");
-
-    return false;
 }
 
 DETAIL_NAMESPACE_END
