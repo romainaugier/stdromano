@@ -94,34 +94,34 @@ _simd:
     vmovdqu  ymm1, [rsi + r9]
     vpcmpeqb ymm2, ymm0, ymm1
     vpmovmskb eax, ymm2
-    cmp     eax, -1
-    jne     _mismatch
+    cmp eax, -1
+    jne _mismatch
 
-    add     r9, 32
-    cmp     r9, r10
-    jb      _simd
+    add r9, 32
+    cmp r9, r10
+    jb _simd
 
 _tail:
-    mov     r11, rdx
-    sub     r11, r10
-    jz      _equal
+    mov r11, rdx
+    sub r11, r10
+    jz _equal
 
 _tail_loop:
-    mov     al,  [rdi + r10]
-    cmp     al,  [rsi + r10]
-    jne     _mismatch
-    inc     r10
-    dec     r11
-    jnz     _tail_loop
+    mov al,  [rdi + r10]
+    cmp al,  [rsi + r10]
+    jne _mismatch
+    inc r10
+    dec r11
+    jnz _tail_loop
 
 _equal:
     vzeroupper
-    mov     eax, 1
+    mov eax, 1
     ret
 
 _mismatch:
     vzeroupper
-    xor     eax, eax
+    xor eax, eax
     ret
 
-; end strcmp_avx_kernel_case_sensitive
+; end asm__detail_strcmp_avx_cs

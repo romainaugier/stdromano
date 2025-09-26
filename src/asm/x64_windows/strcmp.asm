@@ -1,4 +1,5 @@
 PUBLIC asm__detail_strcmp_cs
+PUBLIC asm__detail_strcmp_sse_cs
 PUBLIC asm__detail_strcmp_avx_cs
 
 .code
