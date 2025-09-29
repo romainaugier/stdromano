@@ -21,11 +21,11 @@ if(RUN_TESTS EQUAL 1)
 endif()
 
 # concurrentqueue
-set(concurrentqueue_INCLUDE_DIRS "${CMAKE_SOURCE_DIR}/concurrentqueue")
+set(concurrentqueue_INCLUDE_DIRS "${CMAKE_SOURCE_DIR}/ext/concurrentqueue")
 include_directories(${concurrentqueue_INCLUDE_DIRS})
 
 # spdlog
-set(spdlog_INCLUDE_DIRS "${CMAKE_SOURCE_DIR}/spdlog/include")
+set(spdlog_INCLUDE_DIRS "${CMAKE_SOURCE_DIR}/ext/spdlog/include")
 include_directories(${spdlog_INCLUDE_DIRS})
 
 # gtk
