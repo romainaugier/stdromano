@@ -340,114 +340,6 @@ inline bool is_left_associative(RegexOperatorType op) noexcept
     }
 }
 
-/* Infix to postfix using Shunting Yard algorithm */
-std::tuple<bool, Vector<RegexToken>> parse_regex(const Vector<RegexToken>& tokens) noexcept
-{
-    Vector<RegexToken> output;
-    std::stack<RegexToken> operators;
-
-    std::uint32_t current_group_id = 1;
-
-    for(const auto& token : tokens)
-    {
-        switch(token.type)
-        {
-            case RegexTokenType_Character:
-            case RegexTokenType_CharacterRange:
-            {
-                output.push_back(token);
-                break;
-            }
-
-            case RegexTokenType_Operator:
-            {
-                RegexOperatorType current_op = static_cast<RegexOperatorType>(token.encoding);
-                int current_precedence = get_operator_precedence(current_op);
-
-                while(!operators.empty() && 
-                      operators.top().type != RegexTokenType_GroupBegin)
-                { 
-                    if(operators.top().type != RegexTokenType_Operator)
-                    {
-                        break;
-                    }
-
-                    RegexOperatorType stack_op = static_cast<RegexOperatorType>(operators.top().encoding);
-                    int stack_precedence = get_operator_precedence(stack_op);
-
-                    if(stack_precedence > current_precedence ||
-                       (stack_precedence == current_precedence && is_left_associative(current_op)))
-                    {
-                        output.push_back(operators.top());
-                        operators.pop();
-                    }
-                    else
-                    {
-                        break;
-                    }
-                }
-
-                operators.push(token);
-                break;
-            }
-
-            case RegexTokenType_GroupBegin:
-            {
-                RegexToken group_token = token;
-                group_token.encoding = static_cast<std::uint16_t>(current_group_id++);
-                operators.push(group_token);
-
-                break;
-            }
-
-            case RegexTokenType_GroupEnd:
-            {
-                while(!operators.empty() && operators.top().type != RegexTokenType_GroupBegin)
-                {
-                    output.push_back(operators.top());
-                    operators.pop();
-                }
-
-                if(operators.empty())
-                {
-                    log_error("Mismatched parentheses in regular expression");
-                    return std::make_tuple(false, output);
-                }
-
-                RegexToken group_begin_token = operators.top();
-                operators.pop();
-
-                // RegexToken group_end_token = token;
-                // group_end_token.encoding = --current_group_id;
-
-                // output.push_back(group_end_token);
-
-                break;
-            }
-
-            default:
-            {
-                log_error("Invalid token type during parsing");
-                return std::make_tuple(false, output);
-            }
-        }
-    }
-
-    while(!operators.empty())
-    {
-        if(operators.top().type == RegexTokenType_GroupBegin)
-        {
-            log_error("Mismatched parentheses in regular expression");
-            return std::make_tuple(false, output);
-        }
-
-        output.push_back(operators.top());
-        operators.pop();
-    }
-
-    return std::make_tuple(true, output);
-}
-
 void print_tokens(const Vector<RegexToken>& tokens)
 {
     for(std::size_t i = 0; i < tokens.size(); ++i)
@@ -564,209 +456,268 @@ inline Regex::ByteCode get_range_instrs(char range_start, char range_end) noexce
     }
 }
 
+bool emit_alternation(const Vector<RegexToken>& tokens,
+                      std::size_t& pos,
+                      std::uint32_t& current_group_id,
+                      Regex::ByteCode& bytecode) noexcept;
 
-using Fragment = std::pair<std::uint32_t, Regex::ByteCode>;
+bool emit_concatenation(const Vector<RegexToken>& tokens,
+                        std::size_t& pos,
+                        std::uint32_t& current_group_id,
+                        Regex::ByteCode& bytecode) noexcept;
 
-std::tuple<bool, Regex::ByteCode> regex_emit(const Vector<RegexToken>& tokens) noexcept
+bool emit_quantified(const Vector<RegexToken>& tokens,
+                     std::size_t& pos,
+                     std::uint32_t& current_group_id,
+                     Regex::ByteCode& bytecode) noexcept;
+
+bool emit_primary(const Vector<RegexToken>& tokens,
+                  std::size_t& pos,
+                  std::uint32_t& current_group_id,
+                  Regex::ByteCode& bytecode) noexcept;
+
+bool emit_alternation(const Vector<RegexToken>& tokens,
+                      std::size_t& pos,
+                      std::uint32_t& current_group_id,
+                      Regex::ByteCode& bytecode) noexcept
 {
-    std::stack<Fragment> fragments;
-
-    for(const auto& token : tokens)
+    std::size_t lhs_start = bytecode.size();
+    
+    if(!emit_concatenation(tokens, pos, current_group_id, bytecode))
+        return false;
+    
+    while(pos < tokens.size() && 
+          tokens[pos].type == RegexTokenType_Operator &&
+          static_cast<RegexOperatorType>(tokens[pos].encoding) == RegexOperatorType_Alternate)
     {
-        switch(token.type)
+        pos++;
+        
+        std::size_t jump_over_rhs_pos = emit_jump(bytecode, RegexInstrOpCode_JumpEq);
+        
+        std::size_t rhs_start = bytecode.size();
+        
+        if(!emit_concatenation(tokens, pos, current_group_id, bytecode))
+            return false;
+        
+        int offset = static_cast<int>(bytecode.size() - (jump_over_rhs_pos - 1));
+        patch_jump(bytecode, jump_over_rhs_pos, offset);
+    }
+    
+    return true;
+}
+
+bool emit_concatenation(const Vector<RegexToken>& tokens,
+                        std::size_t& pos,
+                        std::uint32_t& current_group_id,
+                        Regex::ByteCode& bytecode) noexcept
+{
+    bool first = true;
+    
+    while(pos < tokens.size() && 
+          tokens[pos].type != RegexTokenType_GroupEnd &&
+          !(tokens[pos].type == RegexTokenType_Operator &&
+          static_cast<RegexOperatorType>(tokens[pos].encoding) == RegexOperatorType_Alternate))
+    {
+        if(!first)
         {
-            case RegexTokenType_Character:
-            {
-                Regex::ByteCode frag;
+            std::size_t jump_pos = emit_jump(bytecode, RegexInstrOpCode_JumpNeq);
+            patch_jump(bytecode, jump_pos, JUMP_FAIL);
+        }
+        
+        if(!emit_quantified(tokens, pos, current_group_id, bytecode))
+            return false;
+        
+        first = false;
+    }
+    
+    return true;
+}
 
-                switch(token.encoding)
-                {
-                    case RegexCharacterType_Single:
-                        frag.push_back(BYTE(RegexInstrOpCode_TestSingle));
-                        frag.push_back(BYTE(token.data[0]));
-                        break;
+bool emit_quantified(const Vector<RegexToken>& tokens, std::size_t& pos,
+                           std::uint32_t& current_group_id, Regex::ByteCode& bytecode) noexcept
+{
+    std::size_t primary_start = bytecode.size();
+    
+    if(!emit_primary(tokens, pos, current_group_id, bytecode))
+        return false;
+    
+    if(pos < tokens.size() && tokens[pos].type == RegexTokenType_Operator)
+    {
+        RegexOperatorType op_type = static_cast<RegexOperatorType>(tokens[pos].encoding);
+        
+        if(op_type == RegexOperatorType_ZeroOrMore)
+        {
+            pos++;
+            
+            int offset_back = static_cast<int>(primary_start - bytecode.size());
+            std::size_t loop_jump_pos = emit_jump(bytecode, RegexInstrOpCode_JumpEq);
+            patch_jump(bytecode, loop_jump_pos, offset_back);
+            
+            bytecode.push_back(BYTE(RegexInstrOpCode_SetFlag));
+            bytecode.push_back(BYTE(1));
+        }
+        else if(op_type == RegexOperatorType_OneOrMore)
+        {
+            pos++;
 
-                    case RegexCharacterType_Any:
-                        frag.push_back(BYTE(RegexInstrOpCode_TestAny));
-                        break;
-                }
-                
-                frag.push_back(BYTE(RegexInstrOpCode_IncPosEq));
+            std::size_t loop_start = bytecode.size();
 
-                fragments.push({ RegexInstrOpType_TestOp, std::move(frag) });
+            Regex::ByteCode primary_copy;
+            primary_copy.insert(primary_copy.begin(),
+                                bytecode.begin() + primary_start, 
+                                bytecode.begin() + loop_start);
+            
+            std::size_t fail_jump_pos = emit_jump(bytecode, RegexInstrOpCode_JumpNeq);
+            patch_jump(bytecode, fail_jump_pos, JUMP_FAIL);
 
-                break;
-            }
+            bytecode.insert(bytecode.end(), primary_copy.begin(), primary_copy.end());
 
-            case RegexTokenType_CharacterRange:
-                fragments.push({ 
-                    RegexInstrOpType_TestOp,
-                    get_range_instrs(token.data[0], token.data[2])
-                });
-                break;
-
-            case RegexTokenType_GroupBegin:
-                fragments.push({ 
-                    RegexInstrOpType_GroupOp, 
-                    { 
-                        BYTE(RegexInstrOpCode_GroupStart),
-                        BYTE(token.encoding & 0xFF)
-                    } 
-                });
-                break;
-
-            case RegexTokenType_GroupEnd:
-                fragments.push({
-                    RegexInstrOpType_GroupOp, 
-                    { 
-                        BYTE(RegexInstrOpCode_GroupEnd),
-                        BYTE(token.encoding & 0xFF)
-                    } 
-                });
-                break;
-
-            case RegexTokenType_Operator:
-            {
-                switch(token.encoding)
-                {
-                    case RegexOperatorType_Alternate:
-                    {
-                        Regex::ByteCode frag; 
-
-                        const auto [rhs_op_type, rhs] = std::move(fragments.top());
-                        fragments.pop();
-
-                        const auto [lhs_op_type, lhs] = std::move(fragments.top());
-                        fragments.pop();
-
-                        frag.insert(frag.cend(), lhs.begin(), lhs.end());
-
-                        const std::size_t jump_over_rhs_pos = emit_jump(frag, RegexInstrOpCode_JumpEq);
-
-                        frag.insert(frag.cend(), rhs.begin(), rhs.end());
-
-                        const int offset = static_cast<int>(frag.size() - (jump_over_rhs_pos - 1));
-                        patch_jump(frag, jump_over_rhs_pos, offset);
-
-                        fragments.push({ RegexInstrOpType_BinaryOp, std::move(frag) });
-
-                        break;
-                    }
-
-                    case RegexOperatorType_Concatenate:
-                    {
-                        Regex::ByteCode frag; 
-
-                        const auto [rhs_op_type, rhs] = std::move(fragments.top());
-                        fragments.pop();
-
-                        const auto [lhs_op_type, lhs] = std::move(fragments.top());
-                        fragments.pop();
-
-                        frag.insert(frag.cend(), lhs.begin(), lhs.end());
-
-                        const std::size_t jump_pos = emit_jump(frag, RegexInstrOpCode_JumpNeq);
-                        patch_jump(frag, jump_pos, JUMP_FAIL);
-
-                        frag.insert(frag.cend(), rhs.begin(), rhs.end());
-
-                        fragments.push({ RegexInstrOpType_BinaryOp, std::move(frag) });
-
-                        break;
-                    }
-
-                    case RegexOperatorType_ZeroOrMore:
-                    {
-                        Regex::ByteCode frag; 
-
-                        const auto [op_type, body] = std::move(fragments.top());
-                        fragments.pop();
-
-                        const std::size_t loop_body_start = frag.size();
-                        frag.insert(frag.cend(), body.begin(), body.end());
-                        
-                        const int offset_back = static_cast<int>(loop_body_start - (frag.size()));
-                        const std::size_t loop_jump_pos = emit_jump(frag, RegexInstrOpCode_JumpEq);
-                        patch_jump(frag, loop_jump_pos, offset_back);
-                        frag.push_back(BYTE(RegexInstrOpCode_SetFlag));
-                        frag.push_back(BYTE(1));
-                        
-                        fragments.push({ RegexInstrOpType_UnaryOp, std::move(frag) });
-
-                        break;
-                    }
-
-                    case RegexOperatorType_OneOrMore:
-                    {
-                        Regex::ByteCode frag; 
-
-                        const auto [op_type, body] = std::move(fragments.top());
-                        fragments.pop();
-
-                        const std::size_t initial_match_start = frag.size();
-                        frag.insert(frag.cend(), body.begin(), body.end());
-                        
-                        const std::size_t fail_jump_pos = emit_jump(frag, RegexInstrOpCode_JumpNeq);
-                        patch_jump(frag, fail_jump_pos, JUMP_FAIL);
-
-                        const std::size_t loop_start = frag.size();
-                        frag.insert(frag.cend(), body.begin(), body.end());
-                        
-                        const std::size_t exit_loop_jump_pos = emit_jump(frag, RegexInstrOpCode_JumpNeq);
-                        frag.push_back(BYTE(RegexInstrOpCode_SetFlag));
-                        frag.push_back(BYTE(1));
-                        
-                        const int offset_back = static_cast<int>(loop_start - frag.size());
-                        const std::size_t loop_jump_pos = emit_jump(frag, RegexInstrOpCode_JumpEq);
-                        patch_jump(frag, loop_jump_pos, offset_back);
-                        
-                        patch_jump(frag, exit_loop_jump_pos, static_cast<int>(frag.size() - (exit_loop_jump_pos-1)));
-                        
-                        fragments.push({ RegexInstrOpType_UnaryOp, std::move(frag) });
-
-                        break;
-                    }
-
-                    case RegexOperatorType_ZeroOrOne:
-                    {
-                        Regex::ByteCode frag; 
-
-                        auto [op_type, body] = std::move(fragments.top());
-                        fragments.pop();
-                        
-                        frag.insert(frag.cend(), body.begin(), body.end());
-                        frag.push_back(BYTE(RegexInstrOpCode_SetFlag));
-                        frag.push_back(BYTE(1));
-                        
-                        fragments.push({ RegexInstrOpType_UnaryOp, std::move(frag) });
-
-                        break;
-                    }
-                }
-
-                break;
-            }
+            std::size_t exit_loop_jump_pos = emit_jump(bytecode, RegexInstrOpCode_JumpNeq);
+            
+            bytecode.push_back(BYTE(RegexInstrOpCode_SetFlag));
+            bytecode.push_back(BYTE(1));
+            
+            int offset_back = static_cast<int>(loop_start - bytecode.size());
+            std::size_t loop_jump_pos = emit_jump(bytecode, RegexInstrOpCode_JumpEq);
+            patch_jump(bytecode, loop_jump_pos, offset_back);
+            
+            patch_jump(bytecode, exit_loop_jump_pos, 
+                      static_cast<int>(bytecode.size() - (exit_loop_jump_pos - 1)));
+        }
+        else if(op_type == RegexOperatorType_ZeroOrOne)
+        {
+            pos++;
+            
+            bytecode.push_back(BYTE(RegexInstrOpCode_SetFlag));
+            bytecode.push_back(BYTE(1));
         }
     }
+    
+    return true;
+}
 
-    if(fragments.empty()) 
+bool emit_primary(const Vector<RegexToken>& tokens, std::size_t& pos,
+                        std::uint32_t& current_group_id, Regex::ByteCode& bytecode) noexcept
+{
+    if(pos >= tokens.size())
     {
-        Regex::ByteCode bytecode;
+        log_error("Unexpected end of regex expression");
+        return false;
+    }
+    
+    const RegexToken& token = tokens[pos];
+    
+    switch(token.type)
+    {
+        case RegexTokenType_Character:
+        {
+            pos++;
+            
+            switch(token.encoding)
+            {
+                case RegexCharacterType_Single:
+                    bytecode.push_back(BYTE(RegexInstrOpCode_TestSingle));
+                    bytecode.push_back(BYTE(token.data[0]));
+                    break;
+                    
+                case RegexCharacterType_Any:
+                    bytecode.push_back(BYTE(RegexInstrOpCode_TestAny));
+                    break;
+            }
+            
+            bytecode.push_back(BYTE(RegexInstrOpCode_IncPosEq));
+
+            return true;
+        }
+        
+        case RegexTokenType_CharacterRange:
+        {
+            pos++;
+            
+            Regex::ByteCode range_instrs = get_range_instrs(token.data[0], token.data[2]);
+            bytecode.insert(bytecode.end(), range_instrs.begin(), range_instrs.end());
+            return true;
+        }
+        
+        case RegexTokenType_GroupBegin:
+        {
+            std::uint32_t group_id = current_group_id++;
+            pos++;
+            
+            bytecode.push_back(BYTE(RegexInstrOpCode_GroupStart));
+            bytecode.push_back(BYTE(group_id & 0xFF));
+            
+            if(!emit_alternation(tokens, pos, current_group_id, bytecode))
+                return false;
+            
+            if(pos >= tokens.size() || tokens[pos].type != RegexTokenType_GroupEnd)
+            {
+                log_error("Mismatched parentheses in regular expression");
+                return false;
+            }
+            
+            bytecode.push_back(BYTE(RegexInstrOpCode_GroupEnd));
+            bytecode.push_back(BYTE(group_id & 0xFF));
+            
+            pos++;
+            return true;
+        }
+
+        case RegexTokenType_Operator:
+        {
+            pos++;
+
+            switch(token.encoding)
+            {
+                case RegexOperatorType_Alternate:
+                    return emit_alternation(tokens, pos, current_group_id, bytecode);
+                case RegexOperatorType_Concatenate:
+                    return emit_concatenation(tokens, pos, current_group_id, bytecode);
+                default:
+                    log_error("Invalid operator type during bytecode emission");
+                    return false;
+            }
+        }
+        
+        default:
+        {
+            log_error("Invalid token type during bytecode emission");
+
+            return false;
+        }
+    }
+}
+
+/* Recursive descent bytecode emitter for regex */
+std::tuple<bool, Regex::ByteCode> regex_emit(const Vector<RegexToken>& tokens) noexcept
+{
+    Regex::ByteCode bytecode;
+    std::size_t pos = 0;
+    std::uint32_t current_group_id = 1;
+    
+    if(tokens.empty())
+    {
         bytecode.push_back(BYTE(RegexInstrOpCode_Accept));
         return { true, std::move(bytecode) };
     }
-
-    auto [last_op_type, bytecode] = std::move(fragments.top());
-    fragments.pop();
-
-    const std::size_t final_fail_jump = emit_jump(bytecode, RegexInstrOpCode_JumpNeq);
+    
+    if(!emit_alternation(tokens, pos, current_group_id, bytecode))
+    {
+        return { false, Regex::ByteCode() };
+    }
+    
+    if(pos < tokens.size())
+    {
+        log_error("Unexpected tokens after bytecode emission");
+        return { false, Regex::ByteCode() };
+    }
+    
+    std::size_t final_fail_jump = emit_jump(bytecode, RegexInstrOpCode_JumpNeq);
     patch_jump(bytecode, final_fail_jump, JUMP_FAIL);
     
     bytecode.push_back(BYTE(RegexInstrOpCode_Accept));
-
-    const std::size_t fail_addr = bytecode.size();
     bytecode.push_back(BYTE(RegexInstrOpCode_Fail));
-
+    
     std::size_t i = 0;
 
     while(i < bytecode.size())
@@ -777,25 +728,22 @@ std::tuple<bool, Regex::ByteCode> regex_emit(const Vector<RegexToken>& tokens) n
             case RegexInstrOpCode_JumpNeq:
             {
                 int offset = decode_jump(std::addressof(bytecode[i + 1]));
-
+                
                 if(offset == JUMP_FAIL)
                 {
-                    offset = static_cast<int>(bytecode.size() - (i + 5));
-
+                    offset = static_cast<int>(bytecode.size() - 1 - (i + 5));
+                    
                     const auto [b1, b2, b3, b4] = encode_jump(offset);
                     bytecode[i + 1] = b1;
                     bytecode[i + 2] = b2;
                     bytecode[i + 3] = b3;
                     bytecode[i + 4] = b4;
                 }
-
+                
                 i += 5;
-
                 break;
             }
-
-            case RegexInstrOpCode_GroupStart:
-            case RegexInstrOpCode_GroupEnd:
+            
             case RegexInstrOpCode_Accept:
             case RegexInstrOpCode_Fail:
             case RegexInstrOpCode_TestAny:
@@ -807,28 +755,30 @@ std::tuple<bool, Regex::ByteCode> regex_emit(const Vector<RegexToken>& tokens) n
             case RegexInstrOpCode_IncPosEq:
                 i++;
                 break;
-
+                
             case RegexInstrOpCode_JumpPos:
                 i += 5;
                 break;
-
+                
             case RegexInstrOpCode_TestSingle:
             case RegexInstrOpCode_SetFlag:
+            case RegexInstrOpCode_GroupStart:
+            case RegexInstrOpCode_GroupEnd:
                 i += 2;
                 break;
-
+                
             case RegexInstrOpCode_TestRange:
             case RegexInstrOpCode_TestNegatedRange:
                 i += 3;
                 break;
-
+                
             default:
                 i++;
                 break;
         }
     }
-
-    return make_tuple(true, bytecode);
+    
+    return { true, std::move(bytecode) };
 }
 
 std::tuple<bool, Regex::ByteCode> regex_opt(Regex::ByteCode& bytecode) noexcept
@@ -1032,6 +982,7 @@ bool regex_exec(RegexVM* vm) noexcept
                 {
                     vm->pc += 5;
                 }
+
                 break;
             case RegexInstrOpCode_Accept:
                 return true;
@@ -1080,58 +1031,46 @@ bool regex_exec(RegexVM* vm) noexcept
 
 bool Regex::compile(const StringD& regex, std::uint32_t flags) noexcept
 {
-        this->_bytecode.clear();
+    this->_bytecode.clear();
 
-        if(flags & RegexFlags_DebugCompilation)
-        {
-            log_debug("Compiling Regex: {}", regex);
-        }
+    if(flags & RegexFlags_DebugCompilation)
+    {
+        log_debug("Compiling Regex: {}", regex);
+    }
 
-        auto [lex_success, tokens] = lex_regex(regex);
+    auto [lex_success, tokens] = lex_regex(regex);
 
-        if(!lex_success)
-        {
-            log_error("Failed to lex regex: {}", regex);
-            return false;
-        }
+    if(!lex_success)
+    {
+        log_error("Failed to lex regex: {}", regex);
+        return false;
+    }
 
-        if(flags & RegexFlags_DebugCompilation)
-        {
-            log_debug("Regex tokens (lex):");
-            print_tokens(tokens);
-        }
+    if(flags & RegexFlags_DebugCompilation)
+    {
+        log_debug("**********");
+        log_debug("Regex tokens (lex):");
+        print_tokens(tokens);
+    }
 
-        auto [parse_success, postfix_tokens] = parse_regex(tokens);
+    auto [emit_success, bytecode] = regex_emit(tokens);
 
-        if(!parse_success)
-        {
-            log_error("Failed to parse regex: {}", regex);
-            return false;
-        }
+    if(!emit_success)
+    {
+        log_error("Failed to emit bytecode for regex: {}", regex);
+        return false;
+    }
 
-        if(flags & RegexFlags_DebugCompilation)
-        {
-            log_debug("Regex tokens (parse):");
-            print_tokens(tokens);
-        }
+    this->_bytecode = std::move(bytecode);
 
-        auto [emit_success, bytecode] = regex_emit(postfix_tokens);
+    if(flags & RegexFlags_DebugCompilation)
+    {
+        log_debug("**********");
+        log_debug("Regex disasm:");
+        regex_disasm(this->_bytecode);
+    }
 
-        if(!emit_success)
-        {
-            log_error("Failed to emit bytecode for regex: {}", regex);
-            return false;
-        }
-
-        this->_bytecode = std::move(bytecode);
-
-        if(flags & RegexFlags_DebugCompilation)
-        {
-            log_debug("Regex disasm:");
-            regex_disasm(this->_bytecode);
-        }
-
-        return true;
+    return true;
 }
 
 bool Regex::match(const StringD& str) const noexcept

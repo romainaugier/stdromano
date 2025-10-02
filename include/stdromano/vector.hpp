@@ -683,11 +683,12 @@ public:
             this->grow();
         }
 
-        std::memmove(this->at(position + 1),
-                     this->at(position),
+        std::memmove(this->data() + position + 1,
+                     this->data() + position,
                      (this->size() - position) * sizeof(T));
 
         ::new(this->at(position)) T(element);
+
         this->incr_size();
     }
 
@@ -711,8 +712,8 @@ public:
             this->grow();
         }
 
-        std::memmove(this->at(position + count),
-                     this->at(position),
+        std::memmove(this->data() + position + count,
+                     this->data() + position,
                      (this->size() - position) * sizeof(T));
 
         for(uint32_t i = 0; i < count; ++i)
@@ -726,7 +727,7 @@ public:
     }
 
     template <class InputIt>
-    iterator insert(const_iterator pos, InputIt first, InputIt last) noexcept
+    iterator insert(iterator pos, InputIt first, InputIt last) noexcept
     {
 #if STDROMANO_NULL_VECTOR_ASSERTIONS
         STDROMANO_ASSERT(this->_data != nullptr, "Vector has not been allocated");
@@ -754,7 +755,7 @@ public:
 
         uint32_t offset = 0;
 
-        if(pos == this->cend())
+        if(pos == this->end())
         {
             for(auto it = first; it != last; ++it)
             {
@@ -764,9 +765,9 @@ public:
         }
         else
         {
-            std::memmove(this->at(position + count),
-                        this->at(position),
-                        (this->size() - position) * sizeof(T));
+            std::memmove(this->data() + position + count,
+                         this->data() + position,
+                         (this->size() - position) * sizeof(T));
 
             for(auto it = first; it != last; ++it, ++offset)
             {
@@ -812,9 +813,9 @@ public:
         }
         else 
         {
-            std::memmove(this->at(position + count),
-                        this->at(position),
-                        (this->size() - position) * sizeof(T));
+            std::memmove(this->data() + position + count,
+                         this->data() + position,
+                         (this->size() - position) * sizeof(T));
 
             for(const auto& item : list)
             {
@@ -839,9 +840,11 @@ public:
         const uint32_t position = pos.index;
 
         this->at(position)->~T();
-        std::memmove(this->at(position),
-                     this->at(position + 1),
+
+        std::memmove(this->data() + position,
+                     this->data() + position + 1,
                      (this->size() - position - 1) * sizeof(T));
+
         this->decr_size();
 
         return iterator(this, position);
@@ -863,9 +866,10 @@ public:
                 this->at(start_pos + i)->~T();
             }
 
-            std::memmove(this->at(start_pos),
-                         this->at(start_pos + count),
+            std::memmove(this->data() + start_pos,
+                         this->data() + start_pos + count,
                          (this->size() - start_pos - count) * sizeof(T));
+
             this->set_size(this->size() - count);
 
             return iterator(this, start_pos);
@@ -883,9 +887,11 @@ public:
         STDROMANO_ASSERT(position < this->size(), "Position must be lower than the vector size");
 
         this->at(position)->~T();
-        std::memmove(this->at(position),
-                     this->at(position + 1),
+
+        std::memmove(this->data() + position,
+                     this->data() + position + 1,
                      (this->size() - position - 1) * sizeof(T));
+
         this->decr_size();
     }
 
