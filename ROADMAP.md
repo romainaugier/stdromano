@@ -19,6 +19,7 @@ This document tracks the feature set, progress, and future plans for the `stdrom
 - :white_check_mark: Cross-platform bit manipulation
 - :white_check_mark: Cross-platform filesystem interaction
 - :white_check_mark: Cross-platform atomics
+- :white_check_mark: Cross-platform CPU features detection
 - :white_check_mark: Profiling
 - :white_check_mark: Logger (based on spdlog)
 - :white_check_mark: ThreadPool (lockfree, based on concurrentqueue)
