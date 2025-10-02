@@ -4,7 +4,7 @@ This document tracks the feature set, progress, and future plans for the `stdrom
 
 ## Data Structures
 - :white_check_mark: String
-- :white_chekc_mark: Dynamic Vector
+- :white_check_mark: Dynamic Vector
 - :white_check_mark: Stack-based Dynamic Vector
 - :white_check_mark: HashMap
 - :white_check_mark: HashSet
