@@ -1,31 +1,13 @@
 @echo off
 setlocal enabledelayedexpansion
 
-rem SPDX-License-Identifier: BSD-3-Clause 
-rem Copyright (c) 2025 - Present Romain Augier 
-rem All rights reserved. 
+rem SPDX-License-Identifier: BSD-3-Clause
+rem Copyright (c) 2025 - Present Romain Augier
+rem All rights reserved.
 
 rem Little utility batch script to build the library
 
 call :LogInfo "Building stdromano"
-
-if not exist vcpkg (
-    call :LogInfo "Vcpkg can't be found, cloning and preparing it"
-    git clone https://github.com/romainaugier/vcpkg.git
-    cd vcpkg
-    call bootstrap-vcpkg.bat
-    cd ..
-)
-
-set VCPKG_ROOT=%CD%/vcpkg
-set CMAKE_TOOLCHAIN_FILE=%VCPKG_ROOT%/scripts/buildsystems/vcpkg.cmake
-
-echo.!PATH! | findstr /C:"!VCPKG_ROOT!" 1>nul
-
-if %errorlevel% equ 1 (
-    call :LogInfo "Can't find vcpkg root in PATH, appending it"
-    set PATH=!PATH!;!VCPKG_ROOT!
-)
 
 set BUILDTYPE=Release
 set RUNTESTS=0
@@ -35,9 +17,36 @@ set VERSION="0.0.0"
 set INSTALLDIR=%CD%\install
 set INSTALL=0
 set ADDRSAN=0
+set VCPKG_PATH=%CD%\vcpkg
+set VCPKG_USER_DEFINED=0
 
 for %%x in (%*) do (
     call :ParseArg %%~x
+)
+
+if not exist "%CD%\vcpkg" (
+    if %VCPKG_USER_DEFINED% equ 1 (
+        call :LogInfo "Using existing vcpkg installation"
+        set VCPKG_ROOT=%VCPKG_PATH%
+    ) else (
+        call :LogInfo "Vcpkg can't be found, cloning and preparing it"
+        git clone https://github.com/romainaugier/vcpkg.git
+        cd vcpkg
+        call bootstrap-vcpkg.bat
+        cd ..
+        set VCPKG_ROOT=%CD%/vcpkg
+    )
+)
+
+call :LogInfo "Vcpkg root: %VCPKG_ROOT%"
+
+set CMAKE_TOOLCHAIN_FILE=%VCPKG_ROOT%/scripts/buildsystems/vcpkg.cmake
+
+echo.!PATH! | findstr /C:"!VCPKG_ROOT!" 1>nul
+
+if %errorlevel% equ 1 (
+    call :LogInfo "Can't find vcpkg root in PATH, appending it"
+    set PATH=!PATH!;!VCPKG_ROOT!
 )
 
 if %REMOVEOLDDIR% equ 1 (
@@ -132,6 +141,10 @@ echo "%~1" | find /I "installdir">nul && (
     call :ParseInstallDir %~1
 )
 
+echo "%~1" | find /I "vcpkgpath">nul && (
+    call :ParseVcpkgPath %~1
+)
+
 exit /B 0
 rem //////////////////////////////////
 
@@ -148,12 +161,25 @@ exit /B 0
 rem //////////////////////////////////
 
 rem //////////////////////////////////
-rem Little function to parse the install dir from the command line 
+rem Little function to parse the install dir from the command line
 :ParseInstallDir
 
 for /f "tokens=1* delims=:" %%a in ("%~1") do (
     set INSTALLDIR=%%b
     call :LogInfo "Install directory specified by the user: %%b"
+)
+
+exit /B 0
+rem //////////////////////////////////
+
+rem //////////////////////////////////
+rem Little function to parse the vcpkg path from the command line
+:ParseVcpkgPath
+
+for /f "tokens=1* delims=:" %%a in ("%~1") do (
+    set VCPKG_PATH=%%b
+    set VCPKG_USER_DEFINED=1
+    call :LogInfo "Vcpkg path specified by the user: %%b"
 )
 
 exit /B 0
@@ -181,7 +207,7 @@ exit /B 0
 rem //////////////////////////////////
 
 rem //////////////////////////////////
-rem Little function to log warnings 
+rem Little function to log warnings
 :LogWarning
 
 echo [WARNING] : %~1
@@ -190,7 +216,7 @@ exit /B 0
 rem //////////////////////////////////
 
 rem //////////////////////////////////
-rem Little function to log infos 
+rem Little function to log infos
 :LogInfo
 
 echo [INFO] : %~1
