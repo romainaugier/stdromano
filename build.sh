@@ -66,7 +66,7 @@ parse_install_dir()
 parse_vcpkg_path()
 {
     VCPKG_PATH="$( cut -d ':' -f 2- <<< "$s" )"
-    log_info "Vcpkg path specified by user: $VCPKG_PATH
+    log_info "Vcpkg path specified by user: $VCPKG_PATH"
 }
 
 # Little function to log an information message to the console
@@ -165,7 +165,7 @@ cmake -S . -B build -DRUN_TESTS=$RUNTESTS \
                     -DTHREADSAN=$THREADSAN \
                     -DUBSAN=$UBSAN \
                     -DADDRSAN=$ADDRSAN \
-                    -DLEAKSAN=LEAK$SAN
+                    -DLEAKSAN=$LEAKSAN
 
 if [[ $? -ne 0 ]]; then
     log_error "Error during CMake configuration"
