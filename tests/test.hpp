@@ -108,7 +108,7 @@ class TestRunner
 class TestObject
 {
   private:
-    std::string* data;
+    std::string* data = nullptr;
     size_t ref_count;
     static size_t total_instances;
 
@@ -139,6 +139,7 @@ class TestObject
         if(this != &other)
         {
             delete this->data;
+
             this->data = new std::string(*other.data);
             this->ref_count = other.ref_count;
         }
@@ -151,6 +152,7 @@ class TestObject
         if(this != &other)
         {
             delete this->data;
+
             this->data = other.data;
             this->ref_count = other.ref_count;
             other.data = nullptr;
@@ -161,6 +163,17 @@ class TestObject
 
     ~TestObject()
     {
+        if(data != nullptr)
+        {
+            fprintf(stderr, "Deleting TestObject at %p with data=%p (content=%s)\n",
+                (void*)this, (void*)data, data->c_str());
+        }
+        else
+        {
+            fprintf(stderr, "Deleting moved-from TestObject at %p (data=nullptr)\n",
+                (void*)this);
+        }
+
         if(this->data != nullptr)
         {
             delete this->data;
@@ -172,6 +185,7 @@ class TestObject
     {
         if(this->data == nullptr || other.data == nullptr)
             return this->data == other.data;
+
         return *this->data == *other.data;
     }
 

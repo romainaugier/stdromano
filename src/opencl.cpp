@@ -2,6 +2,8 @@
 // Copyright (c) 2025 - Present Romain Augier
 // All rights reserved.
 
+#if defined(STDROMANO_ENABLE_OPENCL)
+
 #include "stdromano/opencl.hpp"
 
 STDROMANO_NAMESPACE_BEGIN
@@ -137,3 +139,5 @@ const char* get_cl_error_string(cl_int error) noexcept
 DETAIL_NAMESPACE_END
 
 STDROMANO_NAMESPACE_END
+
+#endif /* defined(STDROMANO_ENABLE_OPENCL) */

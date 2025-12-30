@@ -1,6 +1,6 @@
-# SPDX-License-Identifier: BSD-3-Clause 
-# Copyright (c) 2025 - Present Romain Augier 
-# All rights reserved. 
+# SPDX-License-Identifier: BSD-3-Clause
+# Copyright (c) 2025 - Present Romain Augier
+# All rights reserved.
 
 include(GNUInstallDirs)
 include(target_options)
@@ -10,24 +10,19 @@ file(GLOB_RECURSE src_files *.cpp)
 if(WIN32)
     enable_language(ASM_MASM)
     file(GLOB_RECURSE asm_files asm/x64_windows/*.asm)
-
-    add_library(asm_objects OBJECT ${asm_files})
-
-    set_target_properties(asm_objects PROPERTIES MASM_FLAGS "")
-    set(asm_objects $<TARGET_OBJECTS:asm_objects>)
 elseif(UNIX)
-    set(asm_files asm/x64_linux/*.s)
+    enable_language(ASM_NASM)
+    file(GLOB_RECURSE asm_files asm/x64_linux/*.asm)
+    set(CMAKE_ASM_NASM_OBJECT_FORMAT "elf64")
 else()
     message(FATAL_ERROR "Platform not supported")
 endif()
 
+add_library(asm_objects OBJECT ${asm_files})
+
 add_definitions(-DSTDROMANO_BUILD_SHARED)
 
-if(WIN32)
-    add_library(${PROJECT_NAME} SHARED ${src_files} ${asm_objects})
-else()
-    add_library(${PROJECT_NAME} SHARED ${src_files})
-endif()
+add_library(${PROJECT_NAME} SHARED ${src_files} $<TARGET_OBJECTS:asm_objects>)
 
 set_target_properties(${PROJECT_NAME} PROPERTIES PREFIX "")
 set_target_properties(${PROJECT_NAME} PROPERTIES CXX_STANDARD 17)
@@ -50,7 +45,10 @@ elseif(WIN32)
 endif()
 
 target_link_libraries(${PROJECT_NAME} PRIVATE jemalloc)
-target_link_libraries(${PROJECT_NAME} PUBLIC OpenCL::OpenCL)
+
+if(ENABLE_OPENCL)
+    target_link_libraries(${PROJECT_NAME} PUBLIC OpenCL::OpenCL)
+endif()
 
 target_include_directories(${PROJECT_NAME}
                            PUBLIC
@@ -91,7 +89,7 @@ install(CODE [[
              TYPE SHARED_LIBRARY
              FOLLOW_SYMLINK_CHAIN
              FILES "${FILE}")
-                
+
     endforeach()
 ]])
 
@@ -100,10 +98,12 @@ install(
     DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
 )
 
-install(
-    DIRECTORY "${PROJECT_SOURCE_DIR}/src/cl"
-    DESTINATION ${CMAKE_INSTALL_BINDIR}
-)
+if(ENABLE_OPENCL)
+    install(
+        DIRECTORY "${PROJECT_SOURCE_DIR}/src/cl"
+        DESTINATION ${CMAKE_INSTALL_BINDIR}
+    )
+endif()
 
 install(
     DIRECTORY ${spdlog_INCLUDE_DIRS}/
@@ -112,23 +112,25 @@ install(
 )
 
 install(
-    FILES ${concurrentqueue_INCLUDE_DIRS}/concurrentqueue.h 
+    FILES ${concurrentqueue_INCLUDE_DIRS}/concurrentqueue.h
           ${concurrentqueue_INCLUDE_DIRS}/blockingconcurrentqueue.h
           ${concurrentqueue_INCLUDE_DIRS}/lightweightsemaphore.h
     DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
 )
 
-install(
-    DIRECTORY ${OpenCL_INCLUDE_DIR}/CL/
-    DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/CL
-    FILES_MATCHING PATTERN "*.h"
-)
+if(ENABLE_OPENCL)
+    install(
+        DIRECTORY ${OpenCL_INCLUDE_DIR}/CL/
+        DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/CL
+        FILES_MATCHING PATTERN "*.h"
+    )
 
-install(
-    DIRECTORY ${OpenCLHPP_INCLUDE_DIR}/CL/
-    DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/CL
-    FILES_MATCHING PATTERN "*.hpp"
-)
+    install(
+        DIRECTORY ${OpenCLHPP_INCLUDE_DIR}/CL/
+        DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/CL
+        FILES_MATCHING PATTERN "*.hpp"
+    )
+endif()
 
 install(
     EXPORT "${PROJECT_NAME}Targets"

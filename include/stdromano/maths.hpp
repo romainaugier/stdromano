@@ -231,7 +231,7 @@ constexpr STDROMANO_FORCE_INLINE T clamp(T x,
 
 /******************************************/
 template<typename T>
-constexpr STDROMANO_FORCE_INLINE T clampz(T x, 
+constexpr STDROMANO_FORCE_INLINE T clampz(T x,
                                           T upper = constants<T>::one) noexcept
 {
     return max(constants<T>::zero, min(x, upper));
@@ -493,7 +493,7 @@ template<>
 STDROMANO_FORCE_INLINE void sincos(float theta, float* s, float* c) noexcept
 {
 #if defined(STDROMANO_GCC)
-    __builtin_sincosf(theta, sin, cos);
+    __builtin_sincosf(theta, s, c);
 #else
     *s = sin(theta);
     *c = cos(theta);
@@ -504,7 +504,7 @@ template<>
 STDROMANO_FORCE_INLINE void sincos(double theta, double* s, double* c) noexcept
 {
 #if defined(STDROMANO_GCC)
-    __builtin_sincos(theta, sin, cos);
+    __builtin_sincos(theta, s, c);
 #else
     *s = sin(theta);
     *c = cos(theta);
@@ -609,7 +609,7 @@ STDROMANO_FORCE_INLINE double nfms(double a, double b, double c) noexcept
 
 /******************************************/
 template<typename T>
-STDROMANO_FORCE_INLINE bool equal_with_abs_error(const T lhs, const T rhs, const T err) noexcept 
+STDROMANO_FORCE_INLINE bool equal_with_abs_error(const T lhs, const T rhs, const T err) noexcept
 {
     return abs(lhs - rhs) < err;
 }

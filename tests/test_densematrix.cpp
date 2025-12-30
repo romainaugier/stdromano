@@ -3,7 +3,10 @@
 // All rights reserved.
 
 #include "stdromano/linalg/dense_matrix.hpp"
+
+#if defined(STDROMANO_ENABLE_OPENCL)
 #include "stdromano/opencl.hpp"
+#endif /* defined(STDROMANO_ENABLE_OPENCL) */
 
 #define STDROMANO_ENABLE_PROFILING
 #include "stdromano/profiling.hpp"
@@ -18,6 +21,7 @@ int main() noexcept
 {
     stdromano::log_info("Starting dense_matrix test");
 
+#if defined(STDROMANO_ENABLE_OPENCL)
     stdromano::OpenCLConfig config;
     config.preferred_vendor = "NVIDIA";
     config.enable_debug_output = true;
@@ -31,6 +35,7 @@ int main() noexcept
         stdromano::log_error("Error initializing OpenCL");
         return 0;
     }
+#endif /* defined(STDROMANO_ENABLE_OPENCL) */
 
 #if STDROMANO_DEBUG
     std::size_t M = 644, N = 766, K = 512;
@@ -55,6 +60,7 @@ int main() noexcept
 #endif /* defined(STDROMANO_DEBUG) */
     }
 
+#if defined(STDROMANO_ENABLE_OPENCL)
     stdromano::DenseMatrixF A_gpu = A.to_backend(stdromano::LinAlgBackend_GPU);
     stdromano::DenseMatrixF B_gpu = B.to_backend(stdromano::LinAlgBackend_GPU);
 
@@ -69,6 +75,7 @@ int main() noexcept
         C.debug(10, 10);
 #endif /* defined(STDROMANO_DEBUG) */
     }
+#endif /* defined(STDROMANO_ENABLE_OPENCL) */
 
     stdromano::log_info("Finished dense_matrix test");
 

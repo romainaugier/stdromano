@@ -4,6 +4,8 @@
 
 #pragma once
 
+#if defined(STDROMANO_ENABLE_OPENCL)
+
 #if !defined(__STDROMANO_OPENCL)
 #define __STDROMANO_OPENCL
 
@@ -243,7 +245,7 @@ public:
     }
 
     template <typename T>
-    cl::Buffer create_buffer(std::size_t count, cl_mem_flags flags = CL_MEM_READ_WRITE) 
+    cl::Buffer create_buffer(std::size_t count, cl_mem_flags flags = CL_MEM_READ_WRITE)
     {
         STDROMANO_ASSERT(this->is_initialized(), "OpenCL Manager has not been initialized");
         STDROMANO_ASSERT(count > 0, "Buffer cannot be zero");
@@ -275,7 +277,7 @@ public:
                                                                     0,
                                                                     sizeof(T) * size,
                                                                     data);
-        
+
         if(err != CL_SUCCESS)
         {
             log_error("OpenCL error: failed to write buffer: {}", get_cl_error_string(err));
@@ -332,7 +334,7 @@ public:
                                                                    0,
                                                                    sizeof(T) * count,
                                                                    data);
-        
+
         if(err != CL_SUCCESS)
         {
             log_error("OpenCL error: failed to read buffer: {}", get_cl_error_string(err));
@@ -481,7 +483,7 @@ public:
 
         if(err != CL_SUCCESS)
         {
-            stdromano::log_error("Failed to get profiling info: {}", 
+            stdromano::log_error("Failed to get profiling info: {}",
                                 this->get_cl_error_string(err));
             return 0.0;
         }
@@ -544,7 +546,7 @@ public:
         {
             return true;
         }
-        
+
         const StringD kernel_path = fs_expand_from_lib_dir(StringD("cl/{}.cl", name));
 
         return fs_path_exists(kernel_path);
@@ -619,7 +621,7 @@ private:
                 return false;
             }
 
-            log_error("OpenCL error: Failed to get devices: {}", 
+            log_error("OpenCL error: Failed to get devices: {}",
                         this->get_cl_error_string(err));
 
             return false;
@@ -631,7 +633,7 @@ private:
             return false;
         }
 
-        if(this->_config.prefer_dedicated_gpu && 
+        if(this->_config.prefer_dedicated_gpu &&
             this->_config.device_type == CL_DEVICE_TYPE_GPU)
         {
             std::sort(all_devices.begin(),
@@ -759,3 +761,5 @@ STDROMANO_EXPIMP_TEMPLATE template class STDROMANO_API std::vector<cl::Event>;
 #endif /* defined(STDROMANO_WIN) */
 
 #endif /* !defined(__STDROMANO_OPENCL) */
+
+#endif /* defined(STDROMANO_ENABLE_OPENCL) */

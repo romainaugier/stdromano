@@ -9,8 +9,8 @@ asm__detail_strcmp_cs:
     xor rcx, rcx
 
 _loop:
-    movzx eax, byte ptr [rdi + rcx]
-    movzx r10d, byte ptr [rsi + rcx]
+    movzx eax, byte [rdi + rcx]
+    movzx r10d, byte [rsi + rcx]
     cmp al, r10b
     jne _fail
     inc rcx
@@ -35,42 +35,41 @@ asm__detail_strcmp_sse_cs:
     xor r9, r9 ; r9d = i
 
     test r10, r10
-    je _tail
+    je _tail_sse
 
-_simd:
-    prefetcht0 byte ptr [rdi + r9 + 96]
-    prefetcht0 byte ptr [rsi + r9 + 96]
+_simd_sse:
+    prefetcht0 byte [rdi + r9 + 96]
+    prefetcht0 byte [rsi + r9 + 96]
 
-    movdqa xmm0, xmmword ptr [rdi + r9]
-    movdqa xmm1, xmmword ptr [rsi + r9]
+    movdqa xmm0, [rdi + r9]
+    movdqa xmm1, [rsi + r9]
     pcmpeqb xmm0, xmm1 ; sse2
     pmovmskb eax, xmm0
-    cmp eax, 0000FFFFh 
-    jne _mismatch
+    cmp eax, 0000FFFFh
+    jne _mismatch_sse
 
     add r9, 16
     cmp r9, r10
-    jb _simd
+    jb _simd_sse
 
-_tail:
-    mov r11, r8
-    sub r11, r10
-    jz _equal
+_tail_sse:
+    sub rdx, r10
+    jz _equal_sse
 
-_tail_loop:
-    mov al, byte ptr [rdi + r10]
-    cmp al, byte ptr [rsi + r10]
-    jne _mismatch
+_tail_loop_sse:
+    mov al, byte [rdi + r10]
+    cmp al, byte [rsi + r10]
+    jne _mismatch_sse
     inc r10
     dec r11
-    jnz _tail_loop
+    jnz _tail_loop_sse
 
-_equal:
+_equal_sse:
     vzeroupper
     mov eax, 1
     ret
 
-_mismatch:
+_mismatch_sse:
     vzeroupper
     xor eax, eax
     ret
@@ -84,9 +83,9 @@ asm__detail_strcmp_avx_cs:
     xor     r9d, r9d
 
     test    r10, r10
-    je      _tail
+    je      _tail_avx
 
-_simd:
+_simd_avx:
     prefetcht0 [rdi + r9 + 192]
     prefetcht0 [rsi + r9 + 192]
 
@@ -95,31 +94,31 @@ _simd:
     vpcmpeqb ymm2, ymm0, ymm1
     vpmovmskb eax, ymm2
     cmp eax, -1
-    jne _mismatch
+    jne _mismatch_avx
 
     add r9, 32
     cmp r9, r10
-    jb _simd
+    jb _simd_avx
 
-_tail:
+_tail_avx:
     mov r11, rdx
     sub r11, r10
-    jz _equal
+    jz _equal_avx
 
-_tail_loop:
+_tail_loop_avx:
     mov al,  [rdi + r10]
     cmp al,  [rsi + r10]
-    jne _mismatch
+    jne _mismatch_avx
     inc r10
     dec r11
-    jnz _tail_loop
+    jnz _tail_loop_avx
 
-_equal:
+_equal_avx:
     vzeroupper
     mov eax, 1
     ret
 
-_mismatch:
+_mismatch_avx:
     vzeroupper
     xor eax, eax
     ret

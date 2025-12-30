@@ -15,6 +15,7 @@ THREADSAN=0
 UBSAN=0
 ADDRSAN=0
 LEAKSAN=0
+OPENCL=0
 VCPKG_PATH="$PWD/vcpkg"
 VCPKG_USER_DEFINED=0
 
@@ -38,6 +39,8 @@ parse_args()
     [ "$1" == "--addrsan" ] && ADDRSAN=1
 
     [ "$1" == "--leaksan" ] && LEAKSAN=1
+
+    [ "$1" == "--opencl" ] && OPENCL=1
 
     [ "$1" == "--export-compile-commands" ] && EXPORTCOMPILECOMMANDS=1
 
@@ -102,19 +105,14 @@ do
     parse_args "$arg"
 done
 
-if [[ $UBSAN -eq 1 ]]; then
+if [[ $THREADSAN -eq 1 ]]; then
     if [[ $ADDRSAN -eq 1 ]]; then
-        log_error "Undefined Behavior Sanitizer and Address Sanitizer are not compatible"
+        log_error "Thread Sanitizer and Address Sanitizer are not compatible"
         exit 1
     fi
 
     if [[ $LEAKSAN -eq 1 ]]; then
-        log_error "Undefined Behavior Sanitizer and Leak Sanitizer are not compatible"
-        exit 1
-    fi
-
-    if [[ $THREADSAN -eq 1 ]]; then
-        log_error "Undefined Behavior Sanitizer and Thread Sanitizer are not compatible"
+        log_error "Thread Sanitizer and Leak Sanitizer are not compatible"
         exit 1
     fi
 fi
@@ -131,6 +129,8 @@ if [[ ! -d "vcpkg" ]]; then
         cd ..
         export VCPKG_ROOT=$PWD/vcpkg
     fi
+else
+    export VCPKG_ROOT=$PWD/vcpkg
 fi
 
 log_info "Vcpkg root: $VCPKG_ROOT"

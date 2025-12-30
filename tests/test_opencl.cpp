@@ -2,6 +2,8 @@
 // Copyright (c) 2025 - Present Romain Augier
 // All rights reserved.
 
+#if defined(STDROMANO_ENABLE_OPENCL)
+
 #include "stdromano/opencl.hpp"
 #include "stdromano/logger.hpp"
 
@@ -58,3 +60,9 @@ int main()
 
     return 0;
 }
+
+#else
+
+int main() { return 0; }
+
+#endif /* defined(STDROMANO_ENABLE_OPENCL) */

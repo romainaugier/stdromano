@@ -45,6 +45,7 @@
 #include <cassert>
 #include <cstddef>
 #include <cstdint>
+#include <cstdio>
 
 #if INTPTR_MAX == INT64_MAX || defined(__x86_64__)
 #define STDROMANO_X64
@@ -60,7 +61,7 @@
 #define WIN32_LEAN_AND_MEAN
 #endif /* !defined(WIN32_LEAN_AND_MEAN) */
 #if !defined(NOMINMAX)
-#define NOMINMAX 
+#define NOMINMAX
 #endif /* !defined(NOMINMAX) */
 #if defined(STDROMANO_X64)
 #define STDROMANO_PLATFORM_STR "WIN64"

@@ -5,7 +5,10 @@
 @PACKAGE_INIT@
 
 include(CMakeFindDependencyMacro)
-find_dependency(OpenCL)
+
+if(@ENABLE_OPENCL@)
+    find_dependency(OpenCL)
+endif()
 
 include("${CMAKE_CURRENT_LIST_DIR}/stdromanoDeps.cmake")
 include(${CMAKE_CURRENT_LIST_DIR}/stdromanoTargets.cmake)
@@ -39,6 +42,10 @@ if(WIN32)
 endif()
 
 set_and_check(stdromano_INCLUDE_DIR "@PACKAGE_CMAKE_INSTALL_INCLUDEDIR@")
-set(stdromano_LIBRARIES stdromano::stdromano)
-set(stdromano_RUNTIME_DEPENDENCIES ${stdromano_JEMALLOC_RUNTIME} ${stdromano_OPENCL_RUNTIME})
+list(APPEND stdromano_LIBRARIES stdromano::stdromano)
+
+if(@ENABLE_OPENCL@)
+    list(APPEND stdromano_RUNTIME_DEPENDENCIES ${stdromano_OPENCL_RUNTIME})
+endif()
+
 check_required_components(stdromano)

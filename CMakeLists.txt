@@ -11,9 +11,12 @@ cmake_minimum_required(VERSION 3.15)
 project(stdromano VERSION ${VERSION} LANGUAGES CXX ASM)
 
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/cmake")
-list(APPEND CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/cmake/finders")
 
 set(CMAKE_VERBOSE_MAKEFILE ON)
+
+option(ENABLE_OPENCL
+       "Builds the OpenCL utilities, and accelerators for linear algebra"
+       OFF)
 
 if(RUN_TESTS EQUAL 1)
     message(STATUS "RUN_TESTS enabled, building and running tests")
@@ -73,7 +76,7 @@ else()
         $ENV{VCPKG_ROOT}/installed/x64-windows/include
         $ENV{VCPKG_ROOT}/installed/x64-windows-static/include
     )
-    
+
     find_library(JEMALLOC_LIBRARY
         NAMES jemalloc jemalloc_s
         PATHS
@@ -92,7 +95,7 @@ else()
         $ENV{VCPKG_ROOT}/installed/x64-windows/bin
         $ENV{VCPKG_ROOT}/installed/x64-windows/debug/bin
     )
-  
+
     if(JEMALLOC_INCLUDE_DIR AND JEMALLOC_LIBRARY AND JEMALLOC_DLL)
         message(STATUS "Found jemalloc")
         message(STATUS "jemalloc include dir: ${JEMALLOC_INCLUDE_DIR}")
@@ -112,91 +115,93 @@ else()
 endif()
 
 # OpenCL
-if(UNIX)
-    find_package(PkgConfig QUIET)
+if(ENABLE_OPENCL)
+    if(UNIX)
+        find_package(PkgConfig QUIET)
 
-    if(PkgConfig_FOUND)
-        pkg_check_modules(OPENCL_PKG QUIET OpenCL)
-    endif()
-
-    find_library(SYSTEM_OPENCL_LIB
-        NAMES OpenCL OpenCL.so OpenCL.so.1
-        HINTS /usr/lib64 /lib64 /usr/lib /usr/local/lib
-    )
-
-    find_path(SYSTEM_OPENCL_INCLUDE_DIR
-        NAMES CL/cl.h
-        HINTS /usr/include /usr/local/include /usr/include/CL
-    )
-
-    if(SYSTEM_OPENCL_LIB AND SYSTEM_OPENCL_INCLUDE_DIR)
-        message(STATUS "Found system OpenCL: ${SYSTEM_OPENCL_LIB}, includes: ${SYSTEM_OPENCL_INCLUDE_DIR}")
-
-        if(TARGET OpenCL::OpenCL)
-            message(STATUS "Overriding existing OpenCL::OpenCL imported target to system OpenCL")
-
-            set_target_properties(OpenCL::OpenCL PROPERTIES
-                IMPORTED_LOCATION "${SYSTEM_OPENCL_LIB}"
-                INTERFACE_INCLUDE_DIRECTORIES "${SYSTEM_OPENCL_INCLUDE_DIR}"
-            )
-        else()
-            add_library(OpenCL::OpenCL UNKNOWN IMPORTED GLOBAL)
-
-            set_target_properties(OpenCL::OpenCL PROPERTIES
-                IMPORTED_LOCATION "${SYSTEM_OPENCL_LIB}"
-                INTERFACE_INCLUDE_DIRECTORIES "${SYSTEM_OPENCL_INCLUDE_DIR}"
-            )
+        if(PkgConfig_FOUND)
+            pkg_check_modules(OPENCL_PKG QUIET OpenCL)
         endif()
 
-        set(OpenCL_INCLUDE_DIR ${SYSTEM_OPENCL_INCLUDE_DIR})
-    else()
-        message(STATUS "System OpenCL not found via find_library/find_path; will try find_package or vcpkg fallback")
-
-        find_package(OpenCL QUIET)
-
-        if(NOT TARGET OpenCL::OpenCL AND OpenCL_LIBRARY)
-            add_library(OpenCL::OpenCL UNKNOWN IMPORTED GLOBAL)
-            set_target_properties(OpenCL::OpenCL PROPERTIES
-                IMPORTED_LOCATION "${OpenCL_LIBRARY}"
-                INTERFACE_INCLUDE_DIRECTORIES "${OpenCL_INCLUDE_DIR}"
-            )
-        endif()
-    endif()
-
-elseif(WIN32)
-    # Usually OpenCL comes with CUDA on windows (this is how I install it) so we ask for Cuda toolkit and 
-    # then use the OpenCL provided by Nvidia
-    find_package(CUDAToolkit)
-
-    if(NOT ${CUDAToolkit_FOUND})
-        message(STATUS "Cannot find OpenCL via Cuda Toolkit, downloading it using vcpkg")
-
-        file(READ ${CMAKE_SOURCE_DIR}/vcpkg.json JSON_CONTENT)
-
-        string(REGEX REPLACE
-               "(\"dependencies\"[ \t]*:[ \t]*\\[[^]]*)(\\])"
-               "\\1, \"opencl\"\\2"
-               JSON_CONTENT
-               "${JSON_CONTENT}")
-
-        file(WRITE ${CMAKE_SOURCE_DIR}/vcpkg.json "${JSON_CONTENT}")
-
-        execute_process(
-            COMMAND vcpkg install
-            WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/vcpkg
+        find_library(SYSTEM_OPENCL_LIB
+            NAMES OpenCL OpenCL.so OpenCL.so.1
+            HINTS /usr/lib64 /lib64 /usr/lib /usr/local/lib
         )
-        set(OpenCL_ROOT "${CMAKE_SOURCE_DIR}/vcpkg/packages/opencl_x64-windows")
-    else()
-        set(OpenCL_ROOT "${CUDA_TOOLKIT_ROOT_DIR}")
+
+        find_path(SYSTEM_OPENCL_INCLUDE_DIR
+            NAMES CL/cl.h
+            HINTS /usr/include /usr/local/include /usr/include/CL
+        )
+
+        if(SYSTEM_OPENCL_LIB AND SYSTEM_OPENCL_INCLUDE_DIR)
+            message(STATUS "Found system OpenCL: ${SYSTEM_OPENCL_LIB}, includes: ${SYSTEM_OPENCL_INCLUDE_DIR}")
+
+            if(TARGET OpenCL::OpenCL)
+                message(STATUS "Overriding existing OpenCL::OpenCL imported target to system OpenCL")
+
+                set_target_properties(OpenCL::OpenCL PROPERTIES
+                    IMPORTED_LOCATION "${SYSTEM_OPENCL_LIB}"
+                    INTERFACE_INCLUDE_DIRECTORIES "${SYSTEM_OPENCL_INCLUDE_DIR}"
+                )
+            else()
+                add_library(OpenCL::OpenCL UNKNOWN IMPORTED GLOBAL)
+
+                set_target_properties(OpenCL::OpenCL PROPERTIES
+                    IMPORTED_LOCATION "${SYSTEM_OPENCL_LIB}"
+                    INTERFACE_INCLUDE_DIRECTORIES "${SYSTEM_OPENCL_INCLUDE_DIR}"
+                )
+            endif()
+
+            set(OpenCL_INCLUDE_DIR ${SYSTEM_OPENCL_INCLUDE_DIR})
+        else()
+            message(STATUS "System OpenCL not found via find_library/find_path; will try find_package or vcpkg fallback")
+
+            find_package(OpenCL QUIET)
+
+            if(NOT TARGET OpenCL::OpenCL AND OpenCL_LIBRARY)
+                add_library(OpenCL::OpenCL UNKNOWN IMPORTED GLOBAL)
+                set_target_properties(OpenCL::OpenCL PROPERTIES
+                    IMPORTED_LOCATION "${OpenCL_LIBRARY}"
+                    INTERFACE_INCLUDE_DIRECTORIES "${OpenCL_INCLUDE_DIR}"
+                )
+            endif()
+        endif()
+
+    elseif(WIN32)
+        # Usually OpenCL comes with CUDA on windows (this is how I install it) so we ask for Cuda toolkit and
+        # then use the OpenCL provided by Nvidia
+        find_package(CUDAToolkit)
+
+        if(NOT ${CUDAToolkit_FOUND})
+            message(STATUS "Cannot find OpenCL via Cuda Toolkit, downloading it using vcpkg")
+
+            file(READ ${CMAKE_SOURCE_DIR}/vcpkg.json JSON_CONTENT)
+
+            string(REGEX REPLACE
+                "(\"dependencies\"[ \t]*:[ \t]*\\[[^]]*)(\\])"
+                "\\1, \"opencl\"\\2"
+                JSON_CONTENT
+                "${JSON_CONTENT}")
+
+            file(WRITE ${CMAKE_SOURCE_DIR}/vcpkg.json "${JSON_CONTENT}")
+
+            execute_process(
+                COMMAND vcpkg install
+                WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/vcpkg
+            )
+            set(OpenCL_ROOT "${CMAKE_SOURCE_DIR}/vcpkg/packages/opencl_x64-windows")
+        else()
+            set(OpenCL_ROOT "${CUDA_TOOLKIT_ROOT_DIR}")
+        endif()
+
+        find_package(OpenCL REQUIRED)
     endif()
 
-    find_package(OpenCL REQUIRED)
+    include_directories(${OpenCL_INCLUDE_DIR})
+
+    set(OpenCLHPP_INCLUDE_DIR "${CMAKE_SOURCE_DIR}/ext/opencl_hpp/include")
+    include_directories(${OpenCLHPP_INCLUDE_DIR})
 endif()
-
-include_directories(${OpenCL_INCLUDE_DIR})
-
-set(OpenCLHPP_INCLUDE_DIR "${CMAKE_SOURCE_DIR}/ext/opencl_hpp/include")
-include_directories(${OpenCLHPP_INCLUDE_DIR})
 
 add_subdirectory(src)
 

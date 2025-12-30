@@ -10,8 +10,12 @@
 #include "stdromano/memory.hpp"
 #include "stdromano/linalg/backend.hpp"
 #include "stdromano/linalg/traits.hpp"
-#include "stdromano/opencl.hpp"
 #include "stdromano/filesystem.hpp"
+#include "stdromano/logger.hpp"
+
+#if defined(STDROMANO_ENABLE_OPENCL)
+#include "stdromano/opencl.hpp"
+#endif /* defined(STDROMANO_ENABLE_OPENCL) */
 
 STDROMANO_NAMESPACE_BEGIN
 
@@ -56,12 +60,12 @@ namespace detail {
                                   std::size_t max_N = 0) noexcept;
 }
 
-/* 
+/*
     Dense matrix stored in column-major order for the best matmul performance
 */
 
 template<typename T>
-class DenseMatrix 
+class DenseMatrix
 {
     static_assert(is_compatible_v<T>,
                   "T must be float, double or std::int32_t");
@@ -69,13 +73,15 @@ class DenseMatrix
 private:
     T* _data;
 
+#if defined(STDROMANO_ENABLE_OPENCL)
     cl::Buffer _gpu_data;
+#endif /* defined(STDROMANO_ENABLE_OPENCL) */
 
     std::size_t _nrows;
     std::size_t _ncols;
 
     std::uint32_t _backend;
-    
+
     static constexpr size_t ALIGNMENT = 32;
 
     void allocate(std::size_t size) noexcept
@@ -89,46 +95,58 @@ private:
 
             this->_data = mem_aligned_alloc<T>(size, ALIGNMENT);
 
+#if defined(STDROMANO_ENABLE_OPENCL)
             this->_gpu_data = nullptr;
+#endif /* defined(STDROMANO_ENABLE_OPENCL) */
         }
         else if(this->_backend == LinAlgBackend_GPU)
         {
+#if defined(STDROMANO_ENABLE_OPENCL)
             this->_gpu_data = opencl_manager.create_buffer<T>(this->size());
+#else
+            log_error("OpenCL Backed not available");
+#endif /* defined(STDROMANO_ENABLE_OPENCL) */
         }
     }
-    
+
 public:
     DenseMatrix(std::uint32_t backend = get_default_backend()) : _data(nullptr),
+#if defined(STDROMANO_ENABLE_OPENCL)
                                                                  _gpu_data(nullptr),
+#endif /* defined(STDROMANO_ENABLE_OPENCL) */
                                                                  _nrows(0),
                                                                  _ncols(0),
                                                                  _backend(backend) {}
-    
+
     DenseMatrix(std::size_t nrows,
                 std::size_t ncols,
                 std::uint32_t backend = get_default_backend()) : _data(nullptr),
+#if defined(STDROMANO_ENABLE_OPENCL)
                                                                  _gpu_data(nullptr),
-                                                                 _nrows(nrows), 
+#endif /* defined(STDROMANO_ENABLE_OPENCL) */
+                                                                 _nrows(nrows),
                                                                  _ncols(ncols),
                                                                  _backend(backend)
     {
         this->allocate(this->nbytes());
     }
-    
+
     DenseMatrix(std::size_t nrows,
                 std::size_t ncols,
                 const T& init_value,
                 std::uint32_t backend = get_default_backend()) : _data(nullptr),
+#if defined(STDROMANO_ENABLE_OPENCL)
                                                                  _gpu_data(nullptr),
+#endif /* defined(STDROMANO_ENABLE_OPENCL) */
                                                                  _nrows(nrows),
                                                                  _ncols(ncols),
-                                                                 _backend(backend) 
+                                                                 _backend(backend)
     {
         this->allocate(this->nbytes());
 
         this->fill(init_value);
     }
-    
+
     ~DenseMatrix() noexcept
     {
         if(this->_data != nullptr)
@@ -136,9 +154,11 @@ public:
             mem_aligned_free(this->_data);
         }
     }
-    
+
     DenseMatrix(const DenseMatrix& other) noexcept : _data(nullptr),
+#if defined(STDROMANO_ENABLE_OPENCL)
                                                      _gpu_data(nullptr),
+#endif /* defined(STDROMANO_ENABLE_OPENCL) */
                                                      _nrows(other._nrows),
                                                      _ncols(other._ncols),
                                                      _backend(other._backend)
@@ -151,7 +171,11 @@ public:
         }
         else if(this->_backend == LinAlgBackend_GPU)
         {
-            opencl_manager.copy_buffer(this->_gpu_data, other._gpu_data, this->nbytes());
+#if defined(STDROMANO_ENABLE_OPENCL)
+        opencl_manager.copy_buffer(this->_gpu_data, other._gpu_data, this->nbytes());
+#else
+        log_error("OpenCL Backend not available");
+#endif /* defined(STDROMANO_ENABLE_OPENCL) */
         }
     }
 
@@ -168,12 +192,14 @@ public:
 
         return *this;
     }
-    
+
     DenseMatrix(DenseMatrix&& other) noexcept : _nrows(other._nrows),
                                                 _ncols(other._ncols),
                                                 _backend(other._backend),
-                                                _data(other._data),
-                                                _gpu_data(std::move(other._gpu_data))
+#if defined(STDROMANO_ENABLE_OPENCL)
+                                                _gpu_data(std::move(other._gpu_data)),
+#endif /* defined(STDROMANO_ENABLE_OPENCL) */
+                                                _data(other._data)
     {
         other._nrows = 0;
         other._ncols = 0;
@@ -193,7 +219,9 @@ public:
             this->_ncols = other._ncols;
             this->_backend = other._backend;
             this->_data = other._data;
+#if defined(STDROMANO_ENABLE_OPENCL)
             this->_gpu_data = std::move(other._gpu_data);
+#endif /* defined(STDROMANO_ENABLE_OPENCL) */
 
             other._nrows = 0;
             other._ncols = 0;
@@ -202,17 +230,17 @@ public:
 
         return *this;
     }
-    
+
     STDROMANO_FORCE_INLINE std::size_t nrows() const { return this->_nrows; }
     STDROMANO_FORCE_INLINE std::size_t ncols() const { return this->_ncols; }
     STDROMANO_FORCE_INLINE std::size_t size() const { return this->_nrows * this->_ncols; }
 
-    STDROMANO_FORCE_INLINE std::size_t nbytes() const noexcept 
-    { 
+    STDROMANO_FORCE_INLINE std::size_t nbytes() const noexcept
+    {
         return this->_nrows * this->_ncols * sizeof(T);
     }
-    
-    STDROMANO_FORCE_INLINE T& operator()(std::size_t row, std::size_t col) noexcept 
+
+    STDROMANO_FORCE_INLINE T& operator()(std::size_t row, std::size_t col) noexcept
     {
         STDROMANO_ASSERT(this->_backend != LinAlgBackend_GPU,
                          "GPU Backend has no per element access");
@@ -220,7 +248,7 @@ public:
 
         return this->_data[col * this->_nrows + row];
     }
-    
+
     STDROMANO_FORCE_INLINE const T& operator()(size_t row, size_t col) const noexcept
     {
         STDROMANO_ASSERT(this->_backend != LinAlgBackend_GPU,
@@ -229,7 +257,7 @@ public:
 
         return this->_data[col * this->_nrows + row];
     }
-    
+
     STDROMANO_FORCE_INLINE T& at(size_t row, size_t col) noexcept
     {
         STDROMANO_ASSERT(this->_backend != LinAlgBackend_GPU,
@@ -238,7 +266,7 @@ public:
 
         return this->_data[col * this->_nrows + row];
     }
-    
+
     STDROMANO_FORCE_INLINE const T& at(size_t row, size_t col) const noexcept
     {
         STDROMANO_ASSERT(this->_backend != LinAlgBackend_GPU,
@@ -247,12 +275,14 @@ public:
 
         return this->_data[col * this->_nrows + row];
     }
-    
+
     STDROMANO_FORCE_INLINE T* data() noexcept { return this->_data; }
     STDROMANO_FORCE_INLINE const T* data() const noexcept { return this->_data; }
 
+#if defined(STDROMANO_ENABLE_OPENCL)
     STDROMANO_FORCE_INLINE cl::Buffer& gpu_data() noexcept { return this->_gpu_data; }
     STDROMANO_FORCE_INLINE const cl::Buffer& gpu_data() const noexcept { return this->_gpu_data; }
+#endif /* defined(STDROMANO_ENABLE_OPENCL) */
 
     DenseMatrix to_backend(std::uint32_t backend) const noexcept
     {
@@ -264,23 +294,35 @@ public:
         }
         else if(this->_backend == LinAlgBackend_CPU && backend == LinAlgBackend_GPU)
         {
+#if defined(STDROMANO_ENABLE_OPENCL)
             opencl_manager.write_buffer(res.gpu_data(), this->data(), this->size());
+#else
+            log_error("OpenCL Backend not available");
+#endif /* defined(STDROMANO_ENABLE_OPENCL) */
         }
         else if(this->_backend == LinAlgBackend_GPU && backend == LinAlgBackend_CPU)
         {
+#if defined(STDROMANO_ENABLE_OPENCL)
             if(!opencl_manager.read_buffer(this->gpu_data(), res.data(), this->size()))
             {
                 log_error("Error when reading data from the GPU, check the log for more information");
             }
+#else
+            log_error("OpenCL Backend not available");
+#endif /* defined(STDROMANO_ENABLE_OPENCL) */
         }
         else if(this->_backend == LinAlgBackend_GPU && backend == LinAlgBackend_GPU)
         {
+#if defined(STDROMANO_ENABLE_OPENCL)
             opencl_manager.copy_buffer(this->gpu_data(), res.gpu_data(), this->nbytes());
+#else
+            log_error("OpenCL Backend not available");
+#endif /* defined(STDROMANO_ENABLE_OPENCL) */
         }
 
         return res;
     }
-    
+
     DenseMatrix operator*(const DenseMatrix& other) const noexcept
     {
         DenseMatrix res(this->_nrows, other._ncols, this->_backend);
@@ -311,8 +353,9 @@ public:
                 detail::matmat_muli(this->data(), other.data(), res.data(), M, K, N);
             }
         }
-        else 
+        else
         {
+#if defined (STDROMANO_ENABLE_OPENCL)
             cl::Event event;
 
             const StringD kernel_name("matmul{}_kernel", type_to_cl_kernel_ext_v<T>);
@@ -351,18 +394,21 @@ public:
             const double time = opencl_manager.get_execution_time_ms(event);
 
             log_debug("Matmul real time: {:.3f} ms", time);
+#else
+            log_error("OpenCL Backend not available");
+#endif /* defined(STDROMANO_ENABLE_OPENCL) */
         }
-        
+
         return res;
     }
-    
+
     DenseMatrix transpose() const noexcept
     {
         DenseMatrix result(this->_ncols, this->_nrows);
 
-        for(std::size_t i = 0; i < this->_nrows; ++i) 
+        for(std::size_t i = 0; i < this->_nrows; ++i)
         {
-            for(std::size_t j = 0; j < this->_ncols; ++j) 
+            for(std::size_t j = 0; j < this->_ncols; ++j)
             {
                 result(j, i) = (*this)(i, j);
             }
@@ -370,8 +416,8 @@ public:
 
         return result;
     }
-    
-    void fill(T value) noexcept 
+
+    void fill(T value) noexcept
     {
         if(this->_backend == LinAlgBackend_CPU)
         {
@@ -382,6 +428,7 @@ public:
         }
         else if(this->_backend == LinAlgBackend_GPU)
         {
+#if defined(STDROMANO_ENABLE_OPENCL)
             const StringD kernel_name("matfill{}_kernel", type_to_cl_kernel_ext_v<T>);
 
             if(!opencl_manager.has_kernel_source(kernel_name))
@@ -408,10 +455,13 @@ public:
             }
 
             event.wait();
+#else
+            log_error("OpenCL Backend not available");
+#endif /* defined(STDROMANO_ENABLE_OPENCL) */
         }
     }
-    
-    void zero() noexcept 
+
+    void zero() noexcept
     {
         this->fill(T{});
     }
@@ -446,9 +496,9 @@ public:
         }
     }
 
-    /* 
+    /*
         Trace is only defined for square matrices,
-        so if the matrix is not square it returns 0 by default 
+        so if the matrix is not square it returns 0 by default
     */
     T trace() const noexcept
     {
