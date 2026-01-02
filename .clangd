@@ -1,0 +1,7 @@
+CompileFlags:
+    Add:
+    - "-Iinclude"
+    - "-Iext/concurrentqueue"
+    - "-Iext/spdlog/include"
+    - "-Iext/opencl_hpp/include"
+    - "-DDEBUG_BUILD=1"
