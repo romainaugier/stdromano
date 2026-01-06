@@ -1634,9 +1634,7 @@ void matmat_mulf_avx2_kernel(const float* __restrict A,
                              std::size_t K,
                              std::size_t N) noexcept
 {
-    const std::size_t nthreads = std::min(std::size_t(16),
-                                          static_cast<std::size_t>(get_num_procs() * 0.75));
-    global_threadpool().set_max_active_workers(nthreads);
+    const std::size_t nthreads = std::min(std::size_t(16), get_num_procs());
 
     const std::size_t KC = 256;
     const std::size_t MC = 16 * std::max(std::size_t(1), 42 / nthreads) * nthreads;
@@ -1661,7 +1659,7 @@ void matmat_mulf_avx2_kernel(const float* __restrict A,
 #if MULTITHREAD
             ThreadPoolWaiter waiter;
 #endif /* MULTITHREAD */
- 
+
             for(std::size_t jr = 0; jr < nc; jr += 6)
             {
 #if MULTITHREAD

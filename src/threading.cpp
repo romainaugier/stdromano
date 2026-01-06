@@ -13,4 +13,10 @@ ThreadPool& ThreadPool::get_global_threadpool() noexcept
     return g_threadpool;
 }
 
+StealingThreadPool& StealingThreadPool::get_global_threadpool() noexcept
+{
+    static StealingThreadPool global_pool;
+    return global_pool;
+}
+
 STDROMANO_NAMESPACE_END

@@ -192,10 +192,11 @@ class ThreadPoolWork;
 class ThreadPoolWaiter
 {
     friend class ThreadPool;
+    friend class StealingThreadPool;
     friend class ThreadPoolWork;
 
-    Atomic<std::size_t> _expected = 0;
-    Atomic<std::size_t> _done = 0;
+    Atomic<std::size_t> _expected{0};
+    Atomic<std::size_t> _done{0};
 
 public:
     ThreadPoolWaiter() {}
@@ -212,6 +213,7 @@ public:
 class ThreadPoolWork
 {
     friend class ThreadPool;
+    friend class StealingThreadPool;
 
     ThreadPoolWaiter* _waiter = nullptr;
 
@@ -252,12 +254,6 @@ class ThreadPool
 public:
     explicit ThreadPool(const int64_t workers_count = -1)
     {
-        this->_num_workers.store(0);
-        this->_num_active_workers.store(0);
-
-        this->_stop.store(false);
-        this->_started.store(false);
-
         this->_workers = nullptr;
 
         this->init(workers_count);
@@ -341,14 +337,14 @@ private:
 
     Thread* _workers;
 
-    Atomic<std::size_t> _num_workers;
-    Atomic<std::size_t> _num_active_workers;
+    Atomic<std::size_t> _num_workers{0};
+    Atomic<std::size_t> _num_active_workers{0};
 
-    Atomic<std::size_t> _max_active_workers;
+    Atomic<std::size_t> _max_active_workers{0};
 
-    Atomic<bool> _stop;
+    Atomic<bool> _stop{false};
 
-    Atomic<bool> _started;
+    Atomic<bool> _started{false};
 
     void init(const int64_t workers_count) noexcept
     {
@@ -410,8 +406,241 @@ private:
     }
 };
 
+class StealingThreadPool
+{
+private:
+    class LambdaWork : public ThreadPoolWork
+    {
+        std::function<void()> _func;
+    public:
+        explicit LambdaWork(std::function<void()> func) : _func(std::move(func)) {}
+        ~LambdaWork() override = default;
+
+        void execute() override
+        {
+            if(this->_func != nullptr)
+            {
+                this->_func();
+            }
+        }
+    };
+
+    struct WorkerContext
+    {
+        moodycamel::ConcurrentQueue<ThreadPoolWork*> local_queue;
+        Atomic<std::size_t> queue_size{0};
+        std::unique_ptr<Thread> thread;
+        Atomic<bool> active{true};
+    };
+
+    std::vector<std::unique_ptr<WorkerContext>> _workers;
+    moodycamel::ConcurrentQueue<ThreadPoolWork*> _global_queue;
+    Atomic<std::size_t> _global_queue_size{0};
+
+    Atomic<bool> _running{false};
+    Atomic<bool> _shutdown{false};
+    Atomic<std::size_t> _active_workers{0};
+    Atomic<std::size_t> _max_active_workers{0};
+    Atomic<std::size_t> _total_pending_work{0};
+
+    std::size_t _num_workers;
+    Atomic<std::size_t> _next_worker{0};
+
+    void worker_loop(std::size_t worker_id) noexcept
+    {
+        WorkerContext* ctx = this->_workers[worker_id].get();
+        ThreadPoolWork* work = nullptr;
+
+        const std::size_t num_steal_attempts = this->_num_workers * 2;
+
+        while(!this->_shutdown.load(MemoryOrder::Acquire))
+        {
+            bool found_work = false;
+
+            if(ctx->local_queue.try_dequeue(work))
+            {
+                ctx->queue_size.fetch_sub(1, MemoryOrder::Release);
+                this->_total_pending_work.fetch_sub(1, MemoryOrder::Release);
+                found_work = true;
+            }
+            else if(this->_global_queue.try_dequeue(work))
+            {
+                this->_global_queue_size.fetch_sub(1, MemoryOrder::Release);
+                this->_total_pending_work.fetch_sub(1, MemoryOrder::Release);
+                found_work = true;
+            }
+            else
+            {
+                for(std::size_t i = 0; i < num_steal_attempts && !found_work; ++i)
+                {
+                    std::size_t victim = (worker_id + i + 1) % this->_num_workers;
+
+                    if(victim != worker_id && this->_workers[victim]->queue_size.load(MemoryOrder::Acquire) > 0)
+                    {
+                        if(this->_workers[victim]->local_queue.try_dequeue(work))
+                        {
+                            this->_workers[victim]->queue_size.fetch_sub(1, MemoryOrder::Release);
+                            this->_total_pending_work.fetch_sub(1, MemoryOrder::Release);
+                            found_work = true;
+                            break;
+                        }
+                    }
+                }
+            }
+
+            if(found_work && work != nullptr)
+            {
+                std::size_t max_workers = this->_max_active_workers.load(MemoryOrder::Acquire);
+
+                if(max_workers > 0)
+                {
+                    std::size_t current_active = this->_active_workers.load(MemoryOrder::Acquire);
+
+                    if(current_active >= max_workers)
+                    {
+                        ctx->local_queue.enqueue(work);
+                        ctx->queue_size.fetch_add(1, MemoryOrder::Release);
+                        this->_total_pending_work.fetch_add(1, MemoryOrder::Release);
+                        thread_yield();
+                        continue;
+                    }
+                }
+
+                this->_active_workers.fetch_add(1, MemoryOrder::Acquire);
+
+                try
+                {
+                    work->execute();
+                }
+                catch(...)
+                {
+                }
+
+                delete work;
+
+                this->_active_workers.fetch_sub(1, MemoryOrder::Release);
+            }
+            else
+            {
+                thread_yield();
+            }
+        }
+    }
+
+public:
+    explicit StealingThreadPool(const int64_t workers_count = -1)
+    {
+        this->_num_workers = workers_count <= 0 ? get_num_procs() :
+                                                  static_cast<std::size_t>(workers_count);
+
+        this->_workers.reserve(this->_num_workers);
+
+        for(std::size_t i = 0; i < this->_num_workers; ++i)
+        {
+            auto ctx = std::make_unique<WorkerContext>();
+
+            ctx->thread = std::make_unique<Thread>(
+                [this, i]() { this->worker_loop(i); },
+                false,
+                false
+            );
+
+            this->_workers.push_back(std::move(ctx));
+        }
+
+        this->_running.store(true, MemoryOrder::Release);
+
+        for(auto& worker : this->_workers)
+        {
+            worker->thread->start();
+        }
+    }
+
+    ~StealingThreadPool()
+    {
+        this->_shutdown.store(true, MemoryOrder::Release);
+
+        for(auto& worker : this->_workers)
+            if(worker->thread)
+                worker->thread->join();
+
+        ThreadPoolWork* work = nullptr;
+
+        while(this->_global_queue.try_dequeue(work))
+            delete work;
+
+        for(auto& worker : this->_workers)
+            while(worker->local_queue.try_dequeue(work))
+                delete work;
+
+        this->_running.store(false, MemoryOrder::Release);
+    }
+
+    bool add_work(ThreadPoolWork* work, ThreadPoolWaiter* waiter = nullptr) noexcept
+    {
+        if(!this->_running.load(MemoryOrder::Acquire) || work == nullptr)
+            return false;
+
+        work->_waiter = waiter;
+
+        if(waiter != nullptr)
+            waiter->_expected.fetch_add(1, MemoryOrder::Release);
+
+        std::size_t target_worker = _next_worker.fetch_add(1, MemoryOrder::Relaxed) % _num_workers;
+
+        this->_workers[target_worker]->local_queue.enqueue(work);
+        this->_workers[target_worker]->queue_size.fetch_add(1, MemoryOrder::Release);
+        this->_total_pending_work.fetch_add(1, MemoryOrder::Release);
+
+        return true;
+    }
+
+    STDROMANO_FORCE_INLINE bool add_work(std::function<void()>&& func,
+                                         ThreadPoolWaiter* waiter = nullptr) noexcept
+    {
+        if(!this->_running.load(MemoryOrder::Acquire))
+            return false;
+
+        LambdaWork* work = new (std::nothrow) LambdaWork(std::move(func));
+
+        if(work == nullptr)
+            return false;
+
+        return add_work(work, waiter);
+    }
+
+    STDROMANO_FORCE_INLINE void wait() noexcept
+    {
+        while(this->_total_pending_work.load(MemoryOrder::Acquire) > 0 ||
+              this->_active_workers.load(MemoryOrder::Acquire) > 0)
+            thread_yield();
+    }
+
+    STDROMANO_FORCE_INLINE bool is_started() const noexcept
+    {
+        return this->_running.load(MemoryOrder::Acquire);
+    }
+
+    STDROMANO_FORCE_INLINE bool is_stopped() const noexcept
+    {
+        return !this->_running.load(MemoryOrder::Acquire);
+    }
+
+    STDROMANO_FORCE_INLINE std::size_t num_workers() noexcept
+    {
+        return this->_num_workers;
+    }
+
+    STDROMANO_FORCE_INLINE void set_max_active_workers(std::size_t max_workers) noexcept
+    {
+        this->_max_active_workers.store(max_workers, MemoryOrder::Release);
+    }
+
+    STDROMANO_API static StealingThreadPool& get_global_threadpool() noexcept;
+};
+
 /* Macro to make the code more understandable and readable */
-#define global_threadpool() ThreadPool::get_global_threadpool()
+#define global_threadpool() StealingThreadPool::get_global_threadpool()
 
 STDROMANO_NAMESPACE_END
 

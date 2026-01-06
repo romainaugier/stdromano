@@ -163,17 +163,6 @@ class TestObject
 
     ~TestObject()
     {
-        if(data != nullptr)
-        {
-            fprintf(stderr, "Deleting TestObject at %p with data=%p (content=%s)\n",
-                (void*)this, (void*)data, data->c_str());
-        }
-        else
-        {
-            fprintf(stderr, "Deleting moved-from TestObject at %p (data=nullptr)\n",
-                (void*)this);
-        }
-
         if(this->data != nullptr)
         {
             delete this->data;
