@@ -23,20 +23,20 @@ STDROMANO_NAMESPACE_BEGIN
 template <typename T>
 class Vector
 {
-    static constexpr float GROW_RATE = 1.61803398875f;
-    static constexpr uint32_t MIN_SIZE = 128;
+    static constexpr float GROWTH_RATE = 1.61803398875f;
+    static constexpr size_t MIN_SIZE = 128;
 
 private:
     T* _data = nullptr;
-    uint32_t _capacity = 0;
-    uint32_t _size = 0;
+    size_t _capacity = 0;
+    size_t _size = 0;
 
-    STDROMANO_FORCE_INLINE void set_capacity(const uint32_t capacity) noexcept
+    STDROMANO_FORCE_INLINE void set_capacity(const size_t capacity) noexcept
     {
         this->_capacity = capacity;
     }
 
-    STDROMANO_FORCE_INLINE void set_size(const uint32_t size) noexcept
+    STDROMANO_FORCE_INLINE void set_size(const size_t size) noexcept
     {
         this->_size = size;
     }
@@ -51,7 +51,7 @@ private:
         this->_size--;
     }
 
-    static T* allocate(const uint32_t capacity)
+    static T* allocate(const size_t capacity)
     {
         if(capacity == 0)
         {
@@ -84,13 +84,13 @@ private:
         }
         else
         {
-            this->resize(static_cast<uint32_t>(static_cast<float>(this->capacity()) * GROW_RATE));
+            this->resize(static_cast<size_t>(static_cast<float>(this->capacity()) * GROWTH_RATE));
         }
     }
 
 public:
     using value_type = T;
-    using size_type = uint32_t;
+    using size_type = size_t;
     using difference_type = int32_t;
     using reference = value_type&;
     using const_reference = const value_type&;
@@ -103,23 +103,23 @@ public:
     {
     }
 
-    Vector(const uint32_t initial_capacity)
+    Vector(const size_t initial_capacity)
     {
-        const uint32_t capacity = initial_capacity == 0 ? MIN_SIZE : initial_capacity;
+        const size_t capacity = initial_capacity == 0 ? MIN_SIZE : initial_capacity;
         this->_data = Vector::allocate(capacity);
         this->set_capacity(capacity);
         this->set_size(initial_capacity);
 
         if constexpr (std::is_default_constructible_v<T>)
         {
-            for(uint32_t i = 0; i < this->size(); i++)
+            for(size_t i = 0; i < this->size(); i++)
             {
                 ::new(this->_data + i) T();
             }
         }
     }
 
-    Vector(const uint32_t count, const T& value)
+    Vector(const size_t count, const T& value)
     {
         if(count == 0)
         {
@@ -134,7 +134,7 @@ public:
 
         if(this->_data)
         {
-            for(uint32_t i = 0; i < count; ++i)
+            for(size_t i = 0; i < count; ++i)
             {
                 ::new(this->_data + i) T(value);
             }
@@ -182,7 +182,7 @@ public:
 
         if(this->_data)
         {
-            for(uint32_t i = 0; i < other.size(); i++)
+            for(size_t i = 0; i < other.size(); i++)
             {
                 ::new(this->data() + i) T(other[i]);
             }
@@ -223,7 +223,7 @@ public:
 
                 if(this->_data)
                 {
-                    for(uint32_t i = 0; i < other.size(); i++)
+                    for(size_t i = 0; i < other.size(); i++)
                     {
                         ::new(this->data() + i) T(other[i]);
                     }
@@ -256,12 +256,12 @@ public:
         return *this;
     }
 
-    STDROMANO_FORCE_INLINE uint32_t capacity() const noexcept
+    STDROMANO_FORCE_INLINE size_t capacity() const noexcept
     {
         return this->_capacity;
     }
 
-    STDROMANO_FORCE_INLINE uint32_t size() const noexcept
+    STDROMANO_FORCE_INLINE size_t size() const noexcept
     {
         return this->_size;
     }
@@ -275,7 +275,7 @@ public:
     {
         friend class Vector;
         Vector* vector;
-        uint32_t index;
+        size_t index;
 
         void advance()
         {
@@ -290,7 +290,7 @@ public:
         using pointer = T*;
         using reference = T&;
 
-        iterator(Vector* v, uint32_t i)
+        iterator(Vector* v, size_t i)
             : vector(v),
               index(i)
         {
@@ -399,7 +399,7 @@ public:
     {
         friend class Vector;
         const Vector* vector;
-        uint32_t index;
+        size_t index;
 
         void advance()
         {
@@ -414,7 +414,7 @@ public:
         using pointer = const T*;
         using reference = const T&;
 
-        const_iterator(const Vector* v, uint32_t i)
+        const_iterator(const Vector* v, size_t i)
             : vector(v),
               index(i)
         {
@@ -551,15 +551,14 @@ public:
 
     STDROMANO_FORCE_INLINE T* at(const std::size_t index) noexcept
     {
-        STDROMANO_ASSERT(index < static_cast<std::size_t>(this->size()),
-                         "Out of bounds access");
+        STDROMANO_ASSERT(index < this->size(), "Out of bounds access");
+
         return this->data() + index;
     }
 
     STDROMANO_FORCE_INLINE const T* at(const std::size_t index) const noexcept
     {
-        STDROMANO_ASSERT(index < static_cast<std::size_t>(this->size()),
-                         "Out of bounds access");
+        STDROMANO_ASSERT(index < this->size(), "Out of bounds access");
         return this->data() + index;
     }
 
@@ -593,9 +592,9 @@ public:
         return this->operator[](this->size() - 1);
     }
 
-    void resize(const uint32_t new_capacity) noexcept
+    void resize(const size_t new_capacity) noexcept
     {
-        const uint32_t old_capacity = this->capacity();
+        const size_t old_capacity = this->capacity();
 
         if(new_capacity <= old_capacity)
         {
@@ -609,7 +608,7 @@ public:
             return;
         }
 
-        const uint32_t new_size = std::min(this->_size, new_capacity);
+        const size_t new_size = std::min(this->_size, new_capacity);
 
         if(this->_data != nullptr)
         {
@@ -617,7 +616,7 @@ public:
 #if defined(STDROMANO_VECTOR_COPY_ON_RESIZE)
             std::memcpy(new_data, this->_data, new_size * sizeof(T));
 #else
-            for(uint32_t i = 0; i < new_size; ++i)
+            for(size_t i = 0; i < new_size; ++i)
             {
                 ::new(new_data + i) T(std::move_if_noexcept(this->_data[i]));
                 this->_data[i].~T();
@@ -632,7 +631,7 @@ public:
         this->_size = new_size;
     }
 
-    STDROMANO_FORCE_INLINE void reserve(const uint32_t new_capacity) noexcept
+    STDROMANO_FORCE_INLINE void reserve(const size_t new_capacity) noexcept
     {
         this->resize(this->capacity() + new_capacity + 1);
     }
@@ -668,10 +667,11 @@ public:
         }
 
         ::new(this->data() + this->size()) T(std::forward<Args>(args)...);
+
         this->incr_size();
     }
 
-    void insert(const T& element, const uint32_t position) noexcept
+    void insert(const T& element, const size_t position) noexcept
     {
 #if STDROMANO_NULL_VECTOR_ASSERTIONS
         STDROMANO_ASSERT(this->_data != nullptr, "Vector has not been allocated");
@@ -692,20 +692,20 @@ public:
         this->incr_size();
     }
 
-    iterator insert(const_iterator pos, uint32_t count, const T& value) noexcept
+    iterator insert(const_iterator pos, size_t count, const T& value) noexcept
     {
 #if STDROMANO_NULL_VECTOR_ASSERTIONS
         STDROMANO_ASSERT(this->_data != nullptr, "Vector has not been allocated");
 #endif /* STDROMANO_NULL_VECTOR_ASSERTIONS */
 
-        const uint32_t position = pos.index;
+        const size_t position = pos.index;
 
         if(position > this->size())
         {
             return this->end();
         }
 
-        const uint32_t new_size = this->size() + count;
+        const size_t new_size = this->size() + count;
 
         while(this->capacity() < new_size)
         {
@@ -716,7 +716,7 @@ public:
                      this->data() + position,
                      (this->size() - position) * sizeof(T));
 
-        for(uint32_t i = 0; i < count; ++i)
+        for(size_t i = 0; i < count; ++i)
         {
             ::new(this->at(position + i)) T(value);
         }
@@ -738,22 +738,22 @@ public:
             return iterator(this, pos.index);
         }
 
-        const uint32_t position = pos.index;
+        const size_t position = pos.index;
 
         if(position > this->size())
         {
             return this->end();
         }
 
-        const uint32_t count = static_cast<uint32_t>(std::distance(first, last));
-        const uint32_t new_size = this->size() + count;
+        const size_t count = static_cast<size_t>(std::distance(first, last));
+        const size_t new_size = this->size() + count;
 
         while(this->capacity() < new_size)
         {
             this->grow();
         }
 
-        uint32_t offset = 0;
+        size_t offset = 0;
 
         if(pos == this->end())
         {
@@ -786,7 +786,7 @@ public:
         STDROMANO_ASSERT(this->_data != nullptr, "Vector has not been allocated");
 #endif /* STDROMANO_NULL_VECTOR_ASSERTIONS */
 
-        const uint32_t position = pos.index;
+        const size_t position = pos.index;
 
         if(position > this->size())
         {
@@ -801,7 +801,7 @@ public:
             this->grow();
         }
 
-        uint32_t offset = 0;
+        size_t offset = 0;
 
         if(pos == this->cend())
         {
@@ -811,7 +811,7 @@ public:
                 ++offset;
             }
         }
-        else 
+        else
         {
             std::memmove(this->data() + position + count,
                          this->data() + position,
@@ -837,7 +837,7 @@ public:
         STDROMANO_ASSERT(pos.index < this->size(),
                          "Iterator position must be lower than vector size");
 
-        const uint32_t position = pos.index;
+        const size_t position = pos.index;
 
         this->at(position)->~T();
 
@@ -858,10 +858,10 @@ public:
 
         if(first.index < this->size() && first.index < last.index && last.index < this->size())
         {
-            const uint32_t start_pos = first.index;
-            const uint32_t count = last.index - first.index;
+            const size_t start_pos = first.index;
+            const size_t count = last.index - first.index;
 
-            for(uint32_t i = 0; i < count; ++i)
+            for(size_t i = 0; i < count; ++i)
             {
                 this->at(start_pos + i)->~T();
             }
@@ -878,7 +878,7 @@ public:
         return this->end();
     }
 
-    void remove(const uint32_t position) noexcept
+    void remove(const size_t position) noexcept
     {
 #if STDROMANO_NULL_VECTOR_ASSERTIONS
         STDROMANO_ASSERT(this->_data != nullptr, "Vector has not been allocated");
@@ -915,14 +915,14 @@ public:
     {
 #if STDROMANO_NULL_VECTOR_ASSERTIONS
         STDROMANO_ASSERT(this->_data != nullptr, "Vector has not been allocated");
-#else 
+#else
         if(this->size() == 0)
         {
             return this->end();
         }
 #endif /* STDROMANO_NULL_VECTOR_ASSERTIONS */
 
-        for(uint32_t i = 0; i < this->size(); i++)
+        for(size_t i = 0; i < this->size(); i++)
         {
             if(other == this->operator[](i))
                 return iterator(this, i);
@@ -935,14 +935,14 @@ public:
     {
 #if STDROMANO_NULL_VECTOR_ASSERTIONS
         STDROMANO_ASSERT(this->_data != nullptr, "Vector has not been allocated");
-#else 
+#else
         if(this->size() == 0)
         {
             return this->cend();
         }
 #endif /* STDROMANO_NULL_VECTOR_ASSERTIONS */
 
-        for(uint32_t i = 0; i < this->size(); i++)
+        for(size_t i = 0; i < this->size(); i++)
         {
             if(other == this->operator[](i))
                 return const_iterator(this, i);
@@ -955,7 +955,7 @@ public:
     {
 #if STDROMANO_NULL_VECTOR_ASSERTIONS
         STDROMANO_ASSERT(this->_data != nullptr, "Vector has not been allocated");
-#else 
+#else
         if(this->size() == 0)
         {
             return;
@@ -972,14 +972,14 @@ public:
     {
 #if STDROMANO_NULL_VECTOR_ASSERTIONS
         STDROMANO_ASSERT(this->_data != nullptr, "Vector has not been allocated");
-#else 
+#else
         if(this->size() == 0)
         {
             return;
         }
 #endif /* STDROMANO_NULL_VECTOR_ASSERTIONS */
 
-        for(uint32_t i = 0; i < this->size(); i++)
+        for(size_t i = 0; i < this->size(); i++)
         {
             this->operator[](i).~T();
         }
@@ -992,7 +992,7 @@ public:
     {
 #if STDROMANO_NULL_VECTOR_ASSERTIONS
         STDROMANO_ASSERT(this->_data != nullptr, "Vector has not been allocated");
-#else 
+#else
         if(this->size() == 0)
         {
             return;

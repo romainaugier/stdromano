@@ -5,3 +5,4 @@ CompileFlags:
     - "-Iext/spdlog/include"
     - "-Iext/opencl_hpp/include"
     - "-DDEBUG_BUILD=1"
+    - "-std=c++17"
