@@ -15,10 +15,8 @@
 #include <cstring>
 #include <immintrin.h>
 #include <limits>
-#include <memory>
 #include <new>
 #include <type_traits>
-#include <vector>
 
 #if defined(STDROMANO_GCC)
 #include <alloca.h>
@@ -103,8 +101,7 @@ STDROMANO_FORCE_INLINE void mem_aligned_free(T* ptr) noexcept
         (ptrname##_raw + sizeof(void*) + (alignment) - 1) & ~((std::uintptr_t)(alignment) - 1);    \
     void* ptrname = reinterpret_cast<void*>(ptrname##_aligned)
 
-/* STL-like allocators wrapping alloc functions above */
-
+// STL-like allocator that allocates memory using jemalloc wrappers declared above
 template <typename T>
 class STDROMANO_API Allocator
 {
@@ -146,6 +143,7 @@ public:
     }
 };
 
+// STL-like allocator that allocates aligned memory using jemalloc wrappers declared above
 template <typename T, std::size_t Alignment>
 class STDROMANO_API AlignedAllocator
 {
@@ -164,7 +162,7 @@ public:
     {
     }
 
-    [[nodiscard]] T* allocate(const std::size_t n)
+    STDROMANO_NO_DISCARD T* allocate(const std::size_t n)
     {
         if(n > this->max_size())
         {
@@ -184,16 +182,17 @@ public:
         mem_aligned_free(p);
     }
 
-    [[nodiscard]] constexpr std::size_t max_size() const noexcept
+    STDROMANO_NO_DISCARD constexpr std::size_t max_size() const noexcept
     {
         return std::numeric_limits<std::size_t>::max() / sizeof(T);
     }
 };
 
-static STDROMANO_FORCE_INLINE void mem_swap(void* a, void* b, const std::size_t size) noexcept
+// constexpr version of memswap
+constexpr STDROMANO_FORCE_INLINE void mem_swap(void* a, void* b, const std::size_t size) noexcept
 {
-    unsigned char* p;
-    unsigned char* q;
+    unsigned char* p = nullptr;
+    unsigned char* q = nullptr;
     unsigned char* const sentry = (unsigned char*)a + size;
 
     for(p = static_cast<unsigned char*>(a), q = static_cast<unsigned char*>(b); p < sentry;
@@ -205,7 +204,8 @@ static STDROMANO_FORCE_INLINE void mem_swap(void* a, void* b, const std::size_t 
     }
 }
 
-constexpr STDROMANO_FORCE_INLINE std::size_t str_len(const char* str) noexcept
+// constexpr version of strlen
+constexpr STDROMANO_FORCE_INLINE std::size_t str_len(const char* __restrict str) noexcept
 {
     if(str == nullptr)
     {
@@ -222,8 +222,9 @@ constexpr STDROMANO_FORCE_INLINE std::size_t str_len(const char* str) noexcept
     return len;
 }
 
-constexpr STDROMANO_FORCE_INLINE void mem_cpy(void* dst,
-                                              const void* src,
+// constexpr version of memcpy
+constexpr STDROMANO_FORCE_INLINE void mem_cpy(void* __restrict dst,
+                                              const void* __restrict src,
                                               std::size_t count) noexcept
 {
     if(dst != nullptr && src != nullptr)
@@ -238,8 +239,9 @@ constexpr STDROMANO_FORCE_INLINE void mem_cpy(void* dst,
     }
 }
 
-constexpr STDROMANO_FORCE_INLINE void mem_move(void* dst,
-                                               const void* src,
+// constexpr version of memmove
+constexpr STDROMANO_FORCE_INLINE void mem_move(void* __restrict dst,
+                                               const void* __restrict src,
                                                std::size_t count) noexcept
 {
     if(dst != nullptr && src != nullptr)
@@ -264,7 +266,10 @@ constexpr STDROMANO_FORCE_INLINE void mem_move(void* dst,
     }
 }
 
-constexpr STDROMANO_FORCE_INLINE void mem_set(void* dst, char value, std::size_t count) noexcept
+// constexpr version of memset
+constexpr STDROMANO_FORCE_INLINE void mem_set(void* __restrict dst,
+                                              char value,
+                                              std::size_t count) noexcept
 {
     if(dst != nullptr)
     {
@@ -279,6 +284,7 @@ constexpr STDROMANO_FORCE_INLINE void mem_set(void* dst, char value, std::size_t
 
 STDROMANO_API void format_byte_size(float size, char* buffer) noexcept;
 
+// Simple Arena allocator
 class STDROMANO_API Arena
 {
     static constexpr std::uint32_t ARENA_BLOCK_SIZE = 16384; /* 16 Kb */
@@ -345,7 +351,8 @@ class STDROMANO_API Arena
     }
 
 public:
-    Arena(const std::size_t initial_size, const std::size_t block_size = ARENA_BLOCK_SIZE);
+    Arena(const std::size_t initial_size,
+          const std::size_t block_size = ARENA_BLOCK_SIZE);
 
     ~Arena();
 
