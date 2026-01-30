@@ -22,12 +22,12 @@ foreach(test_file ${TEST_FILES})
     if(${TESTNAME} STREQUAL "test_command_line_parser")
         set(TEST_PARAMETERS "--str_arg=arg string value" "--int_arg=573849" "--bool_arg:False" "--bool_store_true" "-another-int-arg=-47381" "--" "a_command_after_args")
         add_test(NAME ${TESTNAME} COMMAND ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/${TESTNAME} ${TEST_PARAMETERS})
-
-        # We have a weird problem in Github CI on Windows where the test hangs indefinitely
-        set_tests_properties(${TESTNAME} PROPERTIES TIMEOUT 60)
     else()
         add_test(NAME ${TESTNAME} COMMAND ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/${TESTNAME})
     endif()
+
+    # We have a weird problem in Github CI on Windows where the test hangs indefinitely
+    set_tests_properties(${TESTNAME} PROPERTIES TIMEOUT 30)
 
     set_property(TEST ${TESTNAME} PROPERTY ENVIRONMENT "STDROMANO_LOG_LEVEL=debug")
 endforeach()
