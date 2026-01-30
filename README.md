@@ -25,6 +25,7 @@ The following arguments are used:
  - `--threadsan`: builds using the thread sanitizer (only available with gcc)
  - `--version:<x.x.x>`: specifies the build version (note that is should be used like: `--version:MAJOR.MINOR.FIX`)
  - `--installdir:<path>`: specifies where to install the library
+ - `--vcpkgpath:<path>`: specifies an existing vcpkg repository
 
 Using the buildscript on Windows:
 ```bat
