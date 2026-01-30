@@ -1,6 +1,6 @@
-# SPDX-License-Identifier: BSD-3-Clause 
-# Copyright (c) 2025 - Present Romain Augier 
-# All rights reserved. 
+# SPDX-License-Identifier: BSD-3-Clause
+# Copyright (c) 2025 - Present Romain Augier
+# All rights reserved.
 
 include(target_options)
 
@@ -17,10 +17,10 @@ foreach(test_file ${TEST_FILES})
     set_target_options(${TESTNAME})
     set_target_properties(${TESTNAME} PROPERTIES CXX_STANDARD 17)
     target_link_libraries(${TESTNAME} ${PROJECT_NAME})
-    
+
     # Special case for command line parser test
     if(${TESTNAME} STREQUAL "test_command_line_parser")
-        set(TEST_PARAMETERS --str_arg='arg string value' --int_arg=573849 --bool_arg:False --bool_store_true -another-int-arg=-47381 -- a_command_after_args)
+        set(TEST_PARAMETERS "--str_arg=arg string value" "--int_arg=573849" "--bool_arg:False" "--bool_store_true" "-another-int-arg=-47381" "--" "a_command_after_args")
         add_test(NAME ${TESTNAME} COMMAND ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/${TESTNAME} ${TEST_PARAMETERS})
     else()
         add_test(NAME ${TESTNAME} COMMAND ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/${TESTNAME})

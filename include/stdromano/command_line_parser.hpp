@@ -62,7 +62,7 @@ public:
                      !std::is_integral_v<T> &&
                      !std::is_floating_point_v<T>,
                      T>
-    get_data_as() const noexcept = delete; 
+    get_data_as() const noexcept = delete;
 
     template<typename T>
     std::enable_if_t<std::is_same_v<T, StringD>, T>
@@ -72,7 +72,7 @@ public:
     std::enable_if_t<std::is_same_v<T, bool>, T>
     get_data_as() const noexcept { return this->_data.to_bool(); }
 
-    template<typename T> 
+    template<typename T>
     std::enable_if_t<std::is_integral_v<T> && !std::is_same_v<bool, T>, T>
     get_data_as() const noexcept { return static_cast<T>(this->_data.to_long_long()); }
 
@@ -83,8 +83,8 @@ public:
 
 class STDROMANO_API CommandLineParser
 {
-    std::unordered_map<StringD, CommandLineArg> _args;
-    std::unordered_map<StringD, StringD> _aliases;
+    HashMap<StringD, CommandLineArg> _args;
+    HashMap<StringD, StringD> _aliases;
 
     StringD _command_after_args;
 
@@ -93,18 +93,29 @@ public:
 
     ~CommandLineParser();
 
-    void add_argument(const StringD& arg_name, 
+    void add_argument(const StringD& arg_name,
                       std::uint32_t arg_type,
                       std::uint32_t arg_mode = ArgMode_Store,
                       const StringD& arg_alias = StringD()) noexcept;
 
     void parse(int argc, char** argv) noexcept;
 
-    STDROMANO_FORCE_INLINE bool has_parsed_argument(const StringD& arg_name) const noexcept { return this->_args.find(arg_name)->second.get_data().size() > 0; }
+    STDROMANO_FORCE_INLINE bool has_parsed_argument(const StringD& arg_name) const noexcept
+    {
+        STDROMANO_ASSERT(this->_args.contains(arg_name), "args does not contain argument");
 
-    STDROMANO_FORCE_INLINE bool has_command_after_args() const noexcept { return !this->_command_after_args.empty(); }
+        return this->_args.find(arg_name)->second.get_data().size() > 0;
+    }
 
-    STDROMANO_FORCE_INLINE const StringD& get_command_after_args() const noexcept { return this->_command_after_args; }
+    STDROMANO_FORCE_INLINE bool has_command_after_args() const noexcept
+    {
+        return !this->_command_after_args.empty();
+    }
+
+    STDROMANO_FORCE_INLINE const StringD& get_command_after_args() const noexcept
+    {
+        return this->_command_after_args;
+    }
 
     template<typename T>
     T get_argument_value(const StringD& arg_name, T default_value = {}) const noexcept

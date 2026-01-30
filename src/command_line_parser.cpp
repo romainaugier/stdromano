@@ -14,12 +14,10 @@ STDROMANO_NAMESPACE_BEGIN
 
 CommandLineParser::CommandLineParser()
 {
-
 }
 
 CommandLineParser::~CommandLineParser()
 {
-
 }
 
 void CommandLineParser::add_argument(const StringD& arg_name,
@@ -41,216 +39,126 @@ void CommandLineParser::add_argument(const StringD& arg_name,
     }
 }
 
-enum CmdLineTokenType : std::uint32_t
+void CommandLineParser::parse(int argc, char** argv) noexcept
 {
-    CmdLineTokenType_Arg = 0,
-    CmdLineTokenType_Value = 1,
-    CmdLineTokenType_AfterArgs = 2
-};
-
-class CmdLineToken
-{
-    const char* _data;
-    std::uint32_t _size;
-    std::uint32_t _type;
-
-public:
-    CmdLineToken(std::uint32_t type, const char* data, std::uint32_t size) : _type(type),
-                                                                             _data(data),
-                                                                             _size(size) {}
-
-    CmdLineToken(const CmdLineToken& other) noexcept : _type(other._type),
-                                                       _data(other._data),
-                                                       _size(other._size) {}
-
-    CmdLineToken(CmdLineToken&& other) noexcept : _type(other._type),
-                                                  _data(other._data),
-                                                  _size(other._size) {}
-
-    STDROMANO_FORCE_INLINE std::uint32_t get_type() const noexcept { return this->_type; }
-    STDROMANO_FORCE_INLINE const char* get_data() const noexcept { return this->_data; }
-    STDROMANO_FORCE_INLINE std::uint32_t get_size() const noexcept { return this->_size; }
-};
-
-bool command_line_lex(char* command_line, Vector<CmdLineToken>& tokens) noexcept
-{
-    char* s = command_line;
-
-    while(*s != '\0')
+    for(int i = 1; i < argc; i++)
     {
-        if(*s == '-')
+        const char* arg = argv[i];
+
+        log_debug("arg {}: {}", i, arg);
+
+        if(arg[0] == '-' && arg[1] == '-' && arg[2] == '\0')
         {
-            /* We reached the end of command line and parse what is after the final -- */
-            if(*(s + 1) == '-' && *(s + 2) != '\0' && *(s + 2) == ' ')
+            if(i + 1 < argc)
             {
-                s += 3;
+                StringD after_args;
 
-                char* start = s;
-                size_t size = 1;
-
-                while(*s != '\0')
+                for(int j = i + 1; j < argc; j++)
                 {
-                    s++;
-                    size++;
+                    if(j > i + 1)
+                        after_args.push_back(' ');
+
+                    after_args.appendc(argv[j]);
                 }
 
-                if(*(s - 1) == ' ')
-                {
-                    size -= 2;
-                }
+                this->_command_after_args = std::move(after_args);
+            }
+            break;
+        }
 
-                tokens.emplace_back(CmdLineTokenType_AfterArgs, start, size);
+        if(arg[0] != '-')
+            continue;
 
-                return true;
+        const char* key_start = arg;
+
+        while(*key_start == '-')
+            key_start++;
+
+        const char* key_end = key_start;
+        const char* value_start = nullptr;
+
+        bool has_inline_value = false;
+
+        while(*key_end != '\0')
+        {
+            if(*key_end == ':' || *key_end == '=')
+            {
+                value_start = key_end + 1;
+                has_inline_value = true;
+                break;
             }
 
-            while(*s == '-') s++;
+            key_end++;
+        }
 
-            char* start = s;
-            size_t size = 0;
+        size_t key_len = key_end - key_start;
+        String key = StringD::make_from_c_str(key_start, key_len);
 
-            bool found_assign = false;
+        auto arg_it = this->_args.find(key);
 
-            while(1)
-            {
-                if(*s == '\0')
-                {
-                    break;
-                }
-                else if(*s == '=' || *s == ':')
-                {
-                    found_assign = true;
-                    break;
-                }
-                else if(*s == ' ')
-                {
-                    break;
-                }
+        if(arg_it == this->_args.end())
+        {
+            log_warn("Argument \"{}\" found in command line but not declared in the command line parser",
+                     StringD(key_start, key_len).c_str());
+            continue;
+        }
 
-                s++;
-                size++;
-            }
-
-            tokens.emplace_back(CmdLineTokenType_Arg, start, size);
-
-            s++;
-
-            if(!found_assign)
-            {
-                continue;
-            }
-
-            char* value_start = s;
-            size_t value_size = 0;
-
-            if(*s == '"' || *s == '\'')
-            {
-                s++;
-
-                /* We dont include the quotes in the argument value */
-                value_start++;
-
-                while(*s != '"' && *s != '\'')
-                {
-                    s++;
-                    value_size++;
-
-                    if(*s == '\0') 
-                    {
-                        const size_t error_pos = static_cast<size_t>(s - command_line);
-                        log_error("Command line lexing error");
-                        log_error("{}", command_line);
-                        log_error("{:>{}}", "^", error_pos - 1);
-                        log_error("Cannot find end of string for argument: {:.{}}", start, size);
-                        return false;
-                    }
-                }
-            }
-            else
-            {
-                while(*s != ' ' && *s != '\0')
-                {
-                    s++;
-                    value_size++;
-                }
-            }
-
-            tokens.emplace_back(CmdLineTokenType_Value, value_start, value_size);
+        if(arg_it->second.get_mode() == ArgMode::ArgMode_StoreTrue)
+        {
+            this->_args[std::move(key)].set_data("true", 4);
+        }
+        else if(arg_it->second.get_mode() == ArgMode::ArgMode_StoreFalse)
+        {
+            this->_args[std::move(key)].set_data("false", 5);
         }
         else
         {
-            s++;
-        }
-    }
+            const char* value = nullptr;
+            size_t value_len = 0;
 
-    return true;
-}
+            if(has_inline_value)
+            {
+                value = value_start;
 
-void CommandLineParser::parse(int argc, char** argv) noexcept
-{
-    StringD command_line_args;
-    
-    for(size_t i = 1; i < static_cast<size_t>(argc); i++)
-    {
-        log_debug("argv[{}]: {}", i, argv[i]);
-
-        if(i > 1)
-        {
-            command_line_args.push_back(' ');
-        }
-
-        command_line_args.appendc(argv[i]);
-    }
-
-    Vector<CmdLineToken> tokens;
-
-    if(!command_line_lex(command_line_args.c_str(), tokens))
-    {
-        log_error("Error during command line arguments lexing, check the log for more informations");
-        return;
-    }
-
-    for(size_t i = 0; i < tokens.size(); i++)
-    {
-        switch (tokens[i].get_type())
-        {
-            case CmdLineTokenType_Arg:
+                if(*value == '"' || *value == '\'')
                 {
-                    String key;
-                    key = StringD(tokens[i].get_data(),
-                                  static_cast<std::size_t>(tokens[i].get_size()));
+                    char quote = *value;
+                    value++;
 
-                    auto arg_it = this->_args.find(key);
+                    const char* value_end = value;
+                    while(*value_end != '\0' && *value_end != quote)
+                    {
+                        value_end++;
+                    }
 
-                    if(arg_it == this->_args.end())
+                    if(*value_end != quote)
                     {
-                        log_warn("Argument \"{}\" found in command line string but not declared in the command line parser", tokens[i].get_data());
+                        log_error("Cannot find closing quote for argument: {}",
+                                  StringD(key_start, key_len).c_str());
+                        continue;
                     }
-                    else if(arg_it->second.get_mode() == ArgMode::ArgMode_StoreTrue)
-                    {
-                        this->_args[key].set_data("true", 4);
-                    }
-                    else if(arg_it->second.get_mode() == ArgMode::ArgMode_StoreFalse)
-                    {
-                        this->_args[key].set_data("false", 5);
-                    }
-                    else if((i + 1) < tokens.size() && tokens[i + 1].get_type() == CmdLineTokenType_Value)
-                    {
-                        this->_args[key].set_data(tokens[i + 1].get_data(),
-                                                  static_cast<std::size_t>(tokens[i + 1].get_size()));
 
-                        i++;
-                    }
+                    value_len = value_end - value;
                 }
+                else
+                {
+                    value_len = strlen(value);
+                }
+            }
+            else if(i + 1 < argc)
+            {
+                i++;
+                value = argv[i];
+                value_len = strlen(value);
+            }
+            else
+            {
+                log_error("Argument \"{}\" requires a value but none provided",
+                          StringD(key_start, key_len).c_str());
+                continue;
+            }
 
-                break;
-            case CmdLineTokenType_AfterArgs:
-                this->_command_after_args = StringD(tokens[i].get_data(),
-                                                    static_cast<std::size_t>(tokens[i].get_size()));
-                break;
-            
-            default:
-                break;
+            this->_args[std::move(key)].set_data(value, value_len);
         }
     }
 }
