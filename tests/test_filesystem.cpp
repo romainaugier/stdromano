@@ -75,9 +75,9 @@ TEST_CASE(TestWalk)
 
     stdromano::log_debug("Walk: {}", directory_path);
 
-    for(stdromano::WalkIterator it(directory_path, stdromano::ListDirFlags_ListAll); 
+    for(stdromano::WalkIterator it(directory_path, stdromano::ListDirFlags_ListAll);
         it != stdromano::WalkIterator();
-        ++it) 
+        ++it)
     {
         stdromano::log_debug(it->get_current_path());
     }
@@ -88,6 +88,14 @@ TEST_CASE(TestCurrentDir)
     const stdromano::StringD cwd = stdromano::fs_current_dir();
 
     stdromano::log_debug("CWD: {}", cwd);
+}
+
+
+TEST_CASE(TestTmpDir)
+{
+    const stdromano::StringD tmp = stdromano::fs_tmp_dir();
+
+    stdromano::log_debug("TMP: {}", tmp);
 }
 
 int main()
@@ -104,6 +112,7 @@ int main()
     runner.add_test("List Dir", TestListDir);
     // runner.add_test("File Dialog", TestFileDialog);
     runner.add_test("CurrentDir", TestCurrentDir);
+    runner.add_test("TmpDir", TestTmpDir);
     runner.add_test("Walk", TestWalk);
 
     runner.run_all();

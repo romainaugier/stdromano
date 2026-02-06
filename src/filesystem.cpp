@@ -194,6 +194,25 @@ String<> fs_expand_from_lib_dir(const String<>& path_to_expand) noexcept
     return String<>("{}/{}", fmt::string_view(sz_path, size), path_to_expand);
 }
 
+String<> fs_tmp_dir() noexcept
+{
+#if defined(STDROMANO_WIN)
+    std::size_t buf_sz = MAX_PATH + 1;
+    String<> buf = String<>::make_zeroed(buf_sz);
+
+    DWORD sz = GetTempPathA(buf_sz, buf.data());
+
+    if(sz == 0 || sz > buf_sz)
+        return String<>();
+
+    buf.erase(static_cast<std::size_t>(sz - static_cast<std::size_t>(buf[sz - 1] == '\\')));
+
+    return buf;
+#elif defined(STDROMANO_LINUX)
+    return String<>::make_ref("/tmp");
+#endif // defined(STDROMANO_WIN)
+}
+
 String<> load_file_content(const String<>& file_path, const char* mode) noexcept
 {
     std::FILE* file_handle;
@@ -578,9 +597,9 @@ bool WalkIterator::process_current_directory() noexcept
 
     bool first_entry = (this->_h_find == INVALID_HANDLE_VALUE);
 
-    if(first_entry) 
+    if(first_entry)
     {
-        if(this->_pending_dirs.empty()) 
+        if(this->_pending_dirs.empty())
         {
             this->_is_end = true;
             return false;
@@ -596,18 +615,18 @@ bool WalkIterator::process_current_directory() noexcept
         {
             return false;
         }
-    } 
-    else 
+    }
+    else
     {
-        if(!FindNextFileA(this->_h_find, &find_data)) 
+        if(!FindNextFileA(this->_h_find, &find_data))
         {
             return false;
         }
     }
 
-    while(true) 
+    while(true)
     {
-        if(this->should_skip_entry(find_data.cFileName, find_data.dwFileAttributes)) 
+        if(this->should_skip_entry(find_data.cFileName, find_data.dwFileAttributes))
         {
             if(!FindNextFileA(this->_h_find, &find_data))
             {
@@ -621,13 +640,13 @@ bool WalkIterator::process_current_directory() noexcept
 
         bool is_dir = (find_data.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) != 0;
 
-        if(is_dir && this->_flags & WalkFlags_Recursive) 
+        if(is_dir && this->_flags & WalkFlags_Recursive)
         {
             this->_pending_dirs.push(full_path);
         }
 
         if((is_dir && (this->_flags & WalkFlags_ListDirs)) ||
-           (!is_dir && (this->_flags & WalkFlags_ListFiles))) 
+           (!is_dir && (this->_flags & WalkFlags_ListFiles)))
         {
             this->_current_item = { std::move(full_path), is_dir };
             return true;
@@ -645,7 +664,7 @@ bool WalkIterator::process_current_directory() noexcept
 #elif defined(STDROMANO_LINUX)
     if(this->_dir == nullptr)
     {
-        if(this->_pending_dirs.empty()) 
+        if(this->_pending_dirs.empty())
         {
             this->_is_end = true;
             return false;
@@ -711,7 +730,7 @@ bool WalkIterator::process_current_directory() noexcept
 
 void WalkIterator::move_to_next_directory() noexcept
 {
-    if(this->_pending_dirs.empty()) 
+    if(this->_pending_dirs.empty())
     {
         this->_is_end = true;
     }
@@ -724,7 +743,7 @@ bool WalkIterator::should_skip_entry(const char* name
                                      ) const noexcept
 #endif /* defined(STDROMANO_WIN) */
 {
-    if(name[0] == '.' && (name[1] == '\0' || (name[1] == '.' && name[2] == '\0'))) 
+    if(name[0] == '.' && (name[1] == '\0' || (name[1] == '.' && name[2] == '\0')))
     {
         return true;
     }

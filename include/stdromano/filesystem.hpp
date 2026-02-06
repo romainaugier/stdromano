@@ -33,6 +33,8 @@ STDROMANO_API String<> fs_expand_from_executable_dir(const String<>& path_to_exp
 
 STDROMANO_API String<> fs_expand_from_lib_dir(const String<>& path_to_expand) noexcept;
 
+STDROMANO_API String<> fs_tmp_dir() noexcept;
+
 STDROMANO_API String<> load_file_content(const String<>& file_path,
                                          const char* mode = "rb") noexcept;
 
@@ -101,10 +103,10 @@ enum WalkFlags : uint32_t
     WalkFlags_Recursive = 0x8,
 };
 
-class STDROMANO_API WalkIterator 
+class STDROMANO_API WalkIterator
 {
 public:
-    struct Item 
+    struct Item
     {
         StringD _path;
         bool _is_directory;
@@ -123,7 +125,7 @@ private:
 
     uint32_t _flags;
     bool _is_end;
-    
+
 #if defined(STDROMANO_WIN)
     HANDLE _h_find = INVALID_HANDLE_VALUE;
 #elif defined(STDROMANO_LINUX)
@@ -131,7 +133,7 @@ private:
 #endif /* defined(STDROMANO_WIN) */
 
 public:
-    WalkIterator(const StringD& root, std::uint32_t flags = 0) : _flags(flags), _is_end(false) 
+    WalkIterator(const StringD& root, std::uint32_t flags = 0) : _flags(flags), _is_end(false)
     {
         if(root.is_ref())
         {
@@ -147,10 +149,10 @@ public:
 
     WalkIterator() : _is_end(true) {}
 
-    ~WalkIterator() 
+    ~WalkIterator()
     {
 #if defined(STDROMANO_WIN)
-        if(this->_h_find != INVALID_HANDLE_VALUE) 
+        if(this->_h_find != INVALID_HANDLE_VALUE)
         {
             FindClose(this->_h_find);
         }
@@ -181,9 +183,9 @@ public:
 private:
     void advance() noexcept
     {
-        while(!this->_is_end) 
+        while(!this->_is_end)
         {
-            if(this->process_current_directory()) 
+            if(this->process_current_directory())
             {
                 return;
             }
@@ -203,7 +205,7 @@ private:
                            ) const noexcept;
 #endif /* defined(STDROMANO_WIN) */
 };
- 
+
 STDROMANO_NAMESPACE_END
 
 #if defined(STDROMANO_WIN)
