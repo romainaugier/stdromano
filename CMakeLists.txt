@@ -41,7 +41,7 @@ endif()
 
 # jemalloc
 if(UNIX)
-    find_package(PkgConfig)
+    find_package(PkgConfig QUIET)
 
     pkg_search_module(JEMALLOC REQUIRED jemalloc)
 else()
