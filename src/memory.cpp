@@ -4,7 +4,6 @@
 
 #include "stdromano/memory.hpp"
 
-#define JEMALLOC_NO_RENAME
 #include "jemalloc/jemalloc.h"
 
 #include <algorithm>

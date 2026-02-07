@@ -125,6 +125,7 @@ if [[ ! -d "vcpkg" ]]; then
     else
         log_info "Vcpkg can't be found, cloning and preparing it"
         git clone https://github.com/romainaugier/vcpkg.git
+        git checkout stdromano
         cd vcpkg
         source_vcpkg_bootstrap
         cd ..

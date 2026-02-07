@@ -31,6 +31,7 @@ if not exist "%CD%\vcpkg" (
     ) else (
         call :LogInfo "Vcpkg can't be found, cloning and preparing it"
         git clone https://github.com/romainaugier/vcpkg.git
+        git checkout stdromano
         cd vcpkg
         call bootstrap-vcpkg.bat
         cd ..
