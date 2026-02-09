@@ -435,7 +435,7 @@ public:
             {
                 log_error("Fill error: cannot find opencl kernel \"{}\" (path should be: {})",
                           kernel_name,
-                          fs_expand_from_executable_dir(StringD("cl/{}.cl", kernel_name)));
+                          fs_expand_from_lib_dir(StringD("cl/{}.cl", kernel_name)));
                 return;
             }
 
