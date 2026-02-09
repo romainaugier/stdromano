@@ -81,6 +81,11 @@ public:
     get_data_as() const noexcept { return static_cast<T>(this->_data.to_double()); }
 };
 
+// Command-Line parser only supports named arguments for now.
+// 3 ways of assigning a value to an argument: `:`, `=` and `space-separated`
+// Example: my_app --file=<filepath> --output:<output> --mode <mode>
+// TODO: add positional arguments
+// TODO: add help string and automated help message generation and print if -h/--help passed
 class STDROMANO_API CommandLineParser
 {
     HashMap<StringD, CommandLineArg> _args;
