@@ -24,7 +24,7 @@ for %%x in (%*) do (
     call :ParseArg %%~x
 )
 
-if not exist "%CD%\vcpkg" (
+if not exist "%VCPKG_PATH%" (
     if %VCPKG_USER_DEFINED% equ 1 (
         call :LogInfo "Using existing vcpkg installation"
         set VCPKG_ROOT=%VCPKG_PATH%
@@ -35,8 +35,10 @@ if not exist "%CD%\vcpkg" (
         cd vcpkg
         call bootstrap-vcpkg.bat
         cd ..
-        set VCPKG_ROOT=%CD%/vcpkg
+        set VCPKG_ROOT=%VCPKG_PATH%
     )
+) else (
+    set VCPKG_ROOT=%VCPKG_PATH%
 )
 
 call :LogInfo "Vcpkg root: %VCPKG_ROOT%"
