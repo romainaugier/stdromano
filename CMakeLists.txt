@@ -201,6 +201,8 @@ if(ENABLE_OPENCL)
 
     set(OpenCLHPP_INCLUDE_DIR "${CMAKE_SOURCE_DIR}/ext/opencl_hpp/include")
     include_directories(${OpenCLHPP_INCLUDE_DIR})
+
+    add_definitions(-DSTDROMANO_ENABLE_OPENCL)
 endif()
 
 add_subdirectory(src)

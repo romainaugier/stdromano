@@ -15,9 +15,9 @@ THREADSAN=0
 UBSAN=0
 ADDRSAN=0
 LEAKSAN=0
-OPENCL=0
 VCPKG_PATH="$PWD/vcpkg"
 VCPKG_USER_DEFINED=0
+ENABLE_OPENCL=0
 
 # Little function to parse command line arguments
 parse_args()
@@ -40,7 +40,7 @@ parse_args()
 
     [[ "$1" == "--leaksan" ]] && LEAKSAN=1
 
-    [[ "$1" == "--opencl" ]] && OPENCL=1
+    [[ "$1" == "--opencl" ]] && ENABLE_OPENCL=1
 
     [[ "$1" == "--export-compile-commands" ]] && EXPORTCOMPILECOMMANDS=1
 
@@ -167,7 +167,8 @@ cmake -S . -B build -DRUN_TESTS=$RUNTESTS \
                     -DTHREADSAN=$THREADSAN \
                     -DUBSAN=$UBSAN \
                     -DADDRSAN=$ADDRSAN \
-                    -DLEAKSAN=$LEAKSAN
+                    -DLEAKSAN=$LEAKSAN \
+                    -DENABLE_OPENCL=$ENABLE_OPENCL
 
 if [[ $? -ne 0 ]]; then
     log_error "Error during CMake configuration"

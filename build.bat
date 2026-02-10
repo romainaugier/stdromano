@@ -19,6 +19,7 @@ set INSTALL=0
 set ADDRSAN=0
 set VCPKG_PATH=%CD%\vcpkg
 set VCPKG_USER_DEFINED=0
+set ENABLE_OPENCL=0
 
 for %%x in (%*) do (
     call :ParseArg %%~x
@@ -74,7 +75,7 @@ if %REMOVEOLDDIR% equ 1 (
 call :LogInfo "Build type: %BUILDTYPE%"
 call :LogInfo "Build version: %VERSION%"
 
-cmake -S . -B build -DRUN_TESTS=%RUNTESTS% -A="%ARCH%" -DVERSION=%VERSION% -DADDRSAN=%ADDRSAN%
+cmake -S . -B build -DRUN_TESTS=%RUNTESTS% -A="%ARCH%" -DVERSION=%VERSION% -DADDRSAN=%ADDRSAN% -DENABLE_OPENCL=%ENABLE_OPENCL%
 
 if %errorlevel% neq 0 (
     call :LogError "Error caught during CMake configuration"
@@ -134,6 +135,11 @@ if "%~1" equ "--addrsan" set ADDRSAN=1
 
 if "%~1" equ "--export-compile-commands" (
     call :LogWarning "Exporting compile commands is not supported on Windows for now"
+)
+
+if "%~1" equ "--opencl" (
+    set ENABLE_OPENCL=1
+    call :LogInfo "Building stdromano with OpenCL support"
 )
 
 echo "%~1" | find /I "version">nul && (
