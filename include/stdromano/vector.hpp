@@ -154,6 +154,19 @@ public:
         }
     }
 
+    template <class InputIt>
+    Vector(InputIt begin, InputIt end)
+    {
+        if(end > begin)
+        {
+            for(auto it = begin; it != end; ++it)
+            {
+                this->emplace_back(*it);
+            }
+        }
+
+    }
+
     ~Vector()
     {
         if(this->_data != nullptr)

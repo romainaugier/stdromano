@@ -24,6 +24,17 @@ TEST_CASE(test_constructor_and_destructor)
         ASSERT_EQUAL(5u, vec.size());
         ASSERT_EQUAL(5u, TestObject::get_total_instances());
     }
+
+    // Constructor with initialization list and with iterator
+    {
+        stdromano::Vector<TestObject> vec({TestObject("test1"), TestObject("test2")});
+        ASSERT_EQUAL(2u, vec.size());
+        ASSERT_EQUAL(2u, TestObject::get_total_instances());
+
+        stdromano::Vector<TestObject> vec2(vec.begin(), vec.end());
+        ASSERT_EQUAL(2u, vec2.size());
+        ASSERT_EQUAL(4u, TestObject::get_total_instances());
+    }
 }
 
 TEST_CASE(test_push_back_and_pop_back)
