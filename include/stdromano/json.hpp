@@ -147,8 +147,8 @@ public:
     Json() noexcept;
     ~Json() noexcept;
 
-    STDROMANO_NON_COPYABLE(Json);
-    STDROMANO_NON_MOVABLE(Json);
+    STDROMANO_NON_COPYABLE(Json)
+    STDROMANO_NON_MOVABLE(Json)
 
     // Root access
 
