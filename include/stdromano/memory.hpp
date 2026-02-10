@@ -362,14 +362,12 @@ public:
     T* emplace(Args... args) noexcept
     {
         constexpr bool needs_destructor = !std::is_trivially_destructible<T>::value;
-        constexpr size_t object_size = sizeof(T);
-        constexpr size_t dtor_size = needs_destructor ? sizeof(Destructor) : 0;
-        constexpr size_t total_size = object_size + dtor_size;
+        constexpr std::size_t object_size = sizeof(T);
+        constexpr std::size_t dtor_size = needs_destructor ? sizeof(Destructor) : 0;
+        constexpr std::size_t total_size = object_size + dtor_size;
 
         if(this->check_resize(total_size))
-        {
             this->grow();
-        }
 
         this->_current_block->_offset = this->align_offset(alignof(T));
 
@@ -392,6 +390,18 @@ public:
         }
 
         return object;
+    }
+
+    STDROMANO_FORCE_INLINE void* allocate(std::size_t n) noexcept
+    {
+        if(this->check_resize(static_cast<std::uint32_t>(n)))
+            this->grow();
+
+        void* address = this->current_address();
+
+        this->_current_block->_offset += n;
+
+        return address;
     }
 
     STDROMANO_FORCE_INLINE void* at(const size_t offset) const noexcept

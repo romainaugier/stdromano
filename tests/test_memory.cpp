@@ -39,7 +39,7 @@ TEST_CASE(test_memory_arena)
 
     /*
         GCC optimizes so well that the dtor is bypassed and the following assertions are false in
-       release mode
+        release mode
     */
 #if !defined(STDROMANO_GCC) && !DEBUG_BUILD
     ASSERT(my_string_ref_ptr->empty());
@@ -47,6 +47,19 @@ TEST_CASE(test_memory_arena)
     ASSERT(my_string_alloced_another_ptr->empty());
     ASSERT(my_string_emplaced_ptr->empty());
 #endif /* !defined(STDROMANO_GCC) && !DEBUG_BUILD */
+
+    // 15 + null term
+    constexpr std::size_t msg_sz = 16;
+    const char* msg = "Hello, World!\n";
+
+    char* data = static_cast<char*>(arena.allocate(msg_sz));
+
+    std::memcpy(data, msg, 15 * sizeof(char));
+    data[15] = '\0';
+
+    char* new_data = static_cast<char*>(arena.allocate(10));
+
+    ASSERT((new_data - data) == msg_sz);
 }
 
 int main()
