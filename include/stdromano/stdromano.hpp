@@ -157,9 +157,11 @@
 
 #define STDROMANO_NON_COPYABLE(__class__)                                                          \
     __class__(const __class__&) = delete;                                                          \
+    __class__& operator=(const __class__&) = delete;
+
+#define STDROMANO_NON_MOVABLE(__class__)                                                           \
     __class__(__class__&&) = delete;                                                               \
-    const __class__& operator=(const __class__&) = delete;                                         \
-    void operator=(__class__&&) = delete;
+    __class__& operator=(__class__&&) = delete;
 
 #if defined(STDROMANO_MSVC)
 #define STDROMANO_PACKED_STRUCT(__struct__) __pragma(pack(push, 1)) __struct__ __pragma(pack(pop))

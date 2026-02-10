@@ -8,272 +8,196 @@
 #define __STDROMANO_JSON
 
 #include "stdromano/string.hpp"
-#include "stdromano/vector.hpp"
-#include "stdromano/hashmap.hpp"
+
+#include <cstdint>
+#include <cstddef>
 
 STDROMANO_NAMESPACE_BEGIN
 
-class STDROMANO_API JsonObject;
+/* Internal forward declarations (opaque to the user) */
+struct JsonParser_;
+struct JsonWriter_;
 
-using JsonList = Vector<JsonObject>;
-using JsonDict = HashMap<StringD, JsonObject>;
+class Json;
 
-enum JsonObjectType : uint32_t
+struct JsonKeyValue
 {
-    JsonObjectType_ValueInt = 1,
-    JsonObjectType_ValueFloat = 2,
-    JsonObjectType_ValueString = 3,
-    JsonObjectType_ValueBoolean = 4,
-    JsonObjectType_ValueNull = 5,
-    JsonObjectType_List = 6,
-    JsonObjectType_Dict = 7,
+    const char* key;
+    class JsonObject* value;
 };
 
-template<typename T> struct json_traits { static const std::size_t id = 0; };
-template<> struct json_traits<std::int64_t> { static const std::size_t id = 1; };
-template<> struct json_traits<double> { static const std::size_t id = 2; };
-template<> struct json_traits<StringD> { static const std::size_t id = 3; };
-template<> struct json_traits<bool> { static const std::size_t id = 4; };
-template<> struct json_traits<JsonList> { static const std::size_t id = 6; };
-template<> struct json_traits<JsonDict> { static const std::size_t id = 7; };
-
-class JsonObject
+class STDROMANO_API JsonObject
 {
-    static constexpr std::size_t STORAGE_MAX_SIZE = sizeof(JsonDict);
-    static constexpr std::size_t STORAGE_ALIGNMENT = alignof(JsonDict);
+    friend class Json;
+    friend struct JsonParser_;
+    friend struct JsonWriter_;
 
-private: 
-    typename std::aligned_storage<STORAGE_MAX_SIZE, STORAGE_ALIGNMENT>::type _data;
-    std::uint32_t _type;
+    uint64_t _tags;
 
-    void clear() noexcept 
+    union
     {
-        switch(this->_type) 
-        {
-            case JsonObjectType_ValueString:
-                reinterpret_cast<StringD*>(&_data)->~StringD();
-                break;
-            case JsonObjectType_List:
-                reinterpret_cast<JsonList*>(&_data)->~Vector();
-                break;
-            case JsonObjectType_Dict:
-                reinterpret_cast<JsonDict*>(&_data)->~HashMap();
-                break;
-            default:
-                break;
-        }
-
-        this->_type = JsonObjectType_ValueNull;
-    }
+        bool b;
+        std::uint64_t u64;
+        std::int64_t i64;
+        double f64;
+        const char* str;
+        void* ptr;
+    } _value;
 
 public:
-    JsonObject() : _type(JsonObjectType_ValueNull) {}
+    JsonObject() noexcept : _tags(0), _value{} {}
 
-    ~JsonObject() 
+    // Type checks
+
+    bool is_null() const noexcept;
+    bool is_bool() const noexcept;
+    bool is_u64() const noexcept;
+    bool is_i64() const noexcept;
+    bool is_f64() const noexcept;
+    bool is_str() const noexcept;
+    bool is_array() const noexcept;
+    bool is_dict() const noexcept;
+
+    // When a float or int is parsed and has an invalid value, a invalid tag
+    // will be set, and can be check here
+    // If it is invalid, get_u64/get_i64/get_f64 will return
+
+    bool is_valid() const noexcept;
+
+    // Getters
+
+    bool get_bool() const noexcept;
+    std::uint64_t get_u64() const noexcept;
+    std::int64_t get_i64() const noexcept;
+    double get_f64() const noexcept;
+    const char* get_str() const noexcept;
+    std::size_t get_str_size() const noexcept;
+
+    // Container sizes
+
+    std::size_t array_size() const noexcept;
+    std::size_t dict_size() const noexcept;
+
+    // Dict lookup
+
+    JsonObject* dict_find(const char* key) const noexcept;
+
+    // Iterators
+
+    class ArrayIterator
     {
-        this->clear();
-    }
+        void* _current;
 
-    JsonObject(const JsonObject& other)
+    public:
+        explicit ArrayIterator(void* current) noexcept : _current(current) {}
+
+        JsonObject* operator*() const noexcept;
+        ArrayIterator& operator++() noexcept;
+        bool operator!=(const ArrayIterator& other) const noexcept;
+    };
+
+    class DictIterator
     {
-        switch(other._type) 
-        {
-            case JsonObjectType_ValueInt:
-                ::new (&_data) std::int64_t(*reinterpret_cast<const std::int64_t*>(&other._data));
-                break;
-            case JsonObjectType_ValueFloat:
-                ::new (&_data) double(*reinterpret_cast<const double*>(&other._data));
-                break;
-            case JsonObjectType_ValueString:
-                ::new (&_data) StringD(*reinterpret_cast<const StringD*>(&other._data));
-                break;
-            case JsonObjectType_ValueBoolean:
-                ::new (&_data) bool(*reinterpret_cast<const bool*>(&other._data));
-                break;
-            case JsonObjectType_List:
-                ::new (&_data) JsonList(*reinterpret_cast<const JsonList*>(&other._data));
-                break;
-            case JsonObjectType_Dict:
-                ::new (&_data) JsonDict(*reinterpret_cast<const JsonDict*>(&other._data));
-                break;
-            case JsonObjectType_ValueNull:
-                break;
-        }
+        void* _current;
 
-        this->_type = other._type;
-    }
+    public:
+        explicit DictIterator(void* current) noexcept : _current(current) {}
 
-    JsonObject(JsonObject&& other) noexcept : _type(other._type) 
+        JsonKeyValue operator*() const noexcept;
+        DictIterator& operator++() noexcept;
+        bool operator!=(const DictIterator& other) const noexcept;
+    };
+
+    class ArrayRange
     {
-        std::memcpy(&_data, &other._data, STORAGE_MAX_SIZE);
-        other._type = JsonObjectType_ValueNull;
-    }
+        void* _head;
 
-    JsonObject& operator=(const JsonObject& other) 
+    public:
+        explicit ArrayRange(void* head) noexcept : _head(head) {}
+
+        ArrayIterator begin() const noexcept;
+        ArrayIterator end() const noexcept;
+    };
+
+    class DictRange
     {
-        if(this != &other) 
-        {
-            this->clear();
+        void* _head;
 
-            switch(other._type) 
-            {
-                case JsonObjectType_ValueInt:
-                    ::new (&_data) int64_t(*reinterpret_cast<const std::int64_t*>(&other._data));
-                    break;
-                case JsonObjectType_ValueFloat:
-                    ::new (&_data) double(*reinterpret_cast<const double*>(&other._data));
-                    break;
-                case JsonObjectType_ValueString:
-                    ::new (&_data) StringD(*reinterpret_cast<const StringD*>(&other._data));
-                    break;
-                case JsonObjectType_ValueBoolean:
-                    ::new (&_data) bool(*reinterpret_cast<const bool*>(&other._data));
-                    break;
-                case JsonObjectType_List:
-                    ::new (&_data) JsonList(*reinterpret_cast<const JsonList*>(&other._data));
-                    break;
-                case JsonObjectType_Dict:
-                    ::new (&_data) JsonDict(*reinterpret_cast<const JsonDict*>(&other._data));
-                    break;
-                case JsonObjectType_ValueNull:
-                    break;
-            }
+    public:
+        explicit DictRange(void* head) noexcept : _head(head) {}
 
-            this->_type = other._type;
-        }
-        return *this;
-    }
+        DictIterator begin() const noexcept;
+        DictIterator end() const noexcept;
+    };
 
-    JsonObject& operator=(JsonObject&& other) noexcept 
-    {
-        if(this != &other) 
-        {
-            this->clear();
-            this->_type = other._type;
-            std::memcpy(&_data, &other._data, STORAGE_MAX_SIZE);
-            other._type = JsonObjectType_ValueNull;
-        }
-
-        return *this;
-    }
-
-    template<typename T>
-    JsonObject(const T& value) : _type(0) 
-    {
-        constexpr size_t type_id = json_traits<T>::id;
-        static_assert(type_id > 0 && type_id < 8, "Unsupported type for JsonObject");
-        
-        ::new (&this->_data) T(value);
-        this->_type = type_id;
-    }
-
-    template<typename T>
-    JsonObject(T&& value) : _type(0) 
-    {
-        using U = std::decay_t<T>;
-
-        constexpr size_t type_id = json_traits<U>::id;
-        static_assert(type_id > 0 && type_id < 8, "Unsupported type for JsonObject");
-        
-        ::new (&this->_data) U(std::forward<T>(value));
-        this->_type = type_id;
-    }
-
-    template<typename T>
-    const T& get() const 
-    {
-        if(this->_type != json_traits<T>::id) 
-        {
-            throw std::runtime_error("Type mismatch in JsonObject::get");
-        }
-
-        return *reinterpret_cast<const T*>(&_data);
-    }
-
-    template<typename T>
-    T& get() 
-    {
-        if(this->_type != json_traits<T>::id) 
-        {
-            throw std::runtime_error("Type mismatch in JsonObject::get");
-        }
-
-        return *reinterpret_cast<T*>(&this->_data);
-    }
-
-    StringD get_as_string() const noexcept
-    {
-        switch(this->type())
-        {
-            case JsonObjectType_ValueInt:
-                return StringD::make_fmt("{}", int64_t(*reinterpret_cast<const std::int64_t*>(&this->_data)));
-            case JsonObjectType_ValueFloat:
-                return StringD::make_fmt("{}", double(*reinterpret_cast<const double*>(&this->_data)));
-            case JsonObjectType_ValueString:
-                return StringD("\"{}\"", *reinterpret_cast<const StringD*>(&this->_data));
-            case JsonObjectType_ValueBoolean:
-                return StringD::make_fmt("{}", bool(*reinterpret_cast<const bool*>(&this->_data)));
-            case JsonObjectType_List:
-                break;
-            case JsonObjectType_Dict:
-                break;
-            case JsonObjectType_ValueNull:
-                return StringD("null");
-        }
-
-        return StringD();
-    }
-
-    template<typename T>
-    void set(T&& value)
-    {
-        this->clear();
-
-        using U = std::decay_t<T>;
-
-        ::new (&this->_data) U(std::forward<T>(value));
-        this->_type = json_traits<U>::id;
-    }
-
-    STDROMANO_FORCE_INLINE bool is_null() const { return _type == JsonObjectType_ValueNull; }
-    STDROMANO_FORCE_INLINE bool is_int() const { return _type == JsonObjectType_ValueInt; }
-    STDROMANO_FORCE_INLINE bool is_float() const { return _type == JsonObjectType_ValueFloat; }
-    STDROMANO_FORCE_INLINE bool is_string() const { return _type == JsonObjectType_ValueString; }
-    STDROMANO_FORCE_INLINE bool is_boolean() const { return _type == JsonObjectType_ValueBoolean; }
-    STDROMANO_FORCE_INLINE bool is_list() const { return _type == JsonObjectType_List; }
-    STDROMANO_FORCE_INLINE bool is_dict() const { return _type == JsonObjectType_Dict; }
-
-    STDROMANO_FORCE_INLINE std::uint32_t type() const { return _type; }
+    ArrayRange array_items() const noexcept;
+    DictRange dict_items() const noexcept;
 };
 
 class STDROMANO_API Json
 {
-private:
-    JsonObject _root;
+    friend struct JsonParser_;
+    friend struct JsonWriter_;
+
+    JsonObject* _root;
+    Arena _string_arena;
+    Arena _value_arena;
 
 public:
-    explicit Json() noexcept {}
+    Json() noexcept;
+    ~Json() noexcept;
 
-    ~Json() noexcept {}
+    STDROMANO_NON_COPYABLE(Json);
+    STDROMANO_NON_MOVABLE(Json);
 
-    bool loadf(const StringD& file_path,
-               bool do_utf8_validation = true) noexcept;
+    // Root access
 
-    bool loads(const StringD& text,
-               bool do_utf8_validation = true) noexcept;
+    JsonObject* root() const noexcept;
+    void set_root(JsonObject* root) noexcept;
 
-    bool dumpf(const StringD& file_path) noexcept;
+    // Value creation
 
-    bool dumps(StringD& text) noexcept;
+    JsonObject* make_null() noexcept;
+    JsonObject* make_bool(bool b) noexcept;
+    JsonObject* make_u64(std::uint64_t u64) noexcept;
+    JsonObject* make_i64(std::int64_t i64) noexcept;
+    JsonObject* make_f64(double f64) noexcept;
+    JsonObject* make_str(const char* str) noexcept;
+    JsonObject* make_array() noexcept;
+    JsonObject* make_dict() noexcept;
 
-    void from_dict(const JsonDict& dict) noexcept;
+    // Value mutation
 
-    void from_list(const JsonList& list) noexcept;
+    void set_null(JsonObject* obj) noexcept;
+    void set_bool(JsonObject* obj, bool b) noexcept;
+    void set_u64(JsonObject* obj, std::uint64_t u64) noexcept;
+    void set_i64(JsonObject* obj, std::int64_t i64) noexcept;
+    void set_f64(JsonObject* obj, double f64) noexcept;
+    void set_str(JsonObject* obj, const char* str) noexcept;
 
-    JsonObject& root() noexcept 
-    {
-        return this->_root;
-    }
+    // Array operations
+
+    void array_append(JsonObject* array, JsonObject* value, bool reference = false) noexcept;
+    void array_pop(JsonObject* array, std::size_t index) noexcept;
+
+    // Dict operations
+
+    void dict_append(JsonObject* dict,
+                     const char* key,
+                     JsonObject* value,
+                     bool reference = false) noexcept;
+
+    void dict_pop(JsonObject* dict, const char* key) noexcept;
+
+    // Parse
+
+    bool loads(const char* str, std::size_t len) noexcept;
+    bool loadf(const StringD& path) noexcept;
+
+    // Dump
+
+    StringD dumps(std::size_t indent_size = 0) const noexcept;
+    bool dumpf(std::size_t indent_size, const StringD& path) const noexcept;
 };
 
 STDROMANO_NAMESPACE_END

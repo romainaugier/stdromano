@@ -14,15 +14,17 @@ int main()
     stdromano::set_log_level(stdromano::LogLevel::Debug);
 
     stdromano::Json json;
-    
-    SCOPED_PROFILE_START(stdromano::ProfileUnit::MilliSeconds, json_loadf_canada);
-    json.loadf(stdromano::StringD("{}/json/twitter.json", TESTS_DATA_DIR));
-    SCOPED_PROFILE_STOP(json_loadf_canada);
 
-    stdromano::StringD out;
-    json.dumps(out);
+    for(const auto file : { "twitter", "citm_catalog", "canada" })
+    {
+        SCOPED_PROFILE_START(stdromano::ProfileUnit::MilliSeconds, json_loadf);
+        json.loadf(stdromano::StringD("{}/json/{}.json", TESTS_DATA_DIR, file));
+        SCOPED_PROFILE_STOP(json_loadf);
 
-    stdromano::log_debug("Out json:\n{}", out);
+        SCOPED_PROFILE_START(stdromano::ProfileUnit::MilliSeconds, json_dumpf);
+        json.dumpf(2, stdromano::StringD("{}/json/out_{}.json", TESTS_DATA_DIR, file));
+        SCOPED_PROFILE_STOP(json_dumpf);
+    }
 
     return 0;
 }
