@@ -5,960 +5,866 @@
 #include "stdromano/regex.hpp"
 #include "stdromano/logger.hpp"
 
-#include <stack>
+#include <cstring>
+#include <limits>
 
 STDROMANO_NAMESPACE_BEGIN
 
 /*
     https://dl.acm.org/doi/pdf/10.1145/363347.363387
+    https://arxiv.org/pdf/2407.20479
 
-    https://arxiv.org/pdf/2407.20479#:~:text=We%20present%20a%20tool%20and,on%20the%20baseline%2C%20and%20outperforms
+    Single-pass recursive descent compiler: regex string -> bytecode directly.
+    Linear VM with group capture support.
 */
-
-enum RegexOperatorType : std::uint16_t
-{
-    RegexOperatorType_Alternate,
-    RegexOperatorType_Concatenate,
-    RegexOperatorType_ZeroOrMore,
-    RegexOperatorType_OneOrMore,
-    RegexOperatorType_ZeroOrOne,
-};
-
-const char* regex_operator_type_to_string(std::uint16_t op)
-{
-    switch(op)
-    {
-        case RegexOperatorType_Alternate:
-            return "Alternate";
-        case RegexOperatorType_Concatenate:
-            return "Concatenate";
-        case RegexOperatorType_ZeroOrMore:
-            return "ZeroOrMore";
-        case RegexOperatorType_OneOrMore:
-            return "OneOrMore";
-        case RegexOperatorType_ZeroOrOne:
-            return "ZeroOrOne";
-        default:
-            return "Unknown Operator";
-    }
-}
-
-enum RegexCharacterType : std::uint16_t
-{
-    RegexCharacterType_Single,
-    RegexCharacterType_Range,
-    RegexCharacterType_Any,
-};
-
-const char* regex_character_type_to_string(std::uint16_t c)
-{
-    switch(c)
-    {
-        case RegexCharacterType_Single:
-            return "Single";
-        case RegexCharacterType_Range:
-            return "Range";
-        case RegexCharacterType_Any:
-            return "Any";
-        default:
-            return "Unknown Character";
-    }
-}
-
-/* Lexing / Parsing */
-
-enum RegexTokenType : std::uint32_t
-{
-    RegexTokenType_Character,
-    RegexTokenType_CharacterRange,
-    RegexTokenType_Operator,
-    RegexTokenType_GroupBegin,
-    RegexTokenType_GroupEnd,
-    RegexTokenType_Invalid,
-};
-
-/* We don't use string_view because we want to keep this struct 16 bytes */
-struct RegexToken
-{
-    const char* data;
-    std::uint32_t data_len;
-    std::uint16_t type;
-    std::uint16_t encoding; /* Either RegexOperatorType or RegexCharacterType */
-
-    RegexToken() : data(nullptr), data_len(0), type(RegexTokenType_Invalid), encoding(0) {}
-
-    RegexToken(const char* data,
-               std::uint32_t data_len,
-               std::uint32_t type,
-               std::uint16_t encoding = std::uint16_t(0)) : data(data), 
-                                                            data_len(data_len),
-                                                            type(type),
-                                                            encoding(encoding) {}
-
-    RegexToken(const RegexToken& other) : data(other.data),
-                                          data_len(other.data_len),
-                                          type(other.type),
-                                          encoding(other.encoding) {}
-
-    RegexToken& operator=(const RegexToken& other) 
-    {
-        this->data = other.data;
-        this->data_len = other.data_len;
-        this->type = other.type;
-        this->encoding = other.encoding;
-
-        return *this;
-    }
-
-    RegexToken(RegexToken&& other) noexcept : data(other.data),
-                                              data_len(other.data_len),
-                                              type(other.type),
-                                              encoding(other.encoding) {}
-
-    RegexToken& operator=(RegexToken&& other) noexcept
-    {
-        this->data = other.data;
-        this->data_len = other.data_len;
-        this->type = other.type;
-        this->encoding = other.encoding;
-
-        return *this;
-    }
-
-    void print() const
-    {
-        switch(type)
-        {
-            case RegexTokenType_Character:
-            {
-                if(this->data != nullptr && this->data_len > 0)
-                {
-                    log_debug("CHAR({}, {})",
-                              std::string_view(this->data, this->data_len),
-                              regex_character_type_to_string(this->encoding));
-                }
-                else
-                {
-                    log_debug("CHAR({})",
-                              regex_character_type_to_string(this->encoding));
-
-                }
-
-                break;
-            }
-
-            case RegexTokenType_CharacterRange:
-            {
-                log_debug("RANGE({})", std::string_view(this->data, this->data_len));
-                break;
-            }
-
-            case RegexTokenType_Operator:
-            {
-                log_debug("OP({})", regex_operator_type_to_string(this->encoding));
-                break;
-            }
-
-            case RegexTokenType_GroupBegin:
-            {
-                log_debug("GROUP_BEGIN({})", this->encoding);
-                break;
-            }
-
-            case RegexTokenType_GroupEnd:
-            {
-                log_debug("GROUP_END({})", this->encoding);
-                break;
-            }
-
-            case RegexTokenType_Invalid:
-            {
-                log_debug("INVALID");
-                break;
-            }
-
-            default:
-            {
-                log_debug("UNKNOWN_TOKEN");
-                break;
-            }
-        }
-    }
-};
-
-std::tuple<bool, Vector<RegexToken>> lex_regex(const StringD& regex) noexcept
-{
-    Vector<RegexToken> tokens;
-
-    std::uint32_t i = 0;
-    bool need_concat = false;
-
-    while(i < regex.size())
-    {
-        if(std::isalnum(regex[i]) || regex[i] == '_')
-        {
-            if(need_concat)
-            {
-                tokens.emplace_back(nullptr, 0u, RegexTokenType_Operator, RegexOperatorType_Concatenate);
-            }
-
-            tokens.emplace_back(regex.data() + i, 1u, RegexTokenType_Character, RegexCharacterType_Single);
-            need_concat = true;
-        }
-        else
-        {
-            switch(regex[i])
-            {
-                case '|':
-                {
-                    tokens.emplace_back(regex.data() + i, 1u, RegexTokenType_Operator, RegexOperatorType_Alternate);
-                    need_concat = false;
-                    break;
-                }
-
-                case '*':
-                {
-                    tokens.emplace_back(regex.data() + i, 1u, RegexTokenType_Operator, RegexOperatorType_ZeroOrMore);
-                    break;
-                }
-
-                case '+':
-                {
-                    tokens.emplace_back(regex.data() + i, 1u, RegexTokenType_Operator, RegexOperatorType_OneOrMore);
-                    break;
-                }
-
-                case '?':
-                {
-                    tokens.emplace_back(regex.data() + i, 1u, RegexTokenType_Operator, RegexOperatorType_ZeroOrOne);
-                    break;
-                }
-
-                case '.':
-                {
-                    if(need_concat)
-                    {
-                        tokens.emplace_back(nullptr, 0u, RegexTokenType_Operator, RegexOperatorType_Concatenate);
-                    }
-
-                    tokens.emplace_back(regex.data() + i, 1u, RegexTokenType_Character, RegexCharacterType_Any);
-                    need_concat = true;
-
-                    break;
-                }
-
-                case '(':
-                {
-                    if(need_concat)
-                    {
-                        tokens.emplace_back(nullptr, 0u, RegexTokenType_Operator, RegexOperatorType_Concatenate);
-                    }
-
-                    tokens.emplace_back(regex.data() + i, 1u, RegexTokenType_GroupBegin);
-                    need_concat = false;
-
-                    break;
-                }
-
-                case ')':
-                {
-                    tokens.emplace_back(regex.data() + i, 1u, RegexTokenType_GroupEnd);
-                    need_concat = true;
-                    break;
-                }
-
-                case '[':
-                {
-                    if(need_concat)
-                    {
-                        tokens.emplace_back(nullptr, 0u, RegexTokenType_Operator, RegexOperatorType_Concatenate);
-                    }
-
-                    const char* start = regex.data() + ++i;
-
-                    while(i < regex.size() && regex[i] != ']')
-                    {
-                        i++;
-                    }
-
-                    if(i >= regex.size())
-                    {
-                        log_error("Unclosed character range in regular expression");
-                        return std::make_tuple(false, tokens);
-                    }
-
-                    tokens.emplace_back(start, (regex.data() + i) - start, RegexTokenType_CharacterRange);
-                    need_concat = true;
-                    break;
-                }
-
-                default:
-                {
-                    log_error("Unsupported character found in regular expression: {}", regex[i]);
-                    return std::make_tuple(false, tokens);
-                }
-            }
-        }
-
-        i++;
-    }
-
-    return std::make_tuple(true, tokens);
-}
-
-/* Operator precedence for infix to postfix conversion */
-inline int get_operator_precedence(RegexOperatorType op) noexcept
-{
-    switch(op)
-    {
-        case RegexOperatorType_Alternate:
-            return 1;
-        case RegexOperatorType_Concatenate:
-            return 2;
-        case RegexOperatorType_ZeroOrMore:
-        case RegexOperatorType_OneOrMore:
-        case RegexOperatorType_ZeroOrOne:
-            return 3;
-        default:
-            return 0;
-    }
-}
-
-inline bool is_left_associative(RegexOperatorType op) noexcept
-{
-    switch(op)
-    {
-        case RegexOperatorType_Alternate:
-        case RegexOperatorType_Concatenate:
-            return true;
-        case RegexOperatorType_ZeroOrMore:
-        case RegexOperatorType_OneOrMore:
-        case RegexOperatorType_ZeroOrOne:
-            return false; /* These are postfix operators */
-        default:
-            return true;
-    }
-}
-
-void print_tokens(const Vector<RegexToken>& tokens)
-{
-    for(std::size_t i = 0; i < tokens.size(); ++i)
-    {
-        tokens[i].print();
-    }
-}
-
-/* Instructions / Bytecode */
 
 enum RegexInstrOpCode : std::uint8_t
 {
-    RegexInstrOpCode_TestSingle,
-    RegexInstrOpCode_TestRange,
-    RegexInstrOpCode_TestNegatedRange,
-    RegexInstrOpCode_TestAny,
-    RegexInstrOpCode_TestDigit,
-    RegexInstrOpCode_TestLowerCase,
-    RegexInstrOpCode_TestUpperCase,
-    RegexInstrOpCode_JumpEq, /* jumps if status_flag = true */
-    RegexInstrOpCode_JumpNeq, /* jumps if status_flag = false */
-    RegexInstrOpCode_Accept,
-    RegexInstrOpCode_Fail,
-    RegexInstrOpCode_GroupStart,
-    RegexInstrOpCode_GroupEnd,
-    RegexInstrOpCode_IncPos,     /* ++string_pos */
-    RegexInstrOpCode_DecPos,     /* --string_pos */
-    RegexInstrOpCode_IncPosEq, /* string_pos += (status_flag ? 1 : 0) */
-    RegexInstrOpCode_JumpPos,    /* Absolute jump in string position */
-    RegexInstrOpCode_SetFlag, /* status_flag = static_cast<bool>(bytecode[pc + 1]) */
+    RegexInstrOpCode_TestSingle,        /* test char == operand */
+    RegexInstrOpCode_TestNegatedSingle, /* test char != operand */
+    RegexInstrOpCode_TestRange,         /* test char in [lo, hi] */
+    RegexInstrOpCode_TestNegatedRange,  /* test char NOT in [lo, hi] */
+    RegexInstrOpCode_TestAny,           /* test any char (except newline) */
+    RegexInstrOpCode_TestDigit,         /* test isdigit */
+    RegexInstrOpCode_TestWord,          /* test isalnum || '_' */
+    RegexInstrOpCode_TestWhitespace,    /* test isspace */
+    RegexInstrOpCode_TestLowerCase,     /* test islower */
+    RegexInstrOpCode_TestUpperCase,     /* test isupper */
+    RegexInstrOpCode_Jump,              /* jump */
+    RegexInstrOpCode_JumpEq,            /* jump if status_flag == true */
+    RegexInstrOpCode_JumpNeq,           /* jump if status_flag == false */
+    RegexInstrOpCode_Accept,            /* match succeeded */
+    RegexInstrOpCode_Fail,              /* match failed */
+    RegexInstrOpCode_GroupStart,        /* record sp as group start  (1-byte id) */
+    RegexInstrOpCode_GroupEnd,          /* record sp as group end    (1-byte id) */
+    RegexInstrOpCode_IncPos,            /* ++sp */
+    RegexInstrOpCode_IncPosEq,          /* sp += status_flag ? 1 : 0 */
+    RegexInstrOpCode_SetFlag,           /* status_flag = (bool)operand */
 };
 
-enum RegexInstrOpType : std::uint32_t
+template<typename T, typename = std::enable_if_t<sizeof(T) == 1>>
+inline std::byte BYTE(const T& t) noexcept
 {
-    RegexInstrOpType_TestOp,
-    RegexInstrOpType_UnaryOp,
-    RegexInstrOpType_BinaryOp,
-    RegexInstrOpType_GroupOp,
-};
+    std::byte b;
+    std::memcpy(&b, &t, 1);
+    return b;
+}
 
-/* std::bitcast like functions to convert back and forth */
-template<typename T,
-         typename = std::enable_if<sizeof(T) == sizeof(std::byte)>>
-inline std::byte BYTE(const T& t) noexcept { std::byte b; std::memcpy(&b, &t, sizeof(std::byte)); return b; }
+template<typename T, typename = std::enable_if_t<sizeof(T) == 1>>
+inline std::byte BYTE(T&& t) noexcept
+{
+    std::byte b;
+    const T t2 = t;
+    std::memcpy(&b, &t2, 1);
+    return b;
+}
 
-template<typename T,
-         typename = std::enable_if<sizeof(T) == sizeof(std::byte)>>
-inline std::byte BYTE(T&& t) noexcept { std::byte b; const T t2 = t; std::memcpy(&b, &t2, sizeof(std::byte)); return b; }
+inline char CHAR(std::byte b) noexcept
+{
+    char c;
+    std::memcpy(&c, &b, 1);
+    return c;
+}
 
-inline char CHAR(const std::byte b) noexcept { char c; std::memcpy(&c, &b, sizeof(char)); return c; }
+// All jumps are relative to the end of the jump instruction (size of a jump instruction is 1 (opcode) + 4 (offset))
 
 static constexpr int JUMP_FAIL = std::numeric_limits<int>::max();
 
-inline std::tuple<std::byte, std::byte, std::byte, std::byte> encode_jump(const int jump_size) noexcept
+inline void encode_jump_at(Regex::ByteCode& code, std::size_t pos, int value) noexcept
 {
-    return std::make_tuple(BYTE((jump_size >> 24) & 0xFF),
-                           BYTE((jump_size >> 16) & 0xFF),
-                           BYTE((jump_size >> 8) & 0xFF),
-                           BYTE((jump_size >> 0) & 0xFF));
+    code[pos + 0] = BYTE(static_cast<std::uint8_t>((value >> 24) & 0xFF));
+    code[pos + 1] = BYTE(static_cast<std::uint8_t>((value >> 16) & 0xFF));
+    code[pos + 2] = BYTE(static_cast<std::uint8_t>((value >> 8) & 0xFF));
+    code[pos + 3] = BYTE(static_cast<std::uint8_t>((value >> 0) & 0xFF));
 }
 
-inline int decode_jump(const std::byte* bytecode) noexcept
+inline int decode_jump(const std::byte* p) noexcept
 {
-    return static_cast<int>(bytecode[0]) << 24 |
-           static_cast<int>(bytecode[1]) << 16 |
-           static_cast<int>(bytecode[2]) << 8 |
-           static_cast<int>(bytecode[3]) << 0;
+    return static_cast<int>(static_cast<std::uint8_t>(p[0])) << 24 |
+           static_cast<int>(static_cast<std::uint8_t>(p[1])) << 16 |
+           static_cast<int>(static_cast<std::uint8_t>(p[2])) << 8  |
+           static_cast<int>(static_cast<std::uint8_t>(p[3])) << 0;
 }
 
+/* Emit a jump instruction, returns the position of the 4-byte offset field */
 inline std::size_t emit_jump(Regex::ByteCode& code, RegexInstrOpCode op) noexcept
 {
     code.push_back(BYTE(op));
-
     std::size_t pos = code.size();
-    const auto [b1, b2, b3, b4] = encode_jump(0);
+    code.push_back(BYTE(std::uint8_t(0)));
+    code.push_back(BYTE(std::uint8_t(0)));
+    code.push_back(BYTE(std::uint8_t(0)));
+    code.push_back(BYTE(std::uint8_t(0)));
+    return pos;
+}
 
-    code.insert(code.cend(), { b1, b2, b3, b4 });
-
+inline std::size_t emit_fail_jump(Regex::ByteCode& code, RegexInstrOpCode op) noexcept
+{
+    code.push_back(BYTE(op));
+    std::size_t pos = code.size();
+    code.push_back(BYTE(static_cast<std::uint8_t>((JUMP_FAIL >> 24) & 0xFF)));
+    code.push_back(BYTE(static_cast<std::uint8_t>((JUMP_FAIL >> 16) & 0xFF)));
+    code.push_back(BYTE(static_cast<std::uint8_t>((JUMP_FAIL >> 8) & 0xFF)));
+    code.push_back(BYTE(static_cast<std::uint8_t>((JUMP_FAIL >> 0) & 0xFF)));
     return pos;
 }
 
 inline void patch_jump(Regex::ByteCode& code, std::size_t jump_pos, int offset) noexcept
 {
-    const auto [b1, b2, b3, b4] = encode_jump(offset);
-
-    code[jump_pos + 0] = b1;
-    code[jump_pos + 1] = b2;
-    code[jump_pos + 2] = b3;
-    code[jump_pos + 3] = b4;
+    encode_jump_at(code, jump_pos, offset);
 }
 
-inline Regex::ByteCode get_range_instrs(char range_start, char range_end) noexcept
+struct RegexCompiler
 {
-    if(range_start == '0' && range_end == '9')
-    {
-        return { BYTE(RegexInstrOpCode_TestDigit), BYTE(RegexInstrOpCode_IncPosEq) };
-    }
-    else if(range_start == 'a' && range_end == 'z')
-    {
-        return { BYTE(RegexInstrOpCode_TestLowerCase), BYTE(RegexInstrOpCode_IncPosEq) };
-    }
-    else if(range_start == 'A' && range_end == 'Z')
-    {
-        return { BYTE(RegexInstrOpCode_TestUpperCase), BYTE(RegexInstrOpCode_IncPosEq) };
-    }
-    else
-    {
-        return { 
-                    BYTE(RegexInstrOpCode_TestRange),
-                    BYTE(range_start),
-                    BYTE(range_end),
-                    BYTE(RegexInstrOpCode_IncPosEq)
-                };
-    }
-}
-
-bool emit_alternation(const Vector<RegexToken>& tokens,
-                      std::size_t& pos,
-                      std::uint32_t& current_group_id,
-                      Regex::ByteCode& bytecode) noexcept;
-
-bool emit_concatenation(const Vector<RegexToken>& tokens,
-                        std::size_t& pos,
-                        std::uint32_t& current_group_id,
-                        Regex::ByteCode& bytecode) noexcept;
-
-bool emit_quantified(const Vector<RegexToken>& tokens,
-                     std::size_t& pos,
-                     std::uint32_t& current_group_id,
-                     Regex::ByteCode& bytecode) noexcept;
-
-bool emit_primary(const Vector<RegexToken>& tokens,
-                  std::size_t& pos,
-                  std::uint32_t& current_group_id,
-                  Regex::ByteCode& bytecode) noexcept;
-
-bool emit_alternation(const Vector<RegexToken>& tokens,
-                      std::size_t& pos,
-                      std::uint32_t& current_group_id,
-                      Regex::ByteCode& bytecode) noexcept
-{
-    std::size_t lhs_start = bytecode.size();
-    
-    if(!emit_concatenation(tokens, pos, current_group_id, bytecode))
-        return false;
-    
-    while(pos < tokens.size() && 
-          tokens[pos].type == RegexTokenType_Operator &&
-          static_cast<RegexOperatorType>(tokens[pos].encoding) == RegexOperatorType_Alternate)
-    {
-        pos++;
-        
-        std::size_t jump_over_rhs_pos = emit_jump(bytecode, RegexInstrOpCode_JumpEq);
-        
-        std::size_t rhs_start = bytecode.size();
-        
-        if(!emit_concatenation(tokens, pos, current_group_id, bytecode))
-            return false;
-        
-        int offset = static_cast<int>(bytecode.size() - (jump_over_rhs_pos - 1));
-        patch_jump(bytecode, jump_over_rhs_pos, offset);
-    }
-    
-    return true;
-}
-
-bool emit_concatenation(const Vector<RegexToken>& tokens,
-                        std::size_t& pos,
-                        std::uint32_t& current_group_id,
-                        Regex::ByteCode& bytecode) noexcept
-{
-    bool first = true;
-    
-    while(pos < tokens.size() && 
-          tokens[pos].type != RegexTokenType_GroupEnd &&
-          !(tokens[pos].type == RegexTokenType_Operator &&
-          static_cast<RegexOperatorType>(tokens[pos].encoding) == RegexOperatorType_Alternate))
-    {
-        if(!first)
-        {
-            std::size_t jump_pos = emit_jump(bytecode, RegexInstrOpCode_JumpNeq);
-            patch_jump(bytecode, jump_pos, JUMP_FAIL);
-        }
-        
-        if(!emit_quantified(tokens, pos, current_group_id, bytecode))
-            return false;
-        
-        first = false;
-    }
-    
-    return true;
-}
-
-bool emit_quantified(const Vector<RegexToken>& tokens, std::size_t& pos,
-                           std::uint32_t& current_group_id, Regex::ByteCode& bytecode) noexcept
-{
-    std::size_t primary_start = bytecode.size();
-    
-    if(!emit_primary(tokens, pos, current_group_id, bytecode))
-        return false;
-    
-    if(pos < tokens.size() && tokens[pos].type == RegexTokenType_Operator)
-    {
-        RegexOperatorType op_type = static_cast<RegexOperatorType>(tokens[pos].encoding);
-        
-        if(op_type == RegexOperatorType_ZeroOrMore)
-        {
-            pos++;
-            
-            int offset_back = static_cast<int>(primary_start - bytecode.size());
-            std::size_t loop_jump_pos = emit_jump(bytecode, RegexInstrOpCode_JumpEq);
-            patch_jump(bytecode, loop_jump_pos, offset_back);
-            
-            bytecode.push_back(BYTE(RegexInstrOpCode_SetFlag));
-            bytecode.push_back(BYTE(1));
-        }
-        else if(op_type == RegexOperatorType_OneOrMore)
-        {
-            pos++;
-
-            std::size_t loop_start = bytecode.size();
-
-            Regex::ByteCode primary_copy;
-            primary_copy.insert(primary_copy.begin(),
-                                bytecode.begin() + primary_start, 
-                                bytecode.begin() + loop_start);
-            
-            std::size_t fail_jump_pos = emit_jump(bytecode, RegexInstrOpCode_JumpNeq);
-            patch_jump(bytecode, fail_jump_pos, JUMP_FAIL);
-
-            bytecode.insert(bytecode.end(), primary_copy.begin(), primary_copy.end());
-
-            std::size_t exit_loop_jump_pos = emit_jump(bytecode, RegexInstrOpCode_JumpNeq);
-            
-            bytecode.push_back(BYTE(RegexInstrOpCode_SetFlag));
-            bytecode.push_back(BYTE(1));
-            
-            int offset_back = static_cast<int>(loop_start - bytecode.size());
-            std::size_t loop_jump_pos = emit_jump(bytecode, RegexInstrOpCode_JumpEq);
-            patch_jump(bytecode, loop_jump_pos, offset_back);
-            
-            patch_jump(bytecode, exit_loop_jump_pos, 
-                      static_cast<int>(bytecode.size() - (exit_loop_jump_pos - 1)));
-        }
-        else if(op_type == RegexOperatorType_ZeroOrOne)
-        {
-            pos++;
-            
-            bytecode.push_back(BYTE(RegexInstrOpCode_SetFlag));
-            bytecode.push_back(BYTE(1));
-        }
-    }
-    
-    return true;
-}
-
-bool emit_primary(const Vector<RegexToken>& tokens, std::size_t& pos,
-                        std::uint32_t& current_group_id, Regex::ByteCode& bytecode) noexcept
-{
-    if(pos >= tokens.size())
-    {
-        log_error("Unexpected end of regex expression");
-        return false;
-    }
-    
-    const RegexToken& token = tokens[pos];
-    
-    switch(token.type)
-    {
-        case RegexTokenType_Character:
-        {
-            pos++;
-            
-            switch(token.encoding)
-            {
-                case RegexCharacterType_Single:
-                    bytecode.push_back(BYTE(RegexInstrOpCode_TestSingle));
-                    bytecode.push_back(BYTE(token.data[0]));
-                    break;
-                    
-                case RegexCharacterType_Any:
-                    bytecode.push_back(BYTE(RegexInstrOpCode_TestAny));
-                    break;
-            }
-            
-            bytecode.push_back(BYTE(RegexInstrOpCode_IncPosEq));
-
-            return true;
-        }
-        
-        case RegexTokenType_CharacterRange:
-        {
-            pos++;
-            
-            Regex::ByteCode range_instrs = get_range_instrs(token.data[0], token.data[2]);
-            bytecode.insert(bytecode.end(), range_instrs.begin(), range_instrs.end());
-            return true;
-        }
-        
-        case RegexTokenType_GroupBegin:
-        {
-            std::uint32_t group_id = current_group_id++;
-            pos++;
-            
-            bytecode.push_back(BYTE(RegexInstrOpCode_GroupStart));
-            bytecode.push_back(BYTE(group_id & 0xFF));
-            
-            if(!emit_alternation(tokens, pos, current_group_id, bytecode))
-                return false;
-            
-            if(pos >= tokens.size() || tokens[pos].type != RegexTokenType_GroupEnd)
-            {
-                log_error("Mismatched parentheses in regular expression");
-                return false;
-            }
-            
-            bytecode.push_back(BYTE(RegexInstrOpCode_GroupEnd));
-            bytecode.push_back(BYTE(group_id & 0xFF));
-            
-            pos++;
-            return true;
-        }
-
-        case RegexTokenType_Operator:
-        {
-            pos++;
-
-            switch(token.encoding)
-            {
-                case RegexOperatorType_Alternate:
-                    return emit_alternation(tokens, pos, current_group_id, bytecode);
-                case RegexOperatorType_Concatenate:
-                    return emit_concatenation(tokens, pos, current_group_id, bytecode);
-                default:
-                    log_error("Invalid operator type during bytecode emission");
-                    return false;
-            }
-        }
-        
-        default:
-        {
-            log_error("Invalid token type during bytecode emission");
-
-            return false;
-        }
-    }
-}
-
-/* Recursive descent bytecode emitter for regex */
-std::tuple<bool, Regex::ByteCode> regex_emit(const Vector<RegexToken>& tokens) noexcept
-{
+    const char* pattern;
+    std::size_t len;
+    std::size_t pos;
+    std::uint32_t next_group_id; /* 0 = implicit whole-match group, 1+ = explicit */
     Regex::ByteCode bytecode;
-    std::size_t pos = 0;
-    std::uint32_t current_group_id = 1;
-    
-    if(tokens.empty())
+    bool has_error;
+
+    RegexCompiler(const char* pat, std::size_t length) : pattern(pat),
+                                                         len(length),
+                                                         pos(0),
+                                                         next_group_id(1),
+                                                         has_error(false) {}
+
+    char peek() const noexcept { return this->pos < this->len ? this->pattern[this->pos] : '\0'; }
+    char advance() noexcept { return this->pos < this->len ? this->pattern[this->pos++] : '\0'; }
+    bool at_end() const noexcept { return this->pos >= this->len; }
+
+    void error(const char* msg) noexcept
     {
-        bytecode.push_back(BYTE(RegexInstrOpCode_Accept));
-        return { true, std::move(bytecode) };
+        log_error("Regex compile error at position {}: {}", this->pos, msg);
+        this->has_error = true;
     }
-    
-    if(!emit_alternation(tokens, pos, current_group_id, bytecode))
+
+    void emit_range_instrs(char lo, char hi, bool add_inc_pos_eq = true, bool negated = false) noexcept
     {
-        return { false, Regex::ByteCode() };
+        if(negated)
+        {
+            this->bytecode.push_back(BYTE(RegexInstrOpCode_TestNegatedRange));
+            this->bytecode.push_back(BYTE(lo));
+            this->bytecode.push_back(BYTE(hi));
+        }
+        else
+        {
+            if(lo == '0' && hi == '9')
+            {
+                this->bytecode.push_back(BYTE(RegexInstrOpCode_TestDigit));
+            }
+            else if(lo == 'a' && hi == 'z')
+            {
+                this->bytecode.push_back(BYTE(RegexInstrOpCode_TestLowerCase));
+            }
+            else if(lo == 'A' && hi == 'Z')
+            {
+                this->bytecode.push_back(BYTE(RegexInstrOpCode_TestUpperCase));
+            }
+            else
+            {
+                this->bytecode.push_back(BYTE(RegexInstrOpCode_TestRange));
+                this->bytecode.push_back(BYTE(lo));
+                this->bytecode.push_back(BYTE(hi));
+            }
+        }
+
+        if(add_inc_pos_eq)
+            this->bytecode.push_back(BYTE(RegexInstrOpCode_IncPosEq));
     }
-    
-    if(pos < tokens.size())
+
+    /* alternation = concatenation ('|' concatenation)* */
+    bool compile_alternation() noexcept
     {
-        log_error("Unexpected tokens after bytecode emission");
-        return { false, Regex::ByteCode() };
+        if(!this->compile_concatenation())
+            return false;
+
+        Vector<std::size_t> jumps;
+
+        while(!this->at_end() && this->peek() == '|')
+        {
+            this->advance();
+
+            std::size_t jump_over_pos = emit_jump(this->bytecode, RegexInstrOpCode_JumpEq);
+            jumps.push_back(jump_over_pos);
+
+            if(!this->compile_concatenation())
+                return false;
+
+        }
+
+        std::size_t end_label = this->bytecode.size();
+
+        for(const auto jump : jumps)
+            patch_jump(this->bytecode, jump, static_cast<int>(end_label - (jump + 4)));
+
+        return true;
     }
-    
-    std::size_t final_fail_jump = emit_jump(bytecode, RegexInstrOpCode_JumpNeq);
-    patch_jump(bytecode, final_fail_jump, JUMP_FAIL);
-    
+
+    /* concatenation = quantified+ (stop at '|', ')', or end) */
+    bool compile_concatenation() noexcept
+    {
+        bool first = true;
+
+        Vector<std::size_t> jumps;
+
+        while(!this->at_end() && this->peek() != ')' && this->peek() != '|')
+        {
+            if(!first)
+            {
+                std::size_t fail_jump = emit_jump(this->bytecode, RegexInstrOpCode_JumpNeq);
+                jumps.push_back(fail_jump);
+            }
+
+            if(!this->compile_quantified())
+                return false;
+
+            first = false;
+        }
+
+        std::size_t end_label = this->bytecode.size();
+
+        for(const auto jump : jumps)
+            patch_jump(this->bytecode, jump, static_cast<int>(end_label - (jump + 4)));
+
+        return true;
+    }
+
+    /* quantified = primary ('*' | '+' | '?')? */
+    bool compile_quantified() noexcept
+    {
+        std::size_t primary_start = this->bytecode.size();
+
+        if(!this->compile_primary())
+            return false;
+
+        if(this->at_end())
+            return true;
+
+        char q = this->peek();
+
+        switch(q)
+        {
+            case '*':
+            {
+                this->advance();
+
+                std::size_t loop_jump = emit_jump(this->bytecode, RegexInstrOpCode_JumpEq);
+                int offset_back = static_cast<int>(primary_start) - static_cast<int>(loop_jump + 4);
+                patch_jump(this->bytecode, loop_jump, offset_back);
+
+                this->bytecode.push_back(BYTE(RegexInstrOpCode_SetFlag));
+                this->bytecode.push_back(BYTE(std::uint8_t(1)));
+
+                break;
+            }
+            case '+':
+            {
+                this->advance();
+
+                std::size_t primary_end = this->bytecode.size();
+
+                emit_fail_jump(this->bytecode, RegexInstrOpCode_JumpNeq);
+
+                std::size_t loop_start = this->bytecode.size();
+
+                Regex::ByteCode primary_copy(this->bytecode.begin() + primary_start,
+                                             this->bytecode.begin() + primary_end);
+
+                this->bytecode.insert(this->bytecode.end(), primary_copy.begin(), primary_copy.end());
+
+                std::size_t exit_loop_jump = emit_jump(this->bytecode, RegexInstrOpCode_JumpNeq);
+
+                std::size_t loop_jump = emit_jump(this->bytecode, RegexInstrOpCode_JumpEq);
+                int offset_back = static_cast<int>(loop_start) - static_cast<int>(loop_jump + 4);
+                patch_jump(this->bytecode, loop_jump, offset_back);
+
+                patch_jump(this->bytecode,
+                           exit_loop_jump,
+                           static_cast<int>(this->bytecode.size() - (exit_loop_jump + 4)));
+
+                this->bytecode.push_back(BYTE(RegexInstrOpCode_SetFlag));
+                this->bytecode.push_back(BYTE(std::uint8_t(1)));
+
+                break;
+            }
+            case '?':
+            {
+                this->advance();
+
+                this->bytecode.push_back(BYTE(RegexInstrOpCode_SetFlag));
+                this->bytecode.push_back(BYTE(std::uint8_t(1)));
+
+                break;
+            }
+            default:
+                break;
+        }
+
+        return true;
+    }
+
+    /* primary = literal | '.' | '[' class ']' | '(' alternation ')' | '\\' escape */
+    bool compile_primary() noexcept
+    {
+        if(this->at_end())
+        {
+            this->error("Unexpected end of pattern");
+            return false;
+        }
+
+        char c = this->peek();
+
+        switch(c)
+        {
+            case '(':
+            {
+                this->advance();
+
+                std::uint32_t group_id = this->next_group_id++;
+
+                this->bytecode.push_back(BYTE(RegexInstrOpCode_GroupStart));
+                this->bytecode.push_back(BYTE(static_cast<std::uint8_t>(group_id & 0xFF)));
+
+                if(!this->compile_alternation())
+                    return false;
+
+                if(this->at_end() || this->peek() != ')')
+                {
+                    this->error("Mismatched parentheses: expected ')'");
+                    return false;
+                }
+
+                this->advance();
+
+                this->bytecode.push_back(BYTE(RegexInstrOpCode_GroupEnd));
+                this->bytecode.push_back(BYTE(static_cast<std::uint8_t>(group_id & 0xFF)));
+
+                return true;
+            }
+
+            case '[':
+            {
+                this->advance();
+
+                bool negated = false;
+
+                if(!this->at_end() && this->peek() == '^')
+                {
+                    negated = true;
+                    this->advance();
+                }
+
+                if(this->at_end())
+                {
+                    this->error("Unclosed character class");
+                    return false;
+                }
+
+                /* For a multi-range class like [a-zA-Z0-9], we compile each range
+                   as a test and use alternation logic between them:
+                   test_range1 -> if match, jump to end -> test_range2 -> ... */
+
+                struct RangePair { char lo; char hi; inline bool is_range() const { return this->lo != this->hi; } };
+                Vector<RangePair> ranges;
+
+                while(!this->at_end() && this->peek() != ']')
+                {
+                    char lo = this->advance();
+
+                    if(!this->at_end() && this->peek() == '-')
+                    {
+                        this->advance();
+
+                        if(this->at_end() || this->peek() == ']')
+                        {
+                            /* Trailing '-', treat as literal */
+                            ranges.push_back({ lo, lo });
+                            ranges.push_back({ '-', '-' });
+                        }
+                        else
+                        {
+                            char hi = this->advance();
+                            ranges.push_back({ lo, hi });
+                        }
+                    }
+                    else
+                    {
+                        ranges.push_back({ lo, lo });
+                    }
+                }
+
+                if(this->at_end())
+                {
+                    this->error("Unclosed character class: expected ']'");
+                    return false;
+                }
+
+                this->advance();
+
+                if(ranges.size() == 1 && ranges[0].is_range() && !negated)
+                {
+                    this->emit_range_instrs(ranges[0].lo, ranges[0].hi);
+                }
+                else if(ranges.size() == 1 && !ranges[0].is_range() && !negated)
+                {
+                    this->bytecode.push_back(BYTE(RegexInstrOpCode_TestSingle));
+                    this->bytecode.push_back(BYTE(ranges[0].lo));
+                    this->bytecode.push_back(BYTE(RegexInstrOpCode_IncPosEq));
+                }
+                else
+                {
+                    Vector<std::size_t> success_jumps;
+
+                    for(std::size_t r = 0; r < ranges.size(); ++r)
+                    {
+                        if(ranges[r].is_range())
+                        {
+                            this->emit_range_instrs(ranges[r].lo, ranges[r].hi, false, negated);
+                        }
+                        else
+                        {
+                            if(negated)
+                                this->bytecode.push_back(BYTE(RegexInstrOpCode_TestNegatedSingle));
+                            else
+                                this->bytecode.push_back(BYTE(RegexInstrOpCode_TestSingle));
+
+                            this->bytecode.push_back(BYTE(ranges[r].lo));
+                        }
+
+                        std::size_t jump_pos = emit_jump(this->bytecode, RegexInstrOpCode_JumpEq);
+                        success_jumps.push_back(jump_pos);
+                    }
+
+                    this->bytecode.push_back(BYTE(RegexInstrOpCode_SetFlag));
+                    this->bytecode.push_back(BYTE(static_cast<std::uint8_t>(0)));
+
+                    std::size_t success_label = this->bytecode.size();
+
+                    for(std::size_t j = 0; j < success_jumps.size(); ++j)
+                        patch_jump(this->bytecode, success_jumps[j], static_cast<int>(success_label - (success_jumps[j] + 4)));
+
+                    this->bytecode.push_back(BYTE(RegexInstrOpCode_IncPosEq));
+                }
+
+                return true;
+            }
+
+            case '.':
+            {
+                this->advance();
+                this->bytecode.push_back(BYTE(RegexInstrOpCode_TestAny));
+                this->bytecode.push_back(BYTE(RegexInstrOpCode_IncPosEq));
+                return true;
+            }
+
+            case '\\':
+            {
+                this->advance();
+
+                if(this->at_end())
+                {
+                    this->error("Trailing backslash in pattern");
+                    return false;
+                }
+
+                char esc = this->advance();
+
+                switch(esc)
+                {
+                    case 'd':
+                        this->bytecode.push_back(BYTE(RegexInstrOpCode_TestDigit));
+                        this->bytecode.push_back(BYTE(RegexInstrOpCode_IncPosEq));
+                        break;
+                    case 'w':
+                        this->bytecode.push_back(BYTE(RegexInstrOpCode_TestWord));
+                        this->bytecode.push_back(BYTE(RegexInstrOpCode_IncPosEq));
+                        break;
+                    case 's':
+                        this->bytecode.push_back(BYTE(RegexInstrOpCode_TestWhitespace));
+                        this->bytecode.push_back(BYTE(RegexInstrOpCode_IncPosEq));
+                        break;
+                    default:
+                        /* Escaped literal (handles \\, \., \*, \+, \?, \(, \), \[, \], \|) */
+                        this->bytecode.push_back(BYTE(RegexInstrOpCode_TestSingle));
+                        this->bytecode.push_back(BYTE(esc));
+                        this->bytecode.push_back(BYTE(RegexInstrOpCode_IncPosEq));
+                        break;
+                }
+
+                return true;
+            }
+
+            default:
+            {
+                /* Literal character (alphanumeric, underscore, or other non-special chars) */
+                if(c == '*' || c == '+' || c == '?' || c == ')' || c == ']' || c == '|')
+                {
+                    this->error("Unexpected operator or delimiter");
+                    return false;
+                }
+
+                this->advance();
+
+                this->bytecode.push_back(BYTE(RegexInstrOpCode_TestSingle));
+                this->bytecode.push_back(BYTE(c));
+                this->bytecode.push_back(BYTE(RegexInstrOpCode_IncPosEq));
+
+                return true;
+            }
+        }
+    }
+};
+
+void finalize_bytecode(Regex::ByteCode& bytecode) noexcept
+{
+    // Append the final fail-check, accept, and fail instructions
+    emit_fail_jump(bytecode, RegexInstrOpCode_JumpNeq);
+
     bytecode.push_back(BYTE(RegexInstrOpCode_Accept));
     bytecode.push_back(BYTE(RegexInstrOpCode_Fail));
-    
+
+    // Resolve all JUMP_FAIL offsets to point to the Fail instruction
+    std::size_t fail_addr = bytecode.size() - 1;
     std::size_t i = 0;
 
     while(i < bytecode.size())
     {
         switch(static_cast<std::uint8_t>(bytecode[i]))
         {
+            case RegexInstrOpCode_Jump:
             case RegexInstrOpCode_JumpEq:
             case RegexInstrOpCode_JumpNeq:
             {
-                int offset = decode_jump(std::addressof(bytecode[i + 1]));
-                
+                int offset = decode_jump(&bytecode[i + 1]);
+
                 if(offset == JUMP_FAIL)
                 {
-                    offset = static_cast<int>(bytecode.size() - 1 - (i + 5));
-                    
-                    const auto [b1, b2, b3, b4] = encode_jump(offset);
-                    bytecode[i + 1] = b1;
-                    bytecode[i + 2] = b2;
-                    bytecode[i + 3] = b3;
-                    bytecode[i + 4] = b4;
+                    encode_jump_at(bytecode, i + 1, static_cast<int>(fail_addr - (i + 5)));
                 }
-                
+
                 i += 5;
                 break;
             }
-            
-            case RegexInstrOpCode_Accept:
-            case RegexInstrOpCode_Fail:
-            case RegexInstrOpCode_TestAny:
-            case RegexInstrOpCode_TestDigit:
-            case RegexInstrOpCode_TestLowerCase:
-            case RegexInstrOpCode_TestUpperCase:
-            case RegexInstrOpCode_IncPos:
-            case RegexInstrOpCode_DecPos:
-            case RegexInstrOpCode_IncPosEq:
-                i++;
-                break;
-                
-            case RegexInstrOpCode_JumpPos:
-                i += 5;
-                break;
-                
+
             case RegexInstrOpCode_TestSingle:
             case RegexInstrOpCode_SetFlag:
             case RegexInstrOpCode_GroupStart:
             case RegexInstrOpCode_GroupEnd:
                 i += 2;
                 break;
-                
+
             case RegexInstrOpCode_TestRange:
             case RegexInstrOpCode_TestNegatedRange:
                 i += 3;
                 break;
-                
+
             default:
                 i++;
                 break;
         }
     }
-    
-    return { true, std::move(bytecode) };
 }
 
-std::tuple<bool, Regex::ByteCode> regex_opt(Regex::ByteCode& bytecode) noexcept
+/* ======================================================================== */
+/* Disassembler (debug)                                                     */
+/* ======================================================================== */
+
+static void regex_disasm(const Regex::ByteCode& bytecode) noexcept
 {
     std::size_t i = 0;
 
     while(i < bytecode.size())
     {
+        log_debug("{:04d}: ", i);
 
-    }
-
-    return std::make_tuple(true, bytecode);
-}
-
-void regex_disasm(const Regex::ByteCode& bytecode) noexcept
-{
-    std::size_t i = 0;
-
-    while(i < bytecode.size())
-    {
         switch(static_cast<std::uint8_t>(bytecode[i]))
         {
             case RegexInstrOpCode_TestSingle:
-                log_debug("TESTSINGLE {}",
-                          CHAR(bytecode[i + 1]));
+                log_debug("  TESTSINGLE '{}'", CHAR(bytecode[i + 1]));
+                i += 2;
+                break;
+            case RegexInstrOpCode_TestNegatedSingle:
+                log_debug("  TESTNEGSINGLE '{}'", CHAR(bytecode[i + 1]));
                 i += 2;
                 break;
             case RegexInstrOpCode_TestRange:
-                log_debug("TESTRANGE {}-{}",
-                          CHAR(bytecode[i + 1]),
-                          CHAR(bytecode[i + 2]));
+                log_debug("  TESTRANGE '{}'-'{}'", CHAR(bytecode[i + 1]), CHAR(bytecode[i + 2]));
                 i += 3;
                 break;
             case RegexInstrOpCode_TestNegatedRange:
-                log_debug("TESTNEGRANGE {}-{}",
-                          CHAR(bytecode[i + 1]),
-                          CHAR(bytecode[i + 2]));
+                log_debug("  TESTNEGRANGE '{}'-'{}'", CHAR(bytecode[i + 1]), CHAR(bytecode[i + 2]));
                 i += 3;
                 break;
             case RegexInstrOpCode_TestAny:
-                log_debug("TESTANY");
+                log_debug("  TESTANY");
                 i++;
                 break;
             case RegexInstrOpCode_TestDigit:
-                log_debug("TESTDIGIT");
+                log_debug("  TESTDIGIT");
+                i++;
+                break;
+            case RegexInstrOpCode_TestWord:
+                log_debug("  TESTWORD");
+                i++;
+                break;
+            case RegexInstrOpCode_TestWhitespace:
+                log_debug("  TESTWHITESPACE");
                 i++;
                 break;
             case RegexInstrOpCode_TestLowerCase:
-                log_debug("TESTLOWERCASE");
+                log_debug("  TESTLOWERCASE");
                 i++;
                 break;
             case RegexInstrOpCode_TestUpperCase:
-                log_debug("TESTUPPERCASE");
+                log_debug("  TESTUPPERCASE");
                 i++;
                 break;
+            case RegexInstrOpCode_Jump:
             case RegexInstrOpCode_JumpEq:
             case RegexInstrOpCode_JumpNeq:
-                    log_debug("{} {}{}",
-                              static_cast<std::uint8_t>(bytecode[i]) == RegexInstrOpCode_JumpEq ? "JUMPEQ" : "JUMPNEQ",
-                              decode_jump(std::addressof(bytecode[i + 1])) >= 0 ? "+" : "",
-                              decode_jump(std::addressof(bytecode[i + 1])));
+            {
+                int offset = decode_jump(&bytecode[i + 1]);
+                int target = static_cast<int>(i) + 5 + offset;
+
+                switch(static_cast<std::uint8_t>(bytecode[i]))
+                {
+                    case RegexInstrOpCode_Jump:
+                        log_debug("  JUMP {}{} -> {:04d}", offset > 0 ? "+" : "", offset, target);
+                        break;
+                    case RegexInstrOpCode_JumpEq:
+                        log_debug("  JUMPEQ {}{} -> {:04d}", offset > 0 ? "+" : "", offset, target);
+                        break;
+                    case RegexInstrOpCode_JumpNeq:
+                        log_debug("  JUMPNEQ {}{} -> {:04d}", offset > 0 ? "+" : "", offset, target);
+                        break;
+                    default:
+                        break;
+                }
+
                 i += 5;
+
                 break;
+            }
             case RegexInstrOpCode_Accept:
-                log_debug("ACCEPT");
+                log_debug("  ACCEPT");
                 i++;
                 break;
             case RegexInstrOpCode_Fail:
-                log_debug("FAIL");
+                log_debug("  FAIL");
                 i++;
                 break;
             case RegexInstrOpCode_GroupStart:
-                log_debug("GROUPSTART {}", static_cast<std::uint8_t>(bytecode[i + 1]));
+                log_debug("  GROUPSTART {}", static_cast<std::uint8_t>(bytecode[i + 1]));
                 i += 2;
                 break;
             case RegexInstrOpCode_GroupEnd:
-                log_debug("GROUPEND {}", static_cast<std::uint8_t>(bytecode[i + 1]));
+                log_debug("  GROUPEND {}", static_cast<std::uint8_t>(bytecode[i + 1]));
                 i += 2;
                 break;
             case RegexInstrOpCode_IncPos:
-                log_debug("INCPOS");
-                i++;
-                break;
-            case RegexInstrOpCode_DecPos:
-                log_debug("DECPOS");
+                log_debug("  INCPOS");
                 i++;
                 break;
             case RegexInstrOpCode_IncPosEq:
-                log_debug("INCPOSEQ");
+                log_debug("  INCPOSEQ");
                 i++;
                 break;
-            case RegexInstrOpCode_JumpPos:
-                log_debug("JUMPPOS {}{}",
-                          decode_jump(std::addressof(bytecode[i + 1])) >= 0 ? "+" : "",
-                          decode_jump(std::addressof(bytecode[i + 1])));
-                i += 5;
-                break;
             case RegexInstrOpCode_SetFlag:
-                log_debug("SETFLAG {}",
-                          static_cast<std::uint8_t>(bytecode[i + 1]));
+                log_debug("  SETFLAG {}", static_cast<std::uint8_t>(bytecode[i + 1]));
                 i += 2;
                 break;
             default:
-                log_debug("UNKNOWN {}", static_cast<std::uint8_t>(bytecode[i]));
+                log_debug("  UNKNOWN 0x{:02x}", static_cast<std::uint8_t>(bytecode[i]));
                 i++;
                 break;
         }
     }
 }
+
+/* ======================================================================== */
+/* Virtual machine                                                          */
+/* ======================================================================== */
 
 struct RegexVM
 {
     const Regex::ByteCode& bytecode;
-
-    StringD string;
-    std::size_t sp; /* string position */
-    std::size_t pc; /* program counter */
-
+    const char* str;
+    std::size_t str_len;
+    std::size_t sp;         /* string position (relative to str) */
+    std::size_t pc;         /* program counter */
     bool status_flag;
 
-    RegexVM(const Regex::ByteCode& bytecode, const StringD& str) : bytecode(bytecode), 
-                                                                   string(str),
-                                                                   sp(0),
-                                                                   pc(0),
-                                                                   status_flag(false) {}
+    RegexGroup groups[REGEX_MAX_GROUPS];
+    std::uint32_t group_count;
 
-    RegexVM(const RegexVM&) = delete;
-    RegexVM& operator=(const RegexVM&) = delete;
-
-    RegexVM(RegexVM&&) = delete;
-    RegexVM& operator=(RegexVM&&) = delete;
+    RegexVM(const Regex::ByteCode& bc, const char* s, std::size_t slen, std::uint32_t gc)
+        : bytecode(bc), str(s), str_len(slen), sp(0), pc(0),
+          status_flag(false), group_count(gc)
+    {
+        for(std::uint32_t i = 0; i < REGEX_MAX_GROUPS; ++i)
+        {
+            groups[i] = RegexGroup();
+        }
+    }
 };
 
 bool regex_exec(RegexVM* vm) noexcept
 {
-    while(vm->pc < vm->bytecode.size() && vm->sp < vm->string.size())
+    while(vm->pc < vm->bytecode.size())
     {
-        switch(static_cast<std::uint8_t>(vm->bytecode[vm->pc]))
+        std::uint8_t opcode = static_cast<std::uint8_t>(vm->bytecode[vm->pc]);
+
+        switch(opcode)
         {
             case RegexInstrOpCode_TestSingle:
-                vm->status_flag = vm->string[vm->sp] == CHAR(vm->bytecode[vm->pc + 1]);
-                vm->pc += 2;
+            {
+                if(vm->sp >= vm->str_len)
+                {
+                    vm->status_flag = false;
+                    vm->pc += 2;
+                }
+                else
+                {
+                    vm->status_flag = vm->str[vm->sp] == CHAR(vm->bytecode[vm->pc + 1]);
+                    vm->pc += 2;
+                }
+
                 break;
+            }
+            case RegexInstrOpCode_TestNegatedSingle:
+            {
+                if(vm->sp >= vm->str_len)
+                {
+                    vm->status_flag = false;
+                    vm->pc += 2;
+                }
+                else
+                {
+                    vm->status_flag = vm->str[vm->sp] != CHAR(vm->bytecode[vm->pc + 1]);
+                    vm->pc += 2;
+                }
+
+                break;
+            }
             case RegexInstrOpCode_TestRange:
-                vm->status_flag = vm->string[vm->sp] >= CHAR(vm->bytecode[vm->pc + 1]) &&
-                                  vm->string[vm->sp] <= CHAR(vm->bytecode[vm->pc + 2]);
-                vm->pc += 3;
+            {
+                if(vm->sp >= vm->str_len)
+                {
+                    vm->status_flag = false;
+                    vm->pc += 3;
+                }
+                else
+                {
+                    vm->status_flag = vm->str[vm->sp] >= CHAR(vm->bytecode[vm->pc + 1]) &&
+                                      vm->str[vm->sp] <= CHAR(vm->bytecode[vm->pc + 2]);
+                    vm->pc += 3;
+                }
+
                 break;
+            }
             case RegexInstrOpCode_TestNegatedRange:
-                vm->status_flag = vm->string[vm->sp] < CHAR(vm->bytecode[vm->pc + 1]) &&
-                                  vm->string[vm->sp] > CHAR(vm->bytecode[vm->pc + 2]);
-                vm->pc += 3;
+            {
+                if(vm->sp >= vm->str_len)
+                {
+                    vm->status_flag = false;
+                    vm->pc += 3;
+                }
+                else
+                {
+                    vm->status_flag = vm->str[vm->sp] < CHAR(vm->bytecode[vm->pc + 1]) ||
+                                      vm->str[vm->sp] > CHAR(vm->bytecode[vm->pc + 2]);
+                    vm->pc += 3;
+                }
+
                 break;
+            }
             case RegexInstrOpCode_TestAny:
-                vm->status_flag = true;
+            {
+                if(vm->sp >= vm->str_len)
+                {
+                    vm->status_flag = false;
+                }
+                else
+                {
+                    vm->status_flag = (vm->str[vm->sp] != '\n');
+                }
+
                 vm->pc += 1;
+
                 break;
+            }
             case RegexInstrOpCode_TestDigit:
-                vm->status_flag = std::isdigit(static_cast<int>(vm->string[vm->sp]));
+            {
+                if(vm->sp >= vm->str_len)
+                    vm->status_flag = false;
+                else
+                    vm->status_flag = std::isdigit(static_cast<unsigned char>(vm->str[vm->sp]));
+
                 vm->pc += 1;
+
                 break;
+            }
+            case RegexInstrOpCode_TestWord:
+            {
+                if(vm->sp >= vm->str_len)
+                    vm->status_flag = false;
+                else
+                {
+                    char c = vm->str[vm->sp];
+                    vm->status_flag = std::isalnum(static_cast<unsigned char>(c)) || c == '_';
+                }
+
+                vm->pc += 1;
+
+                break;
+            }
+            case RegexInstrOpCode_TestWhitespace:
+            {
+                if(vm->sp >= vm->str_len)
+                    vm->status_flag = false;
+                else
+                    vm->status_flag = std::isspace(static_cast<unsigned char>(vm->str[vm->sp]));
+
+                vm->pc += 1;
+
+                break;
+            }
             case RegexInstrOpCode_TestLowerCase:
-                vm->status_flag = std::islower(static_cast<int>(vm->string[vm->sp]));
+            {
+                if(vm->sp >= vm->str_len)
+                    vm->status_flag = false;
+                else
+                    vm->status_flag = std::islower(static_cast<unsigned char>(vm->str[vm->sp]));
+
                 vm->pc += 1;
+
                 break;
+            }
             case RegexInstrOpCode_TestUpperCase:
-                vm->status_flag = std::isupper(static_cast<int>(vm->string[vm->sp]));
+            {
+                if(vm->sp >= vm->str_len)
+                    vm->status_flag = false;
+                else
+                    vm->status_flag = std::isupper(static_cast<unsigned char>(vm->str[vm->sp]));
+
                 vm->pc += 1;
+
                 break;
+            }
+            case RegexInstrOpCode_Jump:
+            {
+                int jmp = decode_jump(&vm->bytecode[vm->pc + 1]);
+                vm->pc = static_cast<std::size_t>(static_cast<int>(vm->pc) + 5 + jmp);
+
+                break;
+            }
             case RegexInstrOpCode_JumpEq:
+            {
                 if(vm->status_flag)
                 {
-                    const int jmp = decode_jump(std::addressof(vm->bytecode[vm->pc + 1]));
-
-                    if(jmp > 0)
-                    {
-                        vm->pc += 5;
-                    }
-                    
-                    vm->pc += jmp;
+                    int jmp = decode_jump(&vm->bytecode[vm->pc + 1]);
+                    vm->pc = static_cast<std::size_t>(static_cast<int>(vm->pc) + 5 + jmp);
                 }
                 else
                 {
@@ -966,17 +872,13 @@ bool regex_exec(RegexVM* vm) noexcept
                 }
 
                 break;
+            }
             case RegexInstrOpCode_JumpNeq:
+            {
                 if(!vm->status_flag)
                 {
-                    const int jmp = decode_jump(std::addressof(vm->bytecode[vm->pc + 1]));
-
-                    if(jmp > 0)
-                    {
-                        vm->pc += 5;
-                    }
-                    
-                    vm->pc += jmp;
+                    int jmp = decode_jump(&vm->bytecode[vm->pc + 1]);
+                    vm->pc = static_cast<std::size_t>(static_cast<int>(vm->pc) + 5 + jmp);
                 }
                 else
                 {
@@ -984,105 +886,210 @@ bool regex_exec(RegexVM* vm) noexcept
                 }
 
                 break;
+            }
             case RegexInstrOpCode_Accept:
                 return true;
             case RegexInstrOpCode_Fail:
                 return false;
             case RegexInstrOpCode_GroupStart:
+            {
+                std::uint8_t gid = static_cast<std::uint8_t>(vm->bytecode[vm->pc + 1]);
+
+                if(gid < REGEX_MAX_GROUPS)
+                {
+                    vm->groups[gid].start = vm->sp;
+                }
+
                 vm->pc += 2;
                 break;
+            }
             case RegexInstrOpCode_GroupEnd:
+            {
+                std::uint8_t gid = static_cast<std::uint8_t>(vm->bytecode[vm->pc + 1]);
+
+                if(gid < REGEX_MAX_GROUPS)
+                {
+                    vm->groups[gid].end = vm->sp;
+                }
+
                 vm->pc += 2;
                 break;
+            }
             case RegexInstrOpCode_IncPos:
+            {
                 vm->sp++;
                 vm->pc++;
                 break;
-            case RegexInstrOpCode_DecPos:
-                vm->sp--;
-                vm->pc++;
-                break;
+            }
             case RegexInstrOpCode_IncPosEq:
+            {
                 vm->sp += static_cast<std::size_t>(vm->status_flag);
                 vm->pc++;
                 break;
-            case RegexInstrOpCode_JumpPos:
-                vm->sp += decode_jump(std::addressof(vm->bytecode[vm->pc + 1]));
-                vm->pc += 5;
-                break;
+            }
             case RegexInstrOpCode_SetFlag:
+            {
                 vm->status_flag = static_cast<bool>(vm->bytecode[vm->pc + 1]);
                 vm->pc += 2;
                 break;
+            }
             default:
-                log_error("Error: unknown instruction in regex vm: {} (pc {})",
-                          static_cast<std::uint8_t>(vm->bytecode[vm->pc]),
-                          vm->pc);
+            {
+                log_error("Unknown instruction in regex VM: 0x{:02x} (pc {})", opcode, vm->pc);
                 return false;
+            }
         }
     }
 
-    return static_cast<bool>(vm->status_flag);
+    return vm->status_flag;
 }
 
-/********************************/
-/* Regex */
-/********************************/
+/* ======================================================================== */
+/* Regex public API                                                         */
+/* ======================================================================== */
 
 bool Regex::compile(const StringD& regex, std::uint32_t flags) noexcept
 {
     this->_bytecode.clear();
+    this->_group_count = 0;
 
     if(flags & RegexFlags_DebugCompilation)
     {
-        log_debug("Compiling Regex: {}", regex);
+        log_debug("Compiling regex: {}", regex);
     }
 
-    auto [lex_success, tokens] = lex_regex(regex);
+    RegexCompiler compiler(regex.data(), regex.size());
 
-    if(!lex_success)
+    if(!compiler.compile_alternation())
     {
-        log_error("Failed to lex regex: {}", regex);
+        log_error("Failed to compile regex: {}", regex);
         return false;
     }
 
-    if(flags & RegexFlags_DebugCompilation)
+    if(!compiler.at_end())
     {
-        log_debug("**********");
-        log_debug("Regex tokens (lex):");
-        print_tokens(tokens);
-    }
-
-    auto [emit_success, bytecode] = regex_emit(tokens);
-
-    if(!emit_success)
-    {
-        log_error("Failed to emit bytecode for regex: {}", regex);
+        log_error("Unexpected trailing characters in regex at position {}", compiler.pos);
         return false;
     }
 
-    this->_bytecode = std::move(bytecode);
+    this->_bytecode = std::move(compiler.bytecode);
+
+    finalize_bytecode(this->_bytecode);
+
+    this->_group_count = compiler.next_group_id;
 
     if(flags & RegexFlags_DebugCompilation)
     {
-        log_debug("**********");
-        log_debug("Regex disasm:");
+        log_debug("Regex disasm ({} groups)", this->_group_count);
         regex_disasm(this->_bytecode);
     }
 
     return true;
 }
 
-bool Regex::match(const StringD& str) const noexcept
+bool Regex::exec_at(const StringD& str, std::size_t start_pos,
+                    RegexGroup* groups) const noexcept
 {
-    if(this->_bytecode.empty())
+    RegexVM vm(this->_bytecode,
+               str.data() + start_pos,
+               str.size() - start_pos,
+               this->_group_count);
+
+    bool result = regex_exec(&vm);
+
+    if(result && groups != nullptr)
     {
-        return false;
+        groups[0] = RegexGroup(start_pos, std::min(start_pos + vm.sp, str.size()));
+
+        for(std::uint32_t g = 1; g < this->_group_count && g < REGEX_MAX_GROUPS; ++g)
+        {
+            if(vm.groups[g].matched())
+            {
+                groups[g] = RegexGroup(start_pos + vm.groups[g].start,
+                                       start_pos + vm.groups[g].end);
+            }
+        }
     }
 
-    RegexVM vm(this->_bytecode, str);
+    return result;
+}
 
-    return regex_exec(&vm);
+RegexMatch Regex::match(const StringD& str) const noexcept
+{
+    if(this->_bytecode.empty())
+        return RegexMatch();
+
+    RegexGroup groups[REGEX_MAX_GROUPS] = {};
+
+    bool result = this->exec_at(str, 0, groups);
+
+    if(result)
+        return RegexMatch(str, true, groups, this->_group_count);
+
+    return RegexMatch();
+}
+
+RegexMatch Regex::search(const StringD& str) const noexcept
+{
+    if(this->_bytecode.empty())
+        return RegexMatch();
+
+    for(std::size_t start = 0; start <= str.size(); ++start)
+    {
+        RegexGroup groups[REGEX_MAX_GROUPS] = {};
+
+        if(this->exec_at(str, start, groups))
+            if(groups[0].start < groups[0].end || start == str.size())
+                return RegexMatch(str, true, groups, this->_group_count);
+    }
+
+    return RegexMatch();
+}
+
+void Regex::match_iter(const StringD& str,
+                       const std::function<void(const RegexMatch&)>& callback) const noexcept
+{
+    if(this->_bytecode.empty())
+        return;
+
+    std::size_t search_start = 0;
+
+    while(search_start <= str.size())
+    {
+        RegexGroup groups[REGEX_MAX_GROUPS] = {};
+
+        if(this->exec_at(str, search_start, groups))
+        {
+            std::size_t match_end = groups[0].end;
+
+            /* Skip empty matches to avoid infinite loops */
+            if(match_end <= search_start)
+            {
+                search_start++;
+                continue;
+            }
+
+            RegexMatch m(str, true, groups, this->_group_count);
+            callback(m);
+
+            search_start = match_end;
+        }
+        else
+        {
+            search_start++;
+        }
+    }
+}
+
+Vector<RegexMatch> Regex::match_all(const StringD& str) const noexcept
+{
+    Vector<RegexMatch> results;
+
+    this->match_iter(str, [&results](const RegexMatch& m) {
+        results.push_back(m);
+    });
+
+    return results;
 }
 
 STDROMANO_NAMESPACE_END
