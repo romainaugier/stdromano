@@ -75,6 +75,13 @@ TEST_CASE(test_set_basic_operations)
 
     erased_count = my_set.erase(1);
     ASSERT_EQUAL(0u, erased_count);
+
+    stdromano::HashSet<int> my_int_set({1, 2, 3, 4});
+    ASSERT(my_int_set.size() == 4);
+    ASSERT(my_int_set.contains(1));
+    ASSERT(my_int_set.contains(2));
+    ASSERT(my_int_set.contains(3));
+    ASSERT(my_int_set.contains(4));
 }
 
 TEST_CASE(test_set_complex_key)

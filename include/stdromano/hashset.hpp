@@ -100,6 +100,19 @@ public:
     {
     }
 
+    HashSet(std::initializer_list<value_type> init,
+            std::size_t initial_capacity = 0,
+            const Hash& hash = Hash()) : Base(initial_capacity, hash)
+    {
+        if(init.size() > 0)
+        {
+            for(const auto& item : init)
+            {
+                this->emplace(item);
+            }
+        }
+    }
+
     iterator begin() const
     {
         return const_iterator(Base::cbegin());
