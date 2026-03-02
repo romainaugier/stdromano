@@ -136,6 +136,10 @@ TEST_CASE(TestAppendPrepend)
 
     str.prependf("Before ");
     ASSERT_EQUAL(0, std::strcmp(str.c_str(), "Before PreStartMiddleEndMore Formatted"));
+
+    String<> another = String<>("Middle").prependc("Start").appendf("{}", "End");
+    ASSERT_EQUAL(0, std::strcmp(another.c_str(), "StartMiddleEnd"));
+
 }
 
 TEST_CASE(TestCaseConversion)

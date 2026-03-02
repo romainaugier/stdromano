@@ -57,7 +57,7 @@ private:
     };
 
     std::uint32_t _size : 31;
-    std::uint32_t _capacity : 31; 
+    std::uint32_t _capacity : 31;
     std::uint32_t _is_local : 1;
     std::uint32_t _is_ref : 1;
 
@@ -133,7 +133,7 @@ public:
             this->data()[this->_size] = '\0';
         }
     }
-    
+
     constexpr String(const String& other) noexcept : _size(other._size),
                                                      _capacity(other._is_local ? LocalCapacity : other._capacity),
                                                      _is_local(other._is_local),
@@ -191,7 +191,7 @@ public:
         }
         else
         {
-            this->_heap_data = mem_aligned_alloc<char>((this->_capacity + 1) * sizeof(char),   
+            this->_heap_data = mem_aligned_alloc<char>((this->_capacity + 1) * sizeof(char),
                                                            STRING_ALIGNMENT);
             mem_cpy(this->_heap_data, other._heap_data, this->_size + 1);
         }
@@ -273,7 +273,7 @@ public:
         {
             other._local_data[0] = '\0';
         }
-        
+
         return *this;
     }
 
@@ -384,7 +384,7 @@ public:
             mem_aligned_free(this->_heap_data);
             this->_heap_data = nullptr;
         }
-        
+
         this->_size = other._size;
         this->_capacity = other._capacity;
         this->_is_local = other._is_local;
@@ -410,7 +410,7 @@ public:
         other._is_local = 1;
         other._is_ref = 0;
         other._local_data[0] = '\0';
-        
+
         return *this;
     }
 
@@ -442,7 +442,7 @@ public:
 
     /* constexpr */ bool operator==(const String<>& other) const
     {
-        if(this->size() != other.size()) 
+        if(this->size() != other.size())
         {
             return false;
         }
@@ -452,7 +452,7 @@ public:
             return true;
         }
 
-        /* 
+        /*
             TODO: when switching to C++20 use std::is_constant_evaluated()
             to use a constexpr friendly algorithm
         */
@@ -467,10 +467,10 @@ public:
 
     constexpr static String make_ref(const char* str, size_t size_param = INVALID_REF_SIZE) noexcept
     {
-        if(str == nullptr) 
+        if(str == nullptr)
         {
             return String();
-        } 
+        }
 
         const size_t size = size_param == INVALID_REF_SIZE ? str_len(str) : size_param;
 
@@ -499,7 +499,7 @@ public:
         }
 
         s._size = static_cast<uint32_t>(size);
-        
+
         mem_set(s.data(), 0, size + 1);
 
         return s;
@@ -550,7 +550,7 @@ public:
 
     constexpr String copy() const noexcept
     {
-        if(this->_is_ref) 
+        if(this->_is_ref)
         {
             return String(this->data(), this->size());
         }
@@ -733,10 +733,8 @@ public:
         {
             size_t new_cap = static_cast<size_t>(static_cast<float>(this->_capacity) * STRING_GROWTH_RATE);
 
-            if(new_cap <= this->_size) 
-            {
+            if(new_cap <= this->_size)
                 new_cap = this->_size + 1;
-            }
 
             this->reallocate(new_cap);
         }
@@ -745,21 +743,17 @@ public:
         this->data()[this->_size] = '\0';
     }
 
-    void appendc(const char* c, const size_t n = 0) noexcept
+    String& appendc(const char* c, const size_t n = 0) noexcept
     {
         STDROMANO_ASSERT(!this->_is_ref, "Cannot modify a reference string");
 
-        if(c == nullptr || *c == '\0') 
-        {
-            return;
-        }
+        if(c == nullptr || *c == '\0')
+            return *this;
 
         const size_t len_to_append = (n == 0) ? str_len(c) : n;
 
         if(len_to_append == 0)
-        {
-            return;
-        }
+            return *this;
 
         const size_t required_content_size = this->_size + len_to_append;
 
@@ -773,16 +767,16 @@ public:
         mem_cpy(this->data() + this->_size, c, len_to_append);
         this->_size = static_cast<uint32_t>(required_content_size);
         this->data()[this->_size] = '\0';
+
+        return *this;
     }
 
-    void appends(const String& other) noexcept
+    String& appends(const String& other) noexcept
     {
         STDROMANO_ASSERT(!this->_is_ref, "Cannot modify a reference string");
 
         if(other.empty())
-        {
-            return;
-        }
+            return *this;
 
         const size_t len_to_append = other.size();
         const size_t required_content_size = this->_size + len_to_append;
@@ -792,35 +786,35 @@ public:
             size_t new_cap = std::max(required_content_size, static_cast<size_t>(this->_capacity * STRING_GROWTH_RATE));
             this->reallocate(new_cap);
         }
-        
+
         mem_cpy(this->data() + this->_size, other.c_str(), len_to_append);
         this->_size = static_cast<uint32_t>(required_content_size);
         this->data()[this->_size] = '\0';
+
+        return *this;
     }
 
     template <typename... Args>
-    void appendf(fmt::format_string<Args...> fmt, Args&&... args) noexcept
+    String& appendf(fmt::format_string<Args...> fmt, Args&&... args) noexcept
     {
         STDROMANO_ASSERT(!this->_is_ref, "Cannot modify a reference string");
 
         fmt::format_to(std::back_inserter(*this), fmt, std::forward<Args>(args)...);
+
+        return *this;
     }
 
-    void prependc(const char* c, const size_t n = 0) noexcept
+    String& prependc(const char* c, const size_t n = 0) noexcept
     {
         STDROMANO_ASSERT(!this->_is_ref, "Cannot modify a reference string");
 
         if(c == nullptr || *c == '\0')
-        {
-            return;
-        }
+            return *this;
 
         const size_t len_to_prepend = (n == 0) ? str_len(c) : n;
 
         if(len_to_prepend == 0)
-        {
-            return;
-        }
+            return *this;
 
         const size_t required_content_size = this->_size + len_to_prepend;
 
@@ -835,12 +829,16 @@ public:
         mem_cpy(this->data(), c, len_to_prepend);
 
         this->_size = static_cast<uint32_t>(required_content_size);
+
+        return *this;
     }
 
-    void prepends(const String& other) noexcept
+    String& prepends(const String& other) noexcept
     {
         STDROMANO_ASSERT(!this->_is_ref, "Cannot modify a reference string");
-        if (other.empty()) return;
+
+        if(other.empty())
+            return *this;
 
         const size_t len_to_prepend = other.size();
         const size_t required_content_size = this->_size + len_to_prepend;
@@ -853,133 +851,127 @@ public:
 
         mem_move(this->data() + len_to_prepend, this->data(), this->_size + 1);
         mem_cpy(this->data(), other.c_str(), len_to_prepend);
-        
+
         this->_size = static_cast<uint32_t>(required_content_size);
+
+        return *this;
     }
 
 
     template <typename... Args>
-    void prependf(fmt::format_string<Args...> fmt, Args&&... args) noexcept
+    String& prependf(fmt::format_string<Args...> fmt, Args&&... args) noexcept
     {
         STDROMANO_ASSERT(!this->_is_ref, "Cannot modify a reference string");
+
         String tmp(fmt, std::forward<Args>(args)...);
         this->prepends(tmp);
+
+        return *this;
     }
 
-    void insertc(size_t position, const char* c, size_t n = 0) noexcept
+    String& insertc(size_t position, const char* c, size_t n = 0) noexcept
     {
         STDROMANO_ASSERT(!this->_is_ref, "Cannot modify a reference string");
         STDROMANO_ASSERT(c != nullptr, "Null pointer passed to insertc");
-        
+
         if(position > this->_size)
-        {
             position = this->_size;
-        }
 
         if(*c == '\0')
-        {
-            return;
-        }
-        
+            return *this;
+
         const size_t insert_len = (n == 0) ? str_len(c) : n;
 
         if(insert_len == 0)
-        {
-            return;
-        }
-        
+            return *this;
+
         const size_t new_size = this->_size + insert_len;
-        
+
         if(new_size > this->_capacity)
         {
-            size_t new_cap = std::max(new_size, 
+            size_t new_cap = std::max(new_size,
                                       static_cast<size_t>(this->_capacity * STRING_GROWTH_RATE));
 
             this->reallocate(new_cap);
         }
-        
+
         char* d = this->data();
 
-        mem_move(d + position + insert_len, 
-                 d + position, 
+        mem_move(d + position + insert_len,
+                 d + position,
                  this->_size - position + 1);
-                     
+
         mem_cpy(d + position, c, insert_len);
-        
+
         this->_size = static_cast<uint32_t>(new_size);
+
+        return *this;
     }
 
-    void inserts(size_t position, const String& other) noexcept
+    String& inserts(std::size_t position, const String& other) noexcept
     {
         STDROMANO_ASSERT(!this->_is_ref, "Cannot modify a reference string");
 
         if(other.empty())
-        {
-            return;
-        }
-        
+            return *this;
+
         if(position > this->_size)
-        {
             position = this->_size;
-        }
-        
-        const size_t insert_len = other.size();
-        const size_t new_size = this->_size + insert_len;
-        
+
+        const std::size_t insert_len = other.size();
+        const std::size_t new_size = this->_size + insert_len;
+
         if(new_size > this->_capacity)
         {
-            size_t new_cap = std::max(new_size, 
-                                      static_cast<size_t>(this->_capacity * STRING_GROWTH_RATE));
+            std::size_t new_cap = std::max(new_size,
+                                           static_cast<std::size_t>(this->_capacity * STRING_GROWTH_RATE));
 
             this->reallocate(new_cap);
         }
-        
+
         char* d = this->data();
 
-        mem_move(d + position + insert_len, 
-                 d + position, 
+        mem_move(d + position + insert_len,
+                 d + position,
                  this->_size - position + 1);
 
         mem_cpy(d + position, other.c_str(), insert_len);
-        
+
         this->_size = static_cast<uint32_t>(new_size);
+
+        return *this;
     }
 
     template <typename... Args>
-    void insertf(std::size_t position,
-                 fmt::format_string<Args...> fmt,
-                 Args&&... args) noexcept
+    String& insertf(std::size_t position,
+                    fmt::format_string<Args...> fmt,
+                    Args&&... args) noexcept
     {
         STDROMANO_ASSERT(!this->_is_ref, "Cannot modify a reference string");
 
         if(position > this->_size)
-        {
             position = this->_size;
-        }
-        
+
         String tmp;
         fmt::format_to(std::back_inserter(tmp), fmt, std::forward<Args>(args)...);
-        
+
         this->inserts(position, tmp);
+
+        return *this;
     }
 
     void erase(std::size_t start = 0, std::size_t length = String::NPOS) noexcept
     {
         STDROMANO_ASSERT(!this->_is_ref, "Cannot modify a reference string");
 
-        if (length == 0 || this->_size == 0 || start >= this->_size) 
-        {
+        if(length == 0 || this->_size == 0 || start >= this->_size)
             return;
-        }
 
-        const std::size_t actual_length = (length == String::NPOS || start + length > this->_size)
-                               ? this->_size - start
-                               : length;
+        const std::size_t actual_length = (length == String::NPOS || start + length > this->_size) ?
+                                          this->_size - start : length;
 
-        if (actual_length == 0) 
-        {
+        if(actual_length == 0)
             return;
-        }
 
         char* d = this->data();
         const std::size_t tail_start = start + actual_length;
@@ -1003,21 +995,15 @@ public:
     constexpr String upper() const noexcept
     {
         if(this->empty())
-        {
             return String();
-        }
 
         String result = this->copy();
 
         STDROMANO_ASSERT(!result.is_ref(), "Copy should not be a reference for modification");
 
         for(uint32_t i = 0; i < result.size(); i++)
-        {
             if(is_letter(result[i]))
-            {
                 result[i] = to_upper(result[i]);
-            }
-        }
 
         return result;
     }
@@ -1025,9 +1011,7 @@ public:
     /* constexpr */ String lower() const noexcept
     {
         if(this->empty())
-        {
             return String();
-        }
 
         String result = this->copy();
 
@@ -1035,7 +1019,7 @@ public:
 
         detail::tolower(result.c_str(), result.size());
 
-        /* TODO: switch to C++20 and use std::is_constant_evaluated() */
+        /* TODO: when switching to C++20 and use std::is_constant_evaluated() */
 
         /*
         for(uint32_t i = 0; i < result.size(); i++)
@@ -1052,34 +1036,27 @@ public:
 
     constexpr String capitalize() const noexcept
     {
-        if(this->empty()) 
-        {
+        if(this->empty())
             return String();
-        }
 
-        String result = this->copy(); 
+        String result = this->copy();
 
         STDROMANO_ASSERT(!result.is_ref(), "Copy should not be a reference for modification");
 
-        if(is_letter(result[0])) 
-        {
+        if(is_letter(result[0]))
             result[0] = to_upper(result[0]);
-        }
 
         for(uint32_t i = 1; i < result.size(); i++)
-        {
             if(is_letter(result[i]))
-            {
                 result[i] = to_lower(result[i]);
-            }
-        }
 
         return result;
     }
 
     String lstrip(char c = ' ') const noexcept
     {
-        if (this->empty()) return String::make_ref(this->data(), 0);
+        if(this->empty())
+            return String::make_ref(this->data(), 0);
 
         const char* start_ptr = this->data();
         const char* end_ptr = this->data() + this->_size;
@@ -1087,85 +1064,71 @@ public:
         const char* current_ptr = start_ptr;
 
         while(current_ptr < end_ptr && *current_ptr == c)
-        {
             current_ptr++;
-        }
 
         return String::make_ref(current_ptr, static_cast<size_t>(end_ptr - current_ptr));
     }
 
     String rstrip(char c = ' ') const noexcept
     {
-        if (this->empty()) return String::make_ref(this->data(), 0);
+        if(this->empty())
+            return String::make_ref(this->data(), 0);
 
         const char* start_ptr = this->data();
         const char* current_end_ptr = this->data() + this->_size;
 
         while(current_end_ptr > start_ptr && *(current_end_ptr - 1) == c)
-        {
             current_end_ptr--;
-        }
 
         return String::make_ref(start_ptr, static_cast<size_t>(current_end_ptr - start_ptr));
     }
 
     String strip(char c = ' ') const noexcept
     {
-        if (this->empty()) return String::make_ref(this->data(), 0);
-        
+        if(this->empty())
+            return String::make_ref(this->data(), 0);
+
         const char* original_start_ptr = this->data();
         const char* original_end_ptr = this->data() + this->_size;
 
         const char* new_start_ptr = original_start_ptr;
 
         while(new_start_ptr < original_end_ptr && *new_start_ptr == c)
-        {
             new_start_ptr++;
-        }
 
-        if(new_start_ptr == original_end_ptr) 
-        {
+        if(new_start_ptr == original_end_ptr)
             return String::make_ref(new_start_ptr, 0);
-        }
 
         const char* new_end_ptr = original_end_ptr;
 
         while(new_end_ptr > new_start_ptr && *(new_end_ptr - 1) == c)
-        {
             new_end_ptr--;
-        }
-        
-        return String::make_ref(new_start_ptr, static_cast<size_t>(new_end_ptr - new_start_ptr));
+
+        return String::make_ref(new_start_ptr, static_cast<std::size_t>(new_end_ptr - new_start_ptr));
     }
 
 
-    constexpr String substr(const size_t position) const noexcept
+    constexpr String substr(const std::size_t position) const noexcept
     {
         STDROMANO_ASSERT(position <= this->_size, "Substring position out of bounds");
 
         if(position >= this->_size)
-        {
             return String::make_ref(this->data() + this->_size, 0);
-        }
 
         return String::make_ref(this->data() + position, this->_size - position);
     }
 
-    constexpr String substr(const size_t start_pos, const size_t length) const noexcept
+    constexpr String substr(const std::size_t start_pos, const std::size_t length) const noexcept
     {
         STDROMANO_ASSERT(start_pos <= this->_size, "Substring start position out of bounds");
 
-        size_t actual_length = length;
+        std::size_t actual_length = length;
 
         if(start_pos + length > this->_size)
-        {
             actual_length = this->_size - start_pos;
-        }
 
         if(start_pos >= this->_size)
-        {
             return String::make_ref(this->data() + this->_size, 0);
-        }
 
         return String::make_ref(this->data() + start_pos, actual_length);
     }
@@ -1176,13 +1139,9 @@ public:
 
         STDROMANO_ASSERT(!res.is_ref(), "Copy should not be a reference for modification");
 
-        for(uint32_t i = 0; i < res.size(); i++)
-        {
+        for(std::uint32_t i = 0; i < res.size(); i++)
             if(res[i] == occurence)
-            {
                 res[i] = replacement;
-            }
-        }
 
         return res;
     }
@@ -1190,9 +1149,7 @@ public:
     constexpr bool startswith(const String& prefix) const noexcept
     {
         if(prefix.size() > this->size())
-        {
             return false;
-        }
 
         return std::strncmp(this->data(), prefix.data(), prefix.size()) == 0;
     }
@@ -1200,24 +1157,18 @@ public:
     constexpr bool endswith(const String& suffix) const noexcept
     {
         if(suffix.size() > this->size())
-        {
             return false;
-        }
 
         return std::strncmp(this->data() + this->size() - suffix.size(), suffix.data(), suffix.size()) == 0;
     }
 
     int find(const String& substring) const noexcept
     {
-        if(substring.empty()) 
-        {
+        if(substring.empty())
             return 0;
-        }
 
-        if(substring.size() > this->size()) 
-        {
+        if(substring.size() > this->size())
             return -1;
-        }
 
         const char* found = std::strstr(this->c_str(), substring.c_str());
 
@@ -1260,10 +1211,8 @@ public:
     {
         if(sep.empty())
         {
-            if(rsplit_out != nullptr) 
-            {
+            if(rsplit_out != nullptr)
                 *rsplit_out = String::make_ref(this->data() + this->size(), 0);
-            }
 
             return String::make_ref(*this);
         }
@@ -1272,21 +1221,17 @@ public:
 
         if(found_sep != nullptr)
         {
-            const size_t lsplit_len = static_cast<size_t>(found_sep - this->data());
+            const std::size_t lsplit_len = static_cast<std::size_t>(found_sep - this->data());
 
             if(rsplit_out != nullptr)
-            {
                 *rsplit_out = String::make_ref(found_sep + sep.size(),
                                                this->size() - lsplit_len - sep.size());
-            }
 
             return String::make_ref(this->data(), lsplit_len);
         }
-        
-        if(rsplit_out != nullptr) 
-        {
+
+        if(rsplit_out != nullptr)
             *rsplit_out = String::make_ref(this->data() + this->size(), 0);
-        }
 
         return String::make_ref(*this);
     }
@@ -1296,9 +1241,7 @@ public:
         if(sep.empty())
         {
             if(lsplit_out != nullptr)
-            {
                 *lsplit_out = String::make_ref(this->data(), 0);
-            }
 
             return String::make_ref(*this);
         }
@@ -1307,18 +1250,16 @@ public:
 
         if(found_sep != nullptr)
         {
-            const size_t rsplit_start_offset = static_cast<size_t>(found_sep - this->data()) + sep.size();
-            const size_t rsplit_len = this->size() - rsplit_start_offset;
+            const std::size_t rsplit_start_offset = static_cast<std::size_t>(found_sep - this->data()) + sep.size();
+            const std::size_t rsplit_len = this->size() - rsplit_start_offset;
 
             if(lsplit_out != nullptr)
-            {
-                *lsplit_out = String::make_ref(this->data(), static_cast<size_t>(found_sep - this->data()));
-            }
+                *lsplit_out = String::make_ref(this->data(), static_cast<std::size_t>(found_sep - this->data()));
 
             return String::make_ref(this->data() + rsplit_start_offset, rsplit_len);
         }
 
-        if(lsplit_out != nullptr) 
+        if(lsplit_out != nullptr)
         {
             *lsplit_out = String::make_ref(this->data(), 0);
         }
@@ -1326,36 +1267,30 @@ public:
         return String::make_ref(*this);
     }
 
-    String zfill(const uint32_t total_width) const noexcept
+    String zfill(const std::uint32_t total_width) const noexcept
     {
-        if(this->_size >= total_width) 
-        {
+        if(this->_size >= total_width)
             return String::make_ref(*this);
-        }
-        
-        const uint32_t num_zeros = total_width - this->_size;
-        
+
+        const std::uint32_t num_zeros = total_width - this->_size;
+
         String result;
         result.reallocate(total_width);
-        
+
         mem_set(result.data(), '0', num_zeros);
         mem_cpy(result.data() + num_zeros, this->data(), this->_size);
-        
+
         result._size = total_width;
         result.data()[result._size] = '\0';
-        
+
         return result;
     }
 
     constexpr bool is_digit() const noexcept
     {
         for(std::size_t i = 0; i < this->_size; i++)
-        {
             if(static_cast<int>(this->data()[i] - 48) > 9)
-            {
                 return false;
-            }
-        }
 
         return true;
     }
@@ -1365,38 +1300,38 @@ public:
     long long to_long_long() const noexcept
     {
         if(this->empty())
-        {
             return 0;
-        }
 
         return std::atoll(this->c_str());
     }
 
     double to_double() const noexcept
     {
-        if(this->empty()) 
-        {
+        if(this->empty())
             return 0.0;
-        }
 
         return std::strtod(this->c_str(), nullptr);
     }
 
     bool to_bool() const noexcept
     {
-        if(this->empty()) return false;
-        
-        if(this->size() == 1) 
+        if(this->empty())
+            return false;
+
+        if(this->size() == 1)
         {
-            if (this->data()[0] == '0') return false;
-            if (this->data()[0] == '1') return true;
+            if(this->data()[0] == '0')
+                return false;
+
+            if(this->data()[0] == '1')
+                return true;
         }
 
-        if(this->size() == 4 && 
+        if(this->size() == 4 &&
            (to_lower(this->data()[0]) == 't') &&
            (to_lower(this->data()[1]) == 'r') &&
            (to_lower(this->data()[2]) == 'u') &&
-           (to_lower(this->data()[3]) == 'e')) 
+           (to_lower(this->data()[3]) == 'e'))
         {
             return true;
         }
@@ -1406,11 +1341,11 @@ public:
            (to_lower(this->data()[1]) == 'a') &&
            (to_lower(this->data()[2]) == 'l') &&
            (to_lower(this->data()[3]) == 's') &&
-           (to_lower(this->data()[4]) == 'e')) 
+           (to_lower(this->data()[4]) == 'e'))
         {
             return false;
         }
-        
+
         return false;
     }
 };
