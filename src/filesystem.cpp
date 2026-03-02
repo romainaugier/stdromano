@@ -430,24 +430,18 @@ String<> open_file_dialog(FileDialogMode_ mode,
         ofn.lpstrFilter = windows_filter.c_str();
 
         if(!initial_path.empty())
-        {
             ofn.lpstrInitialDir = initial_path.c_str();
-        }
 
         ofn.lpstrTitle = title.c_str();
         ofn.Flags = OFN_PATHMUSTEXIST | OFN_FILEMUSTEXIST;
 
         if(mode == FileDialogMode_SaveFile)
-        {
             ofn.Flags |= OFN_OVERWRITEPROMPT;
-        }
 
         BOOL result = GetOpenFileNameA(&ofn);
 
         if(result)
-        {
-            return std::move(String<>(filename));
-        }
+            return String<>(filename);
 
         return String<>();
     }
@@ -479,9 +473,7 @@ String<> open_file_dialog(FileDialogMode_ mode,
             HRESULT hr = SHParseDisplayName(initial_path_wide, NULL, &pidl, 0, &sfgao_out);
 
             if(SUCCEEDED(hr))
-            {
                 bi.pidlRoot = pidl;
-            }
         }
 
         LPITEMIDLIST pidl = SHBrowseForFolderA(&bi);
