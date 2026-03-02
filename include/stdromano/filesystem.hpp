@@ -35,6 +35,8 @@ STDROMANO_API String<> fs_expand_from_lib_dir(const String<>& path_to_expand) no
 
 STDROMANO_API String<> fs_tmp_dir() noexcept;
 
+STDROMANO_API String<> fs_home_dir(bool use_env = false) noexcept;
+
 STDROMANO_API String<> load_file_content(const String<>& file_path,
                                          const char* mode = "rb") noexcept;
 

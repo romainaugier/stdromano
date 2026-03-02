@@ -213,6 +213,65 @@ String<> fs_tmp_dir() noexcept
 #endif // defined(STDROMANO_WIN)
 }
 
+String<> fs_home_dir(bool use_env) noexcept
+{
+#if defined(STDROMANO_WIN)
+    if(use_env)
+    {
+        const char* userprofile = std::getenv("USERPROFILE");
+
+        if(userprofile != nullptr)
+            return String<>::make_from_c_str(userprofile);
+    }
+
+    PWSTR ppsz_path;
+
+    HRESULT hr = SHGetKnownFolderPath(FOLDERID_Profile,
+                                      KF_FLAG_SIMPLE_IDLIST | KF_FLAG_DONT_VERIFY | KF_FLAG_NO_ALIAS,
+                                      NULL,
+                                      &ppsz_path);
+
+    if(SUCCEEDED(hr))
+    {
+        std::size_t len = wcslen(ppsz_path);
+        std::size_t ppsz_path_sz = WideCharToMultiByte(CP_UTF8,
+                                                       0,
+                                                       ppsz_path,
+                                                       static_cast<int>(len),
+                                                       nullptr,
+                                                       0,
+                                                       nullptr,
+                                                       nullptr);
+
+        String<> res = String<>::make_zeroed(ppsz_path_sz);
+
+        WideCharToMultiByte(CP_UTF8,
+                            0,
+                            ppsz_path,
+                            static_cast<int>(len),
+                            res.c_str(),
+                            static_cast<int>(res.size()),
+                            nullptr,
+                            nullptr);
+
+        CoTaskMemFree(ppsz_path);
+
+        return res;
+    }
+    else
+    {
+        return String<>();
+    }
+#elif defined(STDROMANO_LINUX)
+    const char* homedir;
+
+    if((homedir = std::getenv("HOME")) == nullptr)
+        homedir = getpwuid(getuid())->pw_dir;
+
+    return String<>::make_from_c_str(homedir);
+#endif // defined(STDROMANO_WIN)
+}
+
 String<> load_file_content(const String<>& file_path, const char* mode) noexcept
 {
     std::FILE* file_handle;

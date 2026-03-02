@@ -90,12 +90,18 @@ TEST_CASE(TestCurrentDir)
     stdromano::log_debug("CWD: {}", cwd);
 }
 
-
 TEST_CASE(TestTmpDir)
 {
     const stdromano::StringD tmp = stdromano::fs_tmp_dir();
 
     stdromano::log_debug("TMP: {}", tmp);
+}
+
+TEST_CASE(TestHomeDir)
+{
+    const stdromano::StringD home = stdromano::fs_home_dir();
+
+    stdromano::log_debug("HOME: {}", home);
 }
 
 int main()
@@ -113,6 +119,7 @@ int main()
     // runner.add_test("File Dialog", TestFileDialog);
     runner.add_test("CurrentDir", TestCurrentDir);
     runner.add_test("TmpDir", TestTmpDir);
+    runner.add_test("HomeDir", TestHomeDir);
     runner.add_test("Walk", TestWalk);
 
     runner.run_all();
