@@ -592,6 +592,174 @@ TEST_CASE(TestUTF8Validation)
     }
 }
 
+TEST_CASE(TestUTF8Iterator)
+{
+    /* 1. ASCII-only string */
+    {
+        StringD s("Hello");
+        assert(s.u8length() == 5);
+
+        auto it = s.u8begin();
+        assert(*it == U'H'); ++it;
+        assert(*it == U'e'); ++it;
+        assert(*it == U'l'); ++it;
+        assert(*it == U'l'); ++it;
+        assert(*it == U'o'); ++it;
+        assert(it == s.u8end());
+    }
+
+    /* 2. Empty string */
+    {
+        StringD s;
+        assert(s.u8length() == 0);
+        assert(s.u8begin() == s.u8end());
+    }
+
+    /* 3. 2-byte sequences (Latin accents) — "café" = 4 codepoints, 5 bytes */
+    {
+        StringD s("caf\xC3\xA9"); /* café */
+        assert(s.size() == 5);
+        assert(s.u8length() == 4);
+
+        auto it = s.u8begin();
+        assert(*it == U'c'); ++it;
+        assert(*it == U'a'); ++it;
+        assert(*it == U'f'); ++it;
+        assert(*it == U'é'); ++it;
+        assert(it == s.u8end());
+    }
+
+    /* 4. 3-byte sequences (CJK / Euro sign) — "€" = U+20AC */
+    {
+        StringD s("\xE2\x82\xAC"); /* € */
+        assert(s.size() == 3);
+        assert(s.u8length() == 1);
+        assert(*s.u8begin() == U'\u20AC');
+    }
+
+    /* 5. 4-byte sequences (emoji) — U+1F600 😀 */
+    {
+        StringD s("\xF0\x9F\x98\x80"); /* 😀 */
+        assert(s.size() == 4);
+        assert(s.u8length() == 1);
+        assert(*s.u8begin() == U'\U0001F600');
+    }
+
+    /* 6. Mixed byte lengths — "Héllo 🌍" */
+    {
+        /* H(1) é(2) l(1) l(1) o(1) ' '(1) 🌍(4) = 7 codepoints, 11 bytes */
+        StringD s("H\xC3\xA9llo \xF0\x9F\x8C\x8D");
+        assert(s.size() == 11);
+        assert(s.u8length() == 7);
+
+        char32_t expected[] = { U'H', U'é', U'l', U'l', U'o', U' ', U'\U0001F30D' };
+        std::size_t idx = 0;
+
+        for(auto it = s.u8begin(); it != s.u8end(); ++it, ++idx)
+        {
+            assert(*it == expected[idx]);
+        }
+
+        assert(idx == 7);
+    }
+
+    /* 7. byte_length() per codepoint */
+    {
+        StringD s("A\xC3\xA9\xE2\x82\xAC\xF0\x9F\x98\x80"); /* A é € 😀 */
+        auto it = s.u8begin();
+        assert(it.byte_length() == 1); ++it; /* A */
+        assert(it.byte_length() == 2); ++it; /* é */
+        assert(it.byte_length() == 3); ++it; /* € */
+        assert(it.byte_length() == 4); ++it; /* 😀 */
+        assert(it == s.u8end());
+    }
+
+    /* 8. base() returns correct raw pointer offset */
+    {
+        StringD s("ab\xC3\xA9"); /* a b é */
+        auto it = s.u8begin();
+        assert(it.base() == s.data());     ++it;
+        assert(it.base() == s.data() + 1); ++it;
+        assert(it.base() == s.data() + 2); ++it;
+        assert(it.base() == s.data() + 4); /* past the 2-byte é */
+        assert(it == s.u8end());
+    }
+
+    /* 9. Post-increment */
+    {
+        StringD s("ab");
+        auto it = s.u8begin();
+        auto prev = it++;
+        assert(*prev == U'a');
+        assert(*it == U'b');
+    }
+
+    /* 10. Backward iteration (--) */
+    {
+        StringD s("A\xC3\xA9\xE2\x82\xAC"); /* A é € = 3 codepoints */
+        auto it = s.u8end();
+
+        --it; assert(*it == U'\u20AC'); /* € */
+        --it; assert(*it == U'é');
+        --it; assert(*it == U'A');
+        assert(it == s.u8begin());
+    }
+
+    /* 11. Post-decrement */
+    {
+        StringD s("ab");
+        auto it = s.u8end();
+        auto prev = it--;
+        assert(prev == s.u8end());
+        assert(*it == U'b');
+    }
+
+    /* 12. Comparison operators */
+    {
+        StringD s("abc");
+        auto a = s.u8begin();
+        auto b = s.u8begin();
+        ++b;
+
+        assert(a < b);
+        assert(b > a);
+        assert(a <= b);
+        assert(b >= a);
+        assert(a <= a);
+        assert(a >= a);
+        assert(!(a == b));
+        assert(a != b);
+    }
+
+    /* 13. Range-for via a small wrapper (verifies begin/end contract) */
+    {
+        StringD s("Hi\xF0\x9F\x91\x8B"); /* Hi👋 */
+        std::size_t count = 0;
+        char32_t last = 0;
+
+        /* Manual loop since u8begin/u8end aren't called begin/end */
+        for(auto it = s.u8begin(); it != s.u8end(); ++it)
+        {
+            last = *it;
+            ++count;
+        }
+
+        assert(count == 3);
+        assert(last == U'\U0001F44B'); /* 👋 */
+    }
+
+    /* 14. Works with local (SSO) and heap strings */
+    {
+        /* Small string — should stay local */
+        String<7> small("abc");
+        assert(small.u8length() == 3);
+
+        /* Large string — should heap-allocate */
+        String<7> big("abcdefghijklmnop");
+        assert(big.u8length() == 16);
+    }
+}
+
 int main()
 {
     TestRunner runner;
@@ -624,6 +792,7 @@ int main()
     runner.add_test("Insertion", TestInsertion);
     runner.add_test("IsDigit", TestIsDigit);
     runner.add_test("UTF-8 Validation", TestUTF8Validation);
+    runner.add_test("UTF-8 Iterator", TestUTF8Iterator);
 
     runner.run_all();
 

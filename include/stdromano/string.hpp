@@ -15,6 +15,123 @@
 
 STDROMANO_NAMESPACE_BEGIN
 
+// Simple utf-8 iterator
+
+class utf8_iterator
+{
+public:
+    using iterator_category = std::bidirectional_iterator_tag;
+    using value_type = char32_t;
+    using difference_type = std::ptrdiff_t;
+    using pointer = const char*;
+    using reference = char32_t;
+
+    utf8_iterator() noexcept : _start(nullptr), _ptr(nullptr), _end(nullptr) {}
+    explicit utf8_iterator(const char* p, const char* start, const char* end) noexcept : _start(start), _ptr(p), _end(end) {}
+
+    // Decode the current codepoint
+    reference operator*() const noexcept
+    {
+        const uint8_t* p = reinterpret_cast<const uint8_t*>(this->_ptr);
+
+        if((*p & 0x80) == 0)
+        {
+            return static_cast<char32_t>(*p);
+        }
+        else if((*p & 0xE0) == 0xC0)
+        {
+            return (static_cast<char32_t>(p[0] & 0x1F) << 6) |
+                    static_cast<char32_t>(p[1] & 0x3F);
+        }
+        else if((*p & 0xF0) == 0xE0)
+        {
+            return (static_cast<char32_t>(p[0] & 0x0F) << 12) |
+                   (static_cast<char32_t>(p[1] & 0x3F) << 6) |
+                    static_cast<char32_t>(p[2] & 0x3F);
+        }
+        else if((*p & 0xF8) == 0xF0)
+        {
+            return (static_cast<char32_t>(p[0] & 0x07) << 18) |
+                   (static_cast<char32_t>(p[1] & 0x3F) << 12) |
+                   (static_cast<char32_t>(p[2] & 0x3F) << 6) |
+                    static_cast<char32_t>(p[3] & 0x3F);
+        }
+
+        return 0xFFFD; // replacement character
+    }
+
+    // Returns a pointer to the raw bytes of the current codepoint
+    STDROMANO_FORCE_INLINE pointer base() const noexcept
+    {
+        return this->_ptr;
+    }
+
+    // Number of bytes in the current codepoint
+    STDROMANO_FORCE_INLINE std::size_t byte_length() const noexcept
+    {
+        return static_cast<std::size_t>(utf8_iterator::_sequence_length(reinterpret_cast<const uint8_t*>(this->_ptr)));
+    }
+
+    utf8_iterator& operator++() noexcept
+    {
+        this->_ptr += utf8_iterator::_sequence_length(reinterpret_cast<const uint8_t*>(this->_ptr));
+        return *this;
+    }
+
+    utf8_iterator operator++(int) noexcept
+    {
+        utf8_iterator tmp = *this;
+        ++(*this);
+        return tmp;
+    }
+
+    utf8_iterator& operator--() noexcept
+    {
+        --this->_ptr;
+
+        while(this->_ptr > this->_start && (static_cast<uint8_t>(*this->_ptr) & 0xC0) == 0x80)
+            --this->_ptr;
+
+        return *this;
+    }
+
+    utf8_iterator operator--(int) noexcept
+    {
+        utf8_iterator tmp = *this;
+        --(*this);
+        return tmp;
+    }
+
+    STDROMANO_FORCE_INLINE bool operator==(const utf8_iterator& other) const noexcept { return this->_ptr == other._ptr; }
+    STDROMANO_FORCE_INLINE bool operator!=(const utf8_iterator& other) const noexcept { return this->_ptr != other._ptr; }
+    STDROMANO_FORCE_INLINE bool operator<(const utf8_iterator& other) const noexcept { return this->_ptr < other._ptr; }
+    STDROMANO_FORCE_INLINE bool operator>(const utf8_iterator& other) const noexcept { return this->_ptr > other._ptr; }
+    STDROMANO_FORCE_INLINE bool operator<=(const utf8_iterator& other) const noexcept { return this->_ptr <= other._ptr; }
+    STDROMANO_FORCE_INLINE bool operator>=(const utf8_iterator& other) const noexcept { return this->_ptr >= other._ptr; }
+
+private:
+    static int _sequence_length(const uint8_t* p) noexcept
+    {
+        if((*p & 0x80) == 0)
+            return 1;
+
+        if((*p & 0xE0) == 0xC0)
+            return 2;
+
+        if((*p & 0xF0) == 0xE0)
+            return 3;
+
+        if((*p & 0xF8) == 0xF0)
+            return 4;
+
+        return 1; // invalid byte, advance by 1 to avoid infinite loop
+    }
+
+    const char* _start;
+    const char* _ptr;
+    const char* _end;
+};
+
 DETAIL_NAMESPACE_BEGIN
 
 STDROMANO_API void tolower(char* str, std::size_t length) noexcept;
@@ -716,6 +833,29 @@ public:
 
     const_iterator cbegin() const noexcept { return const_iterator(this->data()); }
     const_iterator cend() const noexcept { return const_iterator(this->data() + this->_size); }
+
+    utf8_iterator u8begin() const noexcept
+    {
+        return utf8_iterator(this->data(), this->data(), this->data() + this->_size);
+    }
+
+    utf8_iterator u8end() const noexcept
+    {
+        return utf8_iterator(this->data() + this->_size, this->data(), this->data() + this->_size);
+    }
+
+    // Number of Unicode codepoints (as opposed to size() which returns byte count)
+    std::size_t u8length() const noexcept
+    {
+        std::size_t count = 0;
+
+        for(auto it = this->u8begin(); it != this->u8end(); ++it)
+        {
+            ++count;
+        }
+
+        return count;
+    }
 
     constexpr void clear() noexcept
     {
