@@ -403,7 +403,20 @@ int main(int argc, char** argv)
     }
 
     /* ================================================================== */
-    /* 12. Edge cases                                                     */
+    /* 12. match_iter() and match_all()                                   */
+    /* ================================================================== */
+    stdromano::log_info("--- replace_iter / replace_all ---");
+
+    {
+        stdromano::StringD s("${ENV_VAR}");
+
+        stdromano::Regex re("${([A-Z_]+)}");
+
+        assert(re.replace_all(s, "ENV_VAR") == "ENV_VAR");
+    }
+
+    /* ================================================================== */
+    /* 13. Edge cases                                                     */
     /* ================================================================== */
     stdromano::log_info("--- Edge cases ---");
     {

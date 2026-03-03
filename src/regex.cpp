@@ -1081,6 +1081,48 @@ void Regex::match_iter(const StringD& str,
     }
 }
 
+StringD Regex::replace_iter(const StringD& str,
+                            const std::function<StringD(const RegexMatch&)>& callback) const noexcept
+{
+    if(this->_bytecode.empty())
+        return StringD();
+
+    StringD res;
+
+    std::size_t search_start = 0;
+
+    while(search_start <= str.size())
+    {
+        RegexGroup groups[REGEX_MAX_GROUPS] = {};
+
+        if(this->exec_at(str, search_start, groups))
+        {
+            std::size_t match_end = groups[0].end;
+
+            if(match_end <= search_start)
+            {
+                res.push_back(str[search_start++]);
+                continue;
+            }
+
+            RegexMatch m(str, true, groups, this->_group_count);
+
+            res.appends(std::move(callback(m)));
+
+            search_start = match_end;
+        }
+        else
+        {
+            if(search_start < str.size())
+                res.push_back(str[search_start++]);
+            else
+                search_start++;
+        }
+    }
+
+    return res;
+}
+
 Vector<RegexMatch> Regex::match_all(const StringD& str) const noexcept
 {
     Vector<RegexMatch> results;
@@ -1090,6 +1132,13 @@ Vector<RegexMatch> Regex::match_all(const StringD& str) const noexcept
     });
 
     return results;
+}
+
+StringD Regex::replace_all(const StringD& str, const StringD& replace) const noexcept
+{
+    return this->replace_iter(str, [&](const RegexMatch& m) {
+        return replace;
+    });
 }
 
 STDROMANO_NAMESPACE_END

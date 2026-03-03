@@ -121,7 +121,12 @@ public:
     void match_iter(const StringD& str,
                     const std::function<void(const RegexMatch&)>& callback) const noexcept;
 
+    StringD replace_iter(const StringD& str,
+                         const std::function<StringD(const RegexMatch&)>& callback) const noexcept;
+
     Vector<RegexMatch> match_all(const StringD& str) const noexcept;
+
+    StringD replace_all(const StringD& str, const StringD& replace) const noexcept;
 
     bool valid() const noexcept { return !this->_bytecode.empty(); }
 
