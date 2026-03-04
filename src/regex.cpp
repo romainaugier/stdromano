@@ -1107,7 +1107,7 @@ StringD Regex::replace_iter(const StringD& str,
 
             RegexMatch m(str, true, groups, this->_group_count);
 
-            res.appends(std::move(callback(m)));
+            res.appends(callback(m));
 
             search_start = match_end;
         }
