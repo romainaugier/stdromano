@@ -4,6 +4,7 @@
 
 #include "stdromano/regex.hpp"
 #include "stdromano/logger.hpp"
+#include "stdromano/hashmap.hpp"
 
 #include <cassert>
 
@@ -410,9 +411,31 @@ int main(int argc, char** argv)
     {
         stdromano::StringD s("${ENV_VAR}");
 
-        stdromano::Regex re("${([A-Z_]+)}");
+        stdromano::Regex re("${([A-Z0-9_]+)}");
 
         assert(re.replace_all(s, "ENV_VAR") == "ENV_VAR");
+
+        stdromano::HashMap<stdromano::StringD, stdromano::StringD> vars = {
+            { "VAR1", "value1" },
+            { "VAR2", "value2" },
+            { "VAR3", "value3" },
+        };
+
+        auto replace_func = [&](const stdromano::RegexMatch& m) {
+            if(m.group(1).matched())
+            {
+                const auto it = vars.find(m.group_str(1));
+
+                if(it != vars.end())
+                    return it->second;
+            }
+
+            return stdromano::StringD();
+        };
+
+        stdromano::StringD res = re.replace_iter("${VAR2} string with ${VAR1} and ${VAR3}", replace_func);
+
+        assert(res == "value2 string with value1 and value3");
     }
 
     /* ================================================================== */
