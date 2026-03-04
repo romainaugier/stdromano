@@ -43,6 +43,7 @@ endif()
 
 set_and_check(stdromano_INCLUDE_DIR "@PACKAGE_CMAKE_INSTALL_INCLUDEDIR@")
 list(APPEND stdromano_LIBRARIES stdromano::stdromano)
+set(stdromano_RUNTIME_DEPENDENCIES ${stdromano_JEMALLOC_RUNTIME})
 
 if(@ENABLE_OPENCL@)
     list(APPEND stdromano_RUNTIME_DEPENDENCIES ${stdromano_OPENCL_RUNTIME})
