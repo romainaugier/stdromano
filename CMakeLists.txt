@@ -24,6 +24,8 @@ elseif(UNIX)
     else()
         message(FATAL "Could not find an assembler, install nasm and try again")
     endif()
+else()
+    message(FATAL "Could not find an assembler for the current platform")
 endif()
 
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/cmake")
