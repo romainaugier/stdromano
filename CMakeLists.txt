@@ -8,16 +8,34 @@ include(ExternalProject)
 
 cmake_minimum_required(VERSION 3.15)
 
-project(stdromano VERSION ${VERSION} LANGUAGES CXX ASM)
+# MSVC is not an assembler for language ASM
+if(POLICY CMP0194)
+    cmake_policy(SET CMP0194 NEW)
+endif()
+
+if(WIN32)
+    project(stdromano VERSION ${VERSION} LANGUAGES CXX ASM_MASM)
+elseif(UNIX)
+    find_program(NASM_EXEC "nasm")
+
+    if(NASM_EXEC)
+        set(CMAKE_ASM_COMPILER nasm)
+        project(stdromano VERSION ${VERSION} LANGUAGES CXX ASM)
+    else()
+        message(FATAL "Could not find an assembler, install nasm and try again")
+    endif()
+endif()
 
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/cmake")
 
 set(CMAKE_VERBOSE_MAKEFILE ON)
 
+# Enable OpenCL utilities and accelerators for linear algebra operations
 option(ENABLE_OPENCL
        "Builds the OpenCL utilities, and accelerators for linear algebra"
        OFF)
 
+# Enable testing
 if(RUN_TESTS EQUAL 1)
     message(STATUS "RUN_TESTS enabled, building and running tests")
     enable_testing()
