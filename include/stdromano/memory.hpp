@@ -287,6 +287,7 @@ STDROMANO_API void format_byte_size(float size, char* buffer) noexcept;
 // Simple Arena allocator
 class STDROMANO_API Arena
 {
+    static constexpr std::uint32_t ARENA_INITIAL_SIZE =  1048576; /* 1 Mb */
     static constexpr std::uint32_t ARENA_BLOCK_SIZE = 16384; /* 16 Kb */
 
     struct Block
@@ -351,7 +352,7 @@ class STDROMANO_API Arena
     }
 
 public:
-    Arena(const std::size_t initial_size,
+    Arena(const std::size_t initial_size = ARENA_INITIAL_SIZE,
           const std::size_t block_size = ARENA_BLOCK_SIZE);
 
     ~Arena();
