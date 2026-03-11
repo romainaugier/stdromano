@@ -1956,7 +1956,7 @@ bool AST::from_text(const stdromano::StringD& buffer, const bool debug) noexcept
         this->_logger->debug("AST");
 
         visit(this->_root, [&](Node* node, std::uint32_t depth) -> bool {
-            this->_logger->debug("{0: ^{1}}{2}", "", depth * 2, node->type_str());
+            node->debug(this->_logger, depth * 2);
             return true;
         });
 

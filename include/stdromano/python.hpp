@@ -217,6 +217,11 @@ struct Node
     std::uint32_t column() const noexcept { return _column; }
 
     virtual const char* type_str() const noexcept { return "Node"; }
+
+    virtual void debug(std::shared_ptr<spdlog::logger> logger, std::uint32_t indent) const noexcept
+    {
+        logger->debug("{0: ^{1}}NODE", "", indent);
+    }
 };
 
 struct ModuleNode : Node
@@ -226,6 +231,11 @@ struct ModuleNode : Node
     ModuleNode() : Node(NodeModule, 0, 0) {}
 
     virtual const char* type_str() const noexcept override { return "MODULE"; }
+
+    virtual void debug(std::shared_ptr<spdlog::logger> logger, std::uint32_t indent) const noexcept override
+    {
+        logger->debug("{0: ^{1}}MODULE", "", indent);
+    }
 };
 
 struct FunctionDefNode : Node
@@ -240,6 +250,11 @@ struct FunctionDefNode : Node
                                                                               return_annotation(nullptr) {}
 
     virtual const char* type_str() const noexcept override { return "FUNCDEF"; }
+
+    virtual void debug(std::shared_ptr<spdlog::logger> logger, std::uint32_t indent) const noexcept override
+    {
+        logger->debug("{0: ^{1}}FUNCDEF ({2})", "", indent, this->name);
+    }
 };
 
 struct ClassDefNode : Node
@@ -252,6 +267,11 @@ struct ClassDefNode : Node
                                                                            name(std::move(name)) {}
 
     virtual const char* type_str() const noexcept override { return "CLASSDEF"; }
+
+    virtual void debug(std::shared_ptr<spdlog::logger> logger, std::uint32_t indent) const noexcept override
+    {
+        logger->debug("{0: ^{1}}CLASSDEF ({2})", "", indent, this->name);
+    }
 };
 
 struct ReturnNode : Node
@@ -262,6 +282,11 @@ struct ReturnNode : Node
                                                                         value(value) {}
 
     virtual const char* type_str() const noexcept override { return "RETURN"; }
+
+    virtual void debug(std::shared_ptr<spdlog::logger> logger, std::uint32_t indent) const noexcept override
+    {
+        logger->debug("{0: ^{1}}RETURN", "", indent);
+    }
 };
 
 struct AssignNode : Node
@@ -273,6 +298,11 @@ struct AssignNode : Node
                                                                         value(value) {}
 
     virtual const char* type_str() const noexcept override { return "ASSIGN"; };
+
+    virtual void debug(std::shared_ptr<spdlog::logger> logger, std::uint32_t indent) const noexcept override
+    {
+        logger->debug("{0: ^{1}}ASSIGN", "", indent);
+    }
 };
 
 struct AugAssignNode : Node
@@ -287,6 +317,11 @@ struct AugAssignNode : Node
                                                                                                       value(value) {}
 
     virtual const char* type_str() const noexcept override { return "AUGASSIGN"; }
+
+    virtual void debug(std::shared_ptr<spdlog::logger> logger, std::uint32_t indent) const noexcept override
+    {
+        logger->debug("{0: ^{1}}AUGASSIGN ({2})", "", indent, this->op);
+    }
 };
 
 struct ForNode : Node
@@ -301,6 +336,11 @@ struct ForNode : Node
                                                                                   iter(iter) {}
 
     virtual const char* type_str() const noexcept override { return "FOR"; }
+
+    virtual void debug(std::shared_ptr<spdlog::logger> logger, std::uint32_t indent) const noexcept override
+    {
+        logger->debug("{0: ^{1}}FOR", "", indent);
+    }
 };
 
 struct WhileNode : Node
@@ -313,6 +353,11 @@ struct WhileNode : Node
                                                                       test(test) {}
 
     virtual const char* type_str() const noexcept override { return "WHILE"; }
+
+    virtual void debug(std::shared_ptr<spdlog::logger> logger, std::uint32_t indent) const noexcept override
+    {
+        logger->debug("{0: ^{1}}WHILE", "", indent);
+    }
 };
 
 struct IfNode : Node
@@ -325,6 +370,11 @@ struct IfNode : Node
                                                                    test(test) {}
 
     virtual const char* type_str() const noexcept override { return "IF"; }
+
+    virtual void debug(std::shared_ptr<spdlog::logger> logger, std::uint32_t indent) const noexcept override
+    {
+        logger->debug("{0: ^{1}}IF","", indent);
+    }
 };
 
 struct ImportNode : Node
@@ -335,6 +385,13 @@ struct ImportNode : Node
     ImportNode(std::uint32_t line, std::uint32_t column) : Node(NodeImport, line, column) {}
 
     virtual const char* type_str() const noexcept override { return "IMPORT"; }
+
+    virtual void debug(std::shared_ptr<spdlog::logger> logger, std::uint32_t indent) const noexcept override
+    {
+        const StringD import_names = join(this->names, [](StringD name) { return name; }, ", ");
+
+        logger->debug("{0: ^{1}}IMPORT ({2})", "", indent, import_names);
+    }
 };
 
 struct ImportFromNode : Node
@@ -347,6 +404,11 @@ struct ImportFromNode : Node
                                                                                module(std::move(module)) {}
 
     virtual const char* type_str() const noexcept override { return "IMPORT FROM"; }
+
+    virtual void debug(std::shared_ptr<spdlog::logger> logger, std::uint32_t indent) const noexcept override
+    {
+        logger->debug("{0: ^{1}}IMPORT FROM ({2})", "", indent, this->module);
+    }
 };
 
 struct ExprNode : Node
@@ -357,6 +419,11 @@ struct ExprNode : Node
                                                                       value(value) {}
 
     virtual const char* type_str() const noexcept override { return "EXPR"; }
+
+    virtual void debug(std::shared_ptr<spdlog::logger> logger, std::uint32_t indent) const noexcept override
+    {
+        logger->debug("{0: ^{1}}EXPR", "", indent);
+    }
 };
 
 struct PassNode : Node
@@ -364,6 +431,11 @@ struct PassNode : Node
     PassNode(std::uint32_t line, std::uint32_t column) : Node(NodePass, line, column) {}
 
     virtual const char* type_str() const noexcept override { return "PASS"; }
+
+    virtual void debug(std::shared_ptr<spdlog::logger> logger, std::uint32_t indent) const noexcept override
+    {
+        logger->debug("{0: ^{1}}PASS", "", indent);
+    }
 };
 
 struct BreakNode : Node
@@ -371,6 +443,11 @@ struct BreakNode : Node
     BreakNode(std::uint32_t line, std::uint32_t column) : Node(NodeBreak, line, column) {}
 
     virtual const char* type_str() const noexcept override { return "BREAK"; }
+
+    virtual void debug(std::shared_ptr<spdlog::logger> logger, std::uint32_t indent) const noexcept override
+    {
+        logger->debug("{0: ^{1}}BREAK", "", indent);
+    }
 };
 
 struct ContinueNode : Node
@@ -378,6 +455,11 @@ struct ContinueNode : Node
     ContinueNode(std::uint32_t line, std::uint32_t column) : Node(NodeContinue, line, column) {}
 
     virtual const char* type_str() const noexcept override { return "CONTINUE"; }
+
+    virtual void debug(std::shared_ptr<spdlog::logger> logger, std::uint32_t indent) const noexcept override
+    {
+        logger->debug("{0: ^{1}}CONTINUE", "", indent);
+    }
 };
 
 struct RaiseNode : Node
@@ -388,6 +470,11 @@ struct RaiseNode : Node
                                                                      exc(exc) {}
 
     virtual const char* type_str() const noexcept override { return "RAISE"; }
+
+    virtual void debug(std::shared_ptr<spdlog::logger> logger, std::uint32_t indent) const noexcept override
+    {
+        logger->debug("{0: ^{1}}RAISE", "", indent);
+    }
 };
 
 struct BinOpNode : Node
@@ -402,6 +489,11 @@ struct BinOpNode : Node
                                                                                                 right(right) {}
 
     virtual const char* type_str() const noexcept override { return "BINOP"; }
+
+    virtual void debug(std::shared_ptr<spdlog::logger> logger, std::uint32_t indent) const noexcept override
+    {
+        logger->debug("{0: ^{1}}BINOP ({2})", "", indent, this->op);
+    }
 };
 
 struct UnaryOpNode : Node
@@ -414,6 +506,11 @@ struct UnaryOpNode : Node
                                                                                         operand(operand) {}
 
     virtual const char* type_str() const noexcept override { return "UNOP"; }
+
+    virtual void debug(std::shared_ptr<spdlog::logger> logger, std::uint32_t indent) const noexcept override
+    {
+        logger->debug("{0: ^{1}}UNOP ({2})", "", indent, this->op);
+    }
 };
 
 struct BoolOpNode : Node
@@ -425,6 +522,11 @@ struct BoolOpNode : Node
                                                                         op(op) {}
 
     virtual const char* type_str() const noexcept override { return "BOOLOP"; }
+
+    virtual void debug(std::shared_ptr<spdlog::logger> logger, std::uint32_t indent) const noexcept override
+    {
+        logger->debug("{0: ^{1}}BOOLOP ({2})", "", indent, this->op);
+    }
 };
 
 struct CompareNode : Node
@@ -437,6 +539,11 @@ struct CompareNode : Node
                                                                         left(left) {}
 
     virtual const char* type_str() const noexcept override { return "COMPARE"; }
+
+    virtual void debug(std::shared_ptr<spdlog::logger> logger, std::uint32_t indent) const noexcept override
+    {
+        logger->debug("{0: ^{1}}COMPARE", "", indent);
+    }
 };
 
 struct CallNode : Node
@@ -448,6 +555,11 @@ struct CallNode : Node
                                                                      func(func) {}
 
     virtual const char* type_str() const noexcept override { return "CALL"; }
+
+    virtual void debug(std::shared_ptr<spdlog::logger> logger, std::uint32_t indent) const noexcept override
+    {
+        logger->debug("{0: ^{1}}CALL", "", indent);
+    }
 };
 
 struct NameNode : Node
@@ -458,6 +570,11 @@ struct NameNode : Node
                                                                      id(std::move(id)) {}
 
     virtual const char* type_str() const noexcept override { return "NAME"; }
+
+    virtual void debug(std::shared_ptr<spdlog::logger> logger, std::uint32_t indent) const noexcept override
+    {
+        logger->debug("{0: ^{1}}NAME (\"{2}\")", "", indent, this->id);
+    }
 };
 
 struct ConstantNode : Node
@@ -470,6 +587,11 @@ struct ConstantNode : Node
                                                                                                 literal_type(literal_type) {}
 
     virtual const char* type_str() const noexcept override { return "CONSTANT"; }
+
+    virtual void debug(std::shared_ptr<spdlog::logger> logger, std::uint32_t indent) const noexcept override
+    {
+        logger->debug("{0: ^{1}}CONSTANT ({2}: {3})", "", indent, this->literal_type, this->raw);
+    }
 };
 
 struct AttributeNode : Node
@@ -482,6 +604,11 @@ struct AttributeNode : Node
                                                                                          attr(std::move(attr)) {}
 
     virtual const char* type_str() const noexcept override { return "ATTRIBUTE"; }
+
+    virtual void debug(std::shared_ptr<spdlog::logger> logger, std::uint32_t indent) const noexcept override
+    {
+        logger->debug("{0: ^{1}}ATTRIBUTE ({2})", "", indent, this->attr);
+    }
 };
 
 struct SubscriptNode : Node
@@ -494,6 +621,11 @@ struct SubscriptNode : Node
                                                                                         slice(slice) {}
 
     virtual const char* type_str() const noexcept override { return "SUBSCRIPT"; }
+
+    virtual void debug(std::shared_ptr<spdlog::logger> logger, std::uint32_t indent) const noexcept override
+    {
+        logger->debug("{0: ^{1}}SUBSCRIPT", "", indent);
+    }
 };
 
 struct ListNode : Node
@@ -503,6 +635,11 @@ struct ListNode : Node
     ListNode(std::uint32_t line, std::uint32_t column) : Node(NodeList, line, column) {}
 
     virtual const char* type_str() const noexcept override { return "LIST"; }
+
+    virtual void debug(std::shared_ptr<spdlog::logger> logger, std::uint32_t indent) const noexcept override
+    {
+        logger->debug("{0: ^{1}}LIST ({2} elements)", "", indent, this->elts.size());
+    }
 };
 
 struct TupleNode : Node
@@ -512,6 +649,11 @@ struct TupleNode : Node
     TupleNode(std::uint32_t line, std::uint32_t column) : Node(NodeTuple, line, column) {}
 
     virtual const char* type_str() const noexcept override { return "TUPLE"; }
+
+    virtual void debug(std::shared_ptr<spdlog::logger> logger, std::uint32_t indent) const noexcept override
+    {
+        logger->debug("{0: ^{1}}TUPLE ({2} elements)", "", indent, this->elts.size());
+    }
 };
 
 struct DictNode : Node
@@ -522,6 +664,11 @@ struct DictNode : Node
     DictNode(std::uint32_t line, std::uint32_t column) : Node(NodeDict, line, column) {}
 
     virtual const char* type_str() const noexcept override { return "DICT"; }
+
+    virtual void debug(std::shared_ptr<spdlog::logger> logger, std::uint32_t indent) const noexcept override
+    {
+        logger->debug("{0: ^{1}}DICT ({2} elements)", "", indent, this->keys.size());
+    }
 };
 
 struct LambdaNode : Node
@@ -533,6 +680,11 @@ struct LambdaNode : Node
                                                                        body(body) {}
 
     virtual const char* type_str() const noexcept override { return "LAMBDA"; }
+
+    virtual void debug(std::shared_ptr<spdlog::logger> logger, std::uint32_t indent) const noexcept override
+    {
+        logger->debug("{0: ^{1}}LAMBDA ({2} args)", "", indent, this->args.size());
+    }
 };
 
 // Visitor
@@ -745,5 +897,133 @@ public:
 PYTHON_NAMESPACE_END
 
 STDROMANO_NAMESPACE_END
+
+template<>
+struct fmt::formatter<stdromano::Python::Operator>
+{
+    constexpr auto parse(format_parse_context& ctx)
+    {
+        return ctx.begin();
+    }
+
+    auto format(const stdromano::Python::Operator& op, format_context& ctx) const
+    {
+        switch(op)
+        {
+            case stdromano::Python::Addition:
+                return format_to(ctx.out(), "+");
+            case stdromano::Python::Subtraction:
+                return format_to(ctx.out(), "-");
+            case stdromano::Python::Multiplication:
+                return format_to(ctx.out(), "*");
+            case stdromano::Python::Division:
+                return format_to(ctx.out(), "/");
+            case stdromano::Python::Modulus:
+                return format_to(ctx.out(), "%");
+            case stdromano::Python::Exponentiation:
+                return format_to(ctx.out(), "**");
+            case stdromano::Python::FloorDivision:
+                return format_to(ctx.out(), "//");
+            case stdromano::Python::Assign:
+                return format_to(ctx.out(), "=");
+            case stdromano::Python::AdditionAssign:
+                return format_to(ctx.out(), "+=");
+            case stdromano::Python::SubtractionAssign:
+                return format_to(ctx.out(), "-=");
+            case stdromano::Python::MultiplicationAssign:
+                return format_to(ctx.out(), "*=");
+            case stdromano::Python::DivisionAssign:
+                return format_to(ctx.out(), "/=");
+            case stdromano::Python::ModulusAssign:
+                return format_to(ctx.out(), "%=");
+            case stdromano::Python::FloorDivisionAssign:
+                return format_to(ctx.out(), "//=");
+            case stdromano::Python::ExponentiationAssign:
+                return format_to(ctx.out(), "**=");
+            case stdromano::Python::BitwiseAndAssign:
+                return format_to(ctx.out(), "&=");
+            case stdromano::Python::BitwiseOrAssign:
+                return format_to(ctx.out(), "|=");
+            case stdromano::Python::BitwiseXorAssign:
+                return format_to(ctx.out(), "^=");
+            case stdromano::Python::BitwiseLShiftAssign:
+                return format_to(ctx.out(), "<<=");
+            case stdromano::Python::BitwiseRShiftAssign:
+                return format_to(ctx.out(), ">>=");
+            case stdromano::Python::BitwiseAnd:
+                return format_to(ctx.out(), "&");
+            case stdromano::Python::BitwiseOr:
+                return format_to(ctx.out(), "|");
+            case stdromano::Python::BitwiseXor:
+                return format_to(ctx.out(), "^");
+            case stdromano::Python::BitwiseNot:
+                return format_to(ctx.out(), "~");
+            case stdromano::Python::BitwiseLShift:
+                return format_to(ctx.out(), "<<");
+            case stdromano::Python::BitwiseRShift:
+                return format_to(ctx.out(), ">>");
+            case stdromano::Python::ComparatorEquals:
+                return format_to(ctx.out(), "==");
+            case stdromano::Python::ComparatorNotEquals:
+                return format_to(ctx.out(), "!=");
+            case stdromano::Python::ComparatorGreaterThan:
+                return format_to(ctx.out(), ">");
+            case stdromano::Python::ComparatorLessThan:
+                return format_to(ctx.out(), "<");
+            case stdromano::Python::ComparatorGreaterEqualsThan:
+                return format_to(ctx.out(), ">=");
+            case stdromano::Python::ComparatorLessEqualsThan:
+                return format_to(ctx.out(), "<=");
+            case stdromano::Python::LogicalAnd:
+                return format_to(ctx.out(), "and");
+            case stdromano::Python::LogicalOr:
+                return format_to(ctx.out(), "or");
+            case stdromano::Python::LogicalNot:
+                return format_to(ctx.out(), "not");
+            case stdromano::Python::IdentityIs:
+                return format_to(ctx.out(), "is");
+            case stdromano::Python::IdentityIsNot:
+                return format_to(ctx.out(), "is not");
+            case stdromano::Python::MembershipIn:
+                return format_to(ctx.out(), "in");
+            case stdromano::Python::MembershipNotIn:
+                return format_to(ctx.out(), "not in");
+            default:
+                return format_to(ctx.out(), "?");
+        }
+    }
+};
+
+template<>
+struct fmt::formatter<stdromano::Python::Literal>
+{
+    constexpr auto parse(format_parse_context& ctx)
+    {
+        return ctx.begin();
+    }
+
+    auto format(const stdromano::Python::Literal& lit, format_context& ctx) const
+    {
+        switch(lit)
+        {
+            case stdromano::Python::String:
+                return format_to(ctx.out(), "String");
+            case stdromano::Python::UnicodeString:
+                return format_to(ctx.out(), "UnicodeString");
+            case stdromano::Python::RawString:
+                return format_to(ctx.out(), "RawString");
+            case stdromano::Python::FormattedString:
+                return format_to(ctx.out(), "FormattedString");
+            case stdromano::Python::Bytes:
+                return format_to(ctx.out(), "Bytes");
+            case stdromano::Python::Integer:
+                return format_to(ctx.out(), "Integer");
+            case stdromano::Python::Float:
+                return format_to(ctx.out(), "Float");
+            default:
+                return format_to(ctx.out(), "Unknown");
+        }
+    }
+};
 
 #endif // !defined(__STDROMANO_PYTHON)
