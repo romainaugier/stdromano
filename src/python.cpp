@@ -9,41 +9,34 @@ STDROMANO_NAMESPACE_BEGIN
 
 PYTHON_NAMESPACE_BEGIN
 
+// Lexer
+
 static constexpr std::uint32_t LEX_ERROR = std::numeric_limits<std::uint32_t>::max();
 
-struct Token
-{
-    enum Kind : std::uint32_t
-    {
-        Identifier = 0,
-        Keyword = 1,
-        Literal = 2,
-        Operator = 3,
-        Delimiter = 4,
-        Newline = 5,
-        Indent = 6,
-        Dedent = 7,
-    };
-
-    StringD value;
-
-    Kind kind;
-
-    std::uint32_t type;
-
-    std::uint32_t column;
-    std::uint32_t line;
-
-    Token(StringD value, Kind kind, std::uint32_t type, std::uint32_t column, std::uint32_t line) : value(std::move(value)),
-                                                                                                    kind(kind),
-                                                                                                    type(type),
-                                                                                                    column(column),
-                                                                                                    line(line) {}
+static const char* const g_token_kind_as_string[8] = {
+    "IDENTIFIER",
+    "KEYWORD",
+    "LITERAL",
+    "OPERATOR",
+    "DELIMITER",
+    "NEWLINE",
+    "INDENT",
+    "DEDENT",
 };
+
+const char* token_kind_as_string(Token::Kind kind) noexcept
+{
+    const std::uint32_t k = static_cast<std::uint32_t>(kind);
+
+    if(k > 7)
+        return nullptr;
+
+    return g_token_kind_as_string[k];
+}
 
 bool is_identifier_start(unsigned int c) noexcept
 {
-    return is_letter(c) | c == '_';
+    return is_letter(c) | (c == '_');
 }
 
 bool is_identifier(unsigned int c) noexcept
@@ -106,19 +99,19 @@ const HashMap<StringD, Delimiter> g_delimiters = {
 
 bool is_delimiter(unsigned int c) noexcept
 {
-    return c == '(' |
-           c == ')' |
-           c == '[' |
-           c == ']' |
-           c == '{' |
-           c == '}' |
-           c == ',' |
-           c == ':' |
-           c == '.' |
-           c == ';' |
-           c == '@' |
-           c == '-' |
-           c == '>';
+    return (c == '(') |
+           (c == ')') |
+           (c == '[') |
+           (c == ']') |
+           (c == '{') |
+           (c == '}') |
+           (c == ',') |
+           (c == ':') |
+           (c == '.') |
+           (c == ';') |
+           (c == '@') |
+           (c == '-') |
+           (c == '>');
 }
 
 const HashMap<StringD, Operator> g_operators = {
@@ -165,36 +158,36 @@ const HashMap<StringD, Operator> g_operators = {
 
 bool is_operator_start(unsigned int c) noexcept
 {
-    return c == '+' |
-           c == '-' |
-           c == '*' |
-           c == '/' |
-           c == '&' |
-           c == '|' |
-           c == '^' |
-           c == '>' |
-           c == '<' |
-           c == '=' |
-           c == '!' |
-           c == '%' |
-           c == 'a' |
-           c == 'i' |
-           c == 'n' |
-           c == 'o';
+    return (c == '+') |
+           (c == '-') |
+           (c == '*') |
+           (c == '/') |
+           (c == '&') |
+           (c == '|') |
+           (c == '^') |
+           (c == '>') |
+           (c == '<') |
+           (c == '=') |
+           (c == '!') |
+           (c == '%') |
+           (c == 'a') |
+           (c == 'i') |
+           (c == 'n') |
+           (c == 'o');
 }
 
 bool is_binary_operator(unsigned int c) noexcept
 {
-    return c == '+' |
-           c == '-' |
-           c == '*' |
-           c == '/' |
-           c == '&' |
-           c == '|' |
-           c == '^' |
-           c == '>' |
-           c == '<' |
-           c == '%';
+    return (c == '+') |
+           (c == '-') |
+           (c == '*') |
+           (c == '/') |
+           (c == '&') |
+           (c == '|') |
+           (c == '^') |
+           (c == '>') |
+           (c == '<') |
+           (c == '%');
 }
 
 bool is_unary_operator(unsigned int c) noexcept
@@ -273,12 +266,12 @@ std::uint32_t is_operator(char* c) noexcept
 
 bool is_string_literal_prefix(unsigned int c) noexcept
 {
-    return c == 'r' |
-           c == 'u' |
-           c == 'R' |
-           c == 'U' |
-           c == 'f' |
-           c == 'F';
+    return (c == 'r') |
+           (c == 'u') |
+           (c == 'R') |
+           (c == 'U') |
+           (c == 'f') |
+           (c == 'F');
 }
 
 std::uint32_t is_string_literal_start(char* c) noexcept
@@ -366,7 +359,7 @@ bool is_float_literal_start(unsigned int c) noexcept
 
 bool is_float_literal(unsigned int c) noexcept
 {
-    return is_digit(c) | c == '.';
+    return is_digit(c) | (c == '.');
 }
 
 uint32_t consume_float_literal(char* c) noexcept
@@ -403,8 +396,10 @@ uint32_t consume_float_literal(char* c) noexcept
 
 static constexpr std::uint32_t INDENT_SZ_UNDEFINED = std::numeric_limits<std::uint32_t>::max();
 
-bool lex(const char* buffer, Vector<Token>& tokens) noexcept
+bool AST::lex(const char* buffer, Vector<Token>& tokens) noexcept
 {
+    this->_logger->trace("Lexing source code");
+
     char* s = const_cast<char*>(buffer);
 
     std::uint32_t indent_size = INDENT_SZ_UNDEFINED;
@@ -574,8 +569,8 @@ bool lex(const char* buffer, Vector<Token>& tokens) noexcept
 
                 if(operator_it == g_operators.end() || length == LEX_ERROR)
                 {
-                    // log_error("Syntax Error: Invalid operator : {}", op);
-                    // log_error("Line {}, Position {}", line, position);
+                    this->_logger->error("Syntax: Invalid operator {}", op);
+                    this->_logger->error("Line {}, Position {}", line, position);
                     return false;
                 }
 
@@ -658,6 +653,1272 @@ bool lex(const char* buffer, Vector<Token>& tokens) noexcept
         }
     }
 
+    this->_logger->trace("Lex successful");
+
+    return true;
+}
+
+// Parser
+
+struct Parser
+{
+    const Vector<Token>& tokens;
+    Arena& arena;
+    std::shared_ptr<spdlog::logger>& logger;
+    std::uint32_t pos;
+
+    Parser(const Vector<Token>& tokens, Arena& arena, std::shared_ptr<spdlog::logger>& logger) : tokens(tokens),
+                                                                                                 arena(arena),
+                                                                                                 logger(logger),
+                                                                                                 pos(0) {}
+
+    bool at_end() const noexcept { return pos >= tokens.size(); }
+
+    const Token& current() const noexcept { return tokens[pos]; }
+
+    const Token& peek(std::uint32_t offset = 1) const noexcept { return tokens[pos + offset]; }
+
+    void advance() noexcept { pos++; }
+
+    void skip_newlines() noexcept
+    {
+        while(!this->at_end() && this->current().kind == Token::Kind::Newline)
+            this->advance();
+    }
+
+    bool check(Token::Kind kind) const noexcept
+    {
+        return !this->at_end() && this->current().kind == kind;
+    }
+
+    bool check(Token::Kind kind, std::uint32_t type) const noexcept
+    {
+        return !this->at_end() && this->current().kind == kind && this->current().type == type;
+    }
+
+    bool match_keyword(Keyword kw) const noexcept
+    {
+        return this->check(Token::Kind::Keyword, static_cast<std::uint32_t>(kw));
+    }
+
+    bool match_operator(Operator op) const noexcept
+    {
+        return this->check(Token::Kind::Operator, static_cast<std::uint32_t>(op));
+    }
+
+    bool match_delimiter(Delimiter d) const noexcept
+    {
+        return this->check(Token::Kind::Delimiter, static_cast<std::uint32_t>(d));
+    }
+
+    bool expect_keyword(Keyword kw) noexcept
+    {
+        if(!this->match_keyword(kw))
+        {
+            this->logger->error("Expected keyword, got \"{}\" ({}:{})",
+                                this->current().value,
+                                this->current().line,
+                                this->current().column);
+
+            return false;
+        }
+
+        this->advance();
+
+        return true;
+    }
+
+    bool expect_delimiter(Delimiter d) noexcept
+    {
+        if(!match_delimiter(d))
+        {
+            this->logger->error("Expected delimiter, got \"{}\" ({}:{})",
+                                this->current().value,
+                                this->current().line,
+                                this->current().column);
+
+            return false;
+        }
+
+        this->advance();
+
+        return true;
+    }
+
+    bool expect_newline() noexcept
+    {
+        if(!this->check(Token::Kind::Newline) && !this->at_end())
+        {
+            this->logger->error("Expected newline, got \"{}\" ({}:{})",
+                                this->current().value,
+                                this->current().line,
+                                this->current().column);
+            return false;
+        }
+
+        if(!this->at_end())
+            this->advance();
+
+        return true;
+    }
+
+    // Block
+
+    bool parse_block(Vector<Node*>& body) noexcept
+    {
+        this->skip_newlines();
+
+        if(!this->check(Token::Kind::Indent))
+        {
+            this->logger->error("Expected indented block ({}:{})", this->current().line, this->current().column);
+            return false;
+        }
+
+        std::uint32_t block_indent = this->current().type;
+        this->advance();
+
+        while(!this->at_end())
+        {
+            this->skip_newlines();
+
+            if(this->at_end())
+                break;
+
+            if(this->check(Token::Kind::Dedent))
+            {
+                this->advance();
+                break;
+            }
+
+            Node* stmt = this->parse_statement();
+
+            if(stmt == nullptr)
+                return false;
+
+            body.push_back(stmt);
+        }
+
+        return true;
+    }
+
+    // Statements
+
+    Node* parse_statement() noexcept
+    {
+        this->skip_newlines();
+
+        if(this->at_end())
+            return nullptr;
+
+        if(this->current().kind == Token::Kind::Keyword)
+        {
+            switch(static_cast<Keyword>(this->current().type))
+            {
+                case Keyword::Def: return this->parse_funcdef();
+                case Keyword::Class: return this->parse_classdef();
+                case Keyword::If: return this->parse_if();
+                case Keyword::While: return this->parse_while();
+                case Keyword::For: return this->parse_for();
+                case Keyword::Return: return this->parse_return();
+                case Keyword::Pass: return this->parse_pass();
+                case Keyword::Break: return this->parse_break();
+                case Keyword::Continue: return this->parse_continue();
+                case Keyword::Raise: return this->parse_raise();
+                case Keyword::Import: return this->parse_import();
+                case Keyword::From: return this->parse_import_from();
+                default: break;
+            }
+        }
+
+        return this->parse_expr_or_assign();
+    }
+
+    Node* parse_funcdef() noexcept
+    {
+        std::uint32_t line = this->current().line;
+        std::uint32_t column = this->current().column;
+        this->advance(); // skip 'def'
+
+        if(!this->check(Token::Kind::Identifier))
+        {
+            this->logger->error("Expected function name ({}:{})", this->current().line, this->current().column);
+            return nullptr;
+        }
+
+        StringD name = std::move(StringD::make_from_c_str(this->current().value.c_str(), this->current().value.size()));
+        this->advance();
+
+        if(!this->expect_delimiter(Delimiter::LParen))
+            return nullptr;
+
+        auto* node = this->arena.emplace<FunctionDefNode>(std::move(name), line, column);
+
+        // Parse parameters as simple names
+        while(!this->at_end() && !this->match_delimiter(Delimiter::RParen))
+        {
+            if(this->check(Token::Kind::Identifier))
+            {
+                auto* param = this->arena.emplace<NameNode>(
+                    std::move(StringD::make_from_c_str(this->current().value.c_str(), this->current().value.size())),
+                    this->current().line,
+                    this->current().column);
+                node->args.push_back(param);
+                this->advance();
+            }
+
+            if(this->match_delimiter(Delimiter::Comma))
+                this->advance();
+        }
+
+        if(!this->expect_delimiter(Delimiter::RParen))
+            return nullptr;
+
+        // Optional return annotation
+        if(this->match_delimiter(Delimiter::RightArrow))
+        {
+            this->advance();
+            node->return_annotation = this->parse_expr();
+
+            if(node->return_annotation == nullptr)
+                return nullptr;
+        }
+
+        if(!this->expect_delimiter(Delimiter::Colon))
+            return nullptr;
+
+        if(!this->parse_block(node->body))
+            return nullptr;
+
+        return node;
+    }
+
+    Node* parse_classdef() noexcept
+    {
+        std::uint32_t line = this->current().line;
+        std::uint32_t column = this->current().column;
+        this->advance(); // skip 'class'
+
+        if(!this->check(Token::Kind::Identifier))
+        {
+            logger->error("Expected class name ({}:{})", this->current().line, this->current().column);
+            return nullptr;
+        }
+
+        StringD name = std::move(StringD::make_from_c_str(this->current().value.c_str(), this->current().value.size()));
+        this->advance();
+
+        auto* node = this->arena.emplace<ClassDefNode>(std::move(name), line, column);
+
+        // Optional bases
+        if(this->match_delimiter(Delimiter::LParen))
+        {
+            this->advance();
+
+            while(!this->at_end() && !this->match_delimiter(Delimiter::RParen))
+            {
+                Node* base = this->parse_expr();
+
+                if(base == nullptr)
+                    return nullptr;
+
+                node->bases.push_back(base);
+
+                if(this->match_delimiter(Delimiter::Comma))
+                    this->advance();
+            }
+
+            if(!this->expect_delimiter(Delimiter::RParen))
+                return nullptr;
+        }
+
+        if(!this->expect_delimiter(Delimiter::Colon))
+            return nullptr;
+
+        if(!this->parse_block(node->body))
+            return nullptr;
+
+        return node;
+    }
+
+    Node* parse_if() noexcept
+    {
+        std::uint32_t line = this->current().line;
+        std::uint32_t column = this->current().column;
+        this->advance(); // skip 'if'
+
+        Node* test = this->parse_expr();
+
+        if(test == nullptr)
+            return nullptr;
+
+        if(!this->expect_delimiter(Delimiter::Colon))
+            return nullptr;
+
+        auto* node = arena.emplace<IfNode>(test, line, column);
+
+        if(!this->parse_block(node->body))
+            return nullptr;
+
+        this->skip_newlines();
+
+        // Handle elif chains
+        while(!this->at_end() && this->match_keyword(Keyword::Elif))
+        {
+            std::uint32_t elif_line = this->current().line;
+            std::uint32_t elif_column = this->current().column;
+            this->advance();
+
+            Node* elif_test = this->parse_expr();
+
+            if(elif_test == nullptr)
+                return nullptr;
+
+            if(!this->expect_delimiter(Delimiter::Colon))
+                return nullptr;
+
+            auto* elif_node = this->arena.emplace<IfNode>(elif_test, elif_line, elif_column);
+
+            if(!this->parse_block(elif_node->body))
+                return nullptr;
+
+            node->orelse.push_back(elif_node);
+            node = elif_node; // chain further elifs onto this node
+
+            this->skip_newlines();
+        }
+
+        // Handle else
+        if(!this->at_end() && this->match_keyword(Keyword::Else))
+        {
+            this->advance();
+
+            if(!this->expect_delimiter(Delimiter::Colon))
+                return nullptr;
+
+            if(!this->parse_block(node->orelse))
+                return nullptr;
+        }
+
+        return node;
+    }
+
+    Node* parse_while() noexcept
+    {
+        std::uint32_t line = this->current().line;
+        std::uint32_t column = this->current().column;
+        this->advance();
+
+        Node* test = this->parse_expr();
+
+        if(test == nullptr)
+            return nullptr;
+
+        if(!this->expect_delimiter(Delimiter::Colon))
+            return nullptr;
+
+        auto* node = this->arena.emplace<WhileNode>(test, line, column);
+
+        if(!this->parse_block(node->body))
+            return nullptr;
+
+        this->skip_newlines();
+
+        if(!this->at_end() && this->match_keyword(Keyword::Else))
+        {
+            this->advance();
+
+            if(!this->expect_delimiter(Delimiter::Colon))
+                return nullptr;
+
+            if(!this->parse_block(node->orelse))
+                return nullptr;
+        }
+
+        return node;
+    }
+
+    Node* parse_for() noexcept
+    {
+        std::uint32_t line = this->current().line;
+        std::uint32_t column = this->current().column;
+        this->advance();
+
+        Node* target = this->parse_primary();
+
+        if(target == nullptr)
+            return nullptr;
+
+        if(!this->expect_keyword(Keyword::In))
+            return nullptr;
+
+        Node* iter = this->parse_expr();
+
+        if(iter == nullptr)
+            return nullptr;
+
+        if(!this->expect_delimiter(Delimiter::Colon))
+            return nullptr;
+
+        auto* node = this->arena.emplace<ForNode>(target, iter, line, column);
+
+        if(!this->parse_block(node->body))
+            return nullptr;
+
+        this->skip_newlines();
+
+        if(!this->at_end() && this->match_keyword(Keyword::Else))
+        {
+            this->advance();
+
+            if(!this->expect_delimiter(Delimiter::Colon))
+                return nullptr;
+
+            if(!this->parse_block(node->orelse))
+                return nullptr;
+        }
+
+        return node;
+    }
+
+    Node* parse_return() noexcept
+    {
+        std::uint32_t line = this->current().line;
+        std::uint32_t column = this->current().column;
+        this->advance();
+
+        Node* value = nullptr;
+
+        if(!this->at_end() && !this->check(Token::Kind::Newline))
+        {
+            value = this->parse_expr();
+
+            if(value == nullptr)
+                return nullptr;
+        }
+
+        return this->arena.emplace<ReturnNode>(value, line, column);
+    }
+
+    Node* parse_pass() noexcept
+    {
+        auto* node = this->arena.emplace<PassNode>(this->current().line, this->current().column);
+        this->advance();
+        return node;
+    }
+
+    Node* parse_break() noexcept
+    {
+        auto* node = this->arena.emplace<BreakNode>(this->current().line, this->current().column);
+        this->advance();
+        return node;
+    }
+
+    Node* parse_continue() noexcept
+    {
+        auto* node = this->arena.emplace<ContinueNode>(this->current().line, this->current().column);
+        this->advance();
+        return node;
+    }
+
+    Node* parse_raise() noexcept
+    {
+        std::uint32_t line = this->current().line;
+        std::uint32_t column = this->current().column;
+        this->advance();
+
+        Node* exc = nullptr;
+
+        if(!this->at_end() && !this->check(Token::Kind::Newline))
+        {
+            exc = this->parse_expr();
+
+            if(exc == nullptr)
+                return nullptr;
+        }
+
+        return arena.emplace<RaiseNode>(exc, line, column);
+    }
+
+    Node* parse_import() noexcept
+    {
+        std::uint32_t line = this->current().line;
+        std::uint32_t column = this->current().column;
+        this->advance();
+
+        auto* node = this->arena.emplace<ImportNode>(line, column);
+
+        do
+        {
+            if(!this->check(Token::Kind::Identifier))
+            {
+                logger->error("Expected module name ({}:{})", this->current().line, this->current().column);
+                return nullptr;
+            }
+
+            StringD name = std::move(StringD::make_from_c_str(this->current().value.c_str(), this->current().value.size()));
+            this->advance();
+
+            // Handle dotted names: import os.path
+            while(this->match_delimiter(Delimiter::Dot))
+            {
+                this->advance();
+
+                if(!this->check(Token::Kind::Identifier))
+                {
+                    this->logger->error("Expected name after dot ({}:{})", this->current().line, this->current().column);
+                    return nullptr;
+                }
+
+                // Append ".part" to the name
+                name = std::move(name);  // keep building
+                // Simplified: store just the last part for now,
+                // or concatenate via a temporary buffer
+                this->advance();
+            }
+
+            StringD alias;
+
+            if(this->match_keyword(Keyword::As))
+            {
+                this->advance();
+
+                if(!this->check(Token::Kind::Identifier))
+                {
+                    this->logger->error("Expected alias ({}:{})", this->current().line, this->current().column);
+                    return nullptr;
+                }
+
+                alias = std::move(StringD::make_from_c_str(this->current().value.c_str(), this->current().value.size()));
+                this->advance();
+            }
+
+            node->names.push_back(std::move(name));
+            node->aliases.push_back(std::move(alias));
+
+        } while(match_delimiter(Delimiter::Comma) && (this->advance(), true));
+
+        return node;
+    }
+
+    Node* parse_import_from() noexcept
+    {
+        std::uint32_t line = this->current().line;
+        std::uint32_t column = this->current().column;
+        this->advance(); // skip 'from'
+
+        if(!this->check(Token::Kind::Identifier))
+        {
+            this->logger->error("Expected module name ({}:{})", this->current().line, this->current().column);
+            return nullptr;
+        }
+
+        StringD module = std::move(StringD::make_from_c_str(this->current().value.c_str(), this->current().value.size()));
+        this->advance();
+
+        if(!this->expect_keyword(Keyword::Import))
+            return nullptr;
+
+        auto* node = this->arena.emplace<ImportFromNode>(std::move(module), line, column);
+
+        do
+        {
+            if(!this->check(Token::Kind::Identifier))
+            {
+                this->logger->error("Expected name ({}:{})", this->current().line, this->current().column);
+                return nullptr;
+            }
+
+            StringD name = std::move(StringD::make_from_c_str(this->current().value.c_str(), this->current().value.size()));
+            this->advance();
+
+            StringD alias;
+
+            if(this->match_keyword(Keyword::As))
+            {
+                this->advance();
+
+                if(!this->check(Token::Kind::Identifier))
+                {
+                    this->logger->error("Expected alias ({}:{})", this->current().line, this->current().column);
+                    return nullptr;
+                }
+
+                alias = std::move(StringD::make_from_c_str(this->current().value.c_str(), this->current().value.size()));
+                this->advance();
+            }
+
+            node->names.push_back(std::move(name));
+            node->aliases.push_back(std::move(alias));
+
+        } while(this->match_delimiter(Delimiter::Comma) && (this->advance(), true));
+
+        return node;
+    }
+
+    // Expression or assignment
+
+    Node* parse_expr_or_assign() noexcept
+    {
+        std::uint32_t line = this->at_end() ? 0 : this->current().line;
+        std::uint32_t column = this->at_end() ? 0 : this->current().column;
+
+        Node* left = this->parse_expr();
+
+        if(left == nullptr)
+            return nullptr;
+
+        // Simple assignment: target = value
+        if(this->match_operator(Operator::Assign))
+        {
+            this->advance();
+
+            Node* value = this->parse_expr();
+
+            if(value == nullptr)
+                return nullptr;
+
+            auto* node = this->arena.emplace<AssignNode>(value, line, column);
+            node->targets.push_back(left);
+            return node;
+        }
+
+        // Augmented assignment: target += value, etc.
+        if(!this->at_end() && this->current().kind == Token::Kind::Operator)
+        {
+            Operator op = static_cast<Operator>(this->current().type);
+
+            if(op >= Operator::AdditionAssign && op <= Operator::BitwiseRShiftAssign)
+            {
+                this->advance();
+
+                Node* value = this->parse_expr();
+
+                if(value == nullptr)
+                    return nullptr;
+
+                return this->arena.emplace<AugAssignNode>(left, op, value, line, column);
+            }
+        }
+
+        // Standalone expression
+        return this->arena.emplace<ExprNode>(left, line, column);
+    }
+
+    // Expressions (precedence climbing)
+
+    Node* parse_expr() noexcept
+    {
+        if(!this->at_end() && this->match_keyword(Keyword::Lambda))
+            return this->parse_lambda();
+
+        return this->parse_or_expr();
+    }
+
+    Node* parse_lambda() noexcept
+    {
+        std::uint32_t line = this->current().line;
+        std::uint32_t column = this->current().column;
+        this->advance(); // skip 'lambda'
+
+        auto* node = this->arena.emplace<LambdaNode>(nullptr, line, column);
+
+        // Parse parameter names
+        while(!this->at_end() && !this->match_delimiter(Delimiter::Colon))
+        {
+            if(this->check(Token::Kind::Identifier))
+            {
+                auto* param = this->arena.emplace<NameNode>(
+                    std::move(StringD::make_from_c_str(this->current().value.c_str(), this->current().value.size())),
+                    this->current().line,
+                    this->current().column);
+                node->args.push_back(param);
+                this->advance();
+            }
+
+            if(this->match_delimiter(Delimiter::Comma))
+                this->advance();
+        }
+
+        if(!this->expect_delimiter(Delimiter::Colon))
+            return nullptr;
+
+        node->body = this->parse_expr();
+
+        if(node->body == nullptr)
+            return nullptr;
+
+        return node;
+    }
+
+    Node* parse_or_expr() noexcept
+    {
+        Node* left = this->parse_and_expr();
+
+        if(left == nullptr)
+            return nullptr;
+
+        while(!this->at_end() && this->match_operator(Operator::LogicalOr))
+        {
+            this->advance();
+
+            Node* right = this->parse_and_expr();
+
+            if(right == nullptr)
+                return nullptr;
+
+            auto* node = this->arena.emplace<BoolOpNode>(Operator::LogicalOr, left->line(), left->column());
+            node->values.push_back(left);
+            node->values.push_back(right);
+            left = node;
+        }
+
+        return left;
+    }
+
+    Node* parse_and_expr() noexcept
+    {
+        Node* left = this->parse_not_expr();
+
+        if(left == nullptr)
+            return nullptr;
+
+        while(!this->at_end() && this->match_operator(Operator::LogicalAnd))
+        {
+            this->advance();
+
+            Node* right = this->parse_not_expr();
+
+            if(right == nullptr)
+                return nullptr;
+
+            auto* node = this->arena.emplace<BoolOpNode>(Operator::LogicalAnd, left->line(), left->column());
+            node->values.push_back(left);
+            node->values.push_back(right);
+            left = node;
+        }
+
+        return left;
+    }
+
+    Node* parse_not_expr() noexcept
+    {
+        if(!this->at_end() && this->match_operator(Operator::LogicalNot))
+        {
+            std::uint32_t line = this->current().line;
+            std::uint32_t column = this->current().column;
+            this->advance();
+
+            Node* operand = this->parse_not_expr();
+
+            if(operand == nullptr)
+                return nullptr;
+
+            return this->arena.emplace<UnaryOpNode>(Operator::LogicalNot, operand, line, column);
+        }
+
+        return this->parse_comparison();
+    }
+
+    Node* parse_comparison() noexcept
+    {
+        Node* left = this->parse_bitor();
+
+        if(left == nullptr)
+            return nullptr;
+
+        if(this->at_end() || this->current().kind != Token::Kind::Operator)
+            return left;
+
+        Operator op = static_cast<Operator>(this->current().type);
+
+        bool is_cmp = (op >= Operator::ComparatorEquals && op <= Operator::ComparatorLessEqualsThan) ||
+                      (op >= Operator::IdentityIs && op <= Operator::MembershipNotIn);
+
+        if(!is_cmp)
+            return left;
+
+        auto* node = arena.emplace<CompareNode>(left, left->line(), left->column());
+
+        while(!this->at_end() && this->current().kind == Token::Kind::Operator)
+        {
+            op = static_cast<Operator>(this->current().type);
+            is_cmp = (op >= Operator::ComparatorEquals && op <= Operator::ComparatorLessEqualsThan) ||
+                     (op >= Operator::IdentityIs && op <= Operator::MembershipNotIn);
+
+            if(!is_cmp)
+                break;
+
+            node->ops.push_back(op);
+            this->advance();
+
+            Node* right = this->parse_bitor();
+
+            if(right == nullptr)
+                return nullptr;
+
+            node->comparators.push_back(right);
+        }
+
+        return node;
+    }
+
+    Node* parse_bitor() noexcept
+    {
+        Node* left = this->parse_bitxor();
+
+        if(left == nullptr)
+            return nullptr;
+
+        while(!this->at_end() && this->match_operator(Operator::BitwiseOr))
+        {
+            this->advance();
+            Node* right = this->parse_bitxor();
+
+            if(right == nullptr)
+                return nullptr;
+
+            left = this->arena.emplace<BinOpNode>(left, Operator::BitwiseOr, right, left->line(), left->column());
+        }
+
+        return left;
+    }
+
+    Node* parse_bitxor() noexcept
+    {
+        Node* left = this->parse_bitand();
+
+        if(left == nullptr)
+            return nullptr;
+
+        while(!this->at_end() && this->match_operator(Operator::BitwiseXor))
+        {
+            this->advance();
+            Node* right = this->parse_bitand();
+
+            if(right == nullptr)
+                return nullptr;
+
+            left = this->arena.emplace<BinOpNode>(left, Operator::BitwiseXor, right, left->line(), left->column());
+        }
+
+        return left;
+    }
+
+    Node* parse_bitand() noexcept
+    {
+        Node* left = this->parse_shift();
+
+        if(left == nullptr)
+            return nullptr;
+
+        while(!this->at_end() && this->match_operator(Operator::BitwiseAnd))
+        {
+            this->advance();
+            Node* right = this->parse_shift();
+
+            if(right == nullptr)
+                return nullptr;
+
+            left = this->arena.emplace<BinOpNode>(left, Operator::BitwiseAnd, right, left->line(), left->column());
+        }
+
+        return left;
+    }
+
+    Node* parse_shift() noexcept
+    {
+        Node* left = this->parse_additive();
+
+        if(left == nullptr)
+            return nullptr;
+
+        while(!this->at_end() && (this->match_operator(Operator::BitwiseLShift) || this->match_operator(Operator::BitwiseRShift)))
+        {
+            Operator op = static_cast<Operator>(this->current().type);
+            this->advance();
+
+            Node* right = this->parse_additive();
+
+            if(right == nullptr)
+                return nullptr;
+
+            left = this->arena.emplace<BinOpNode>(left, op, right, left->line(), left->column());
+        }
+
+        return left;
+    }
+
+    Node* parse_additive() noexcept
+    {
+        Node* left = this->parse_multiplicative();
+
+        if(left == nullptr)
+            return nullptr;
+
+        while(!this->at_end() && (this->match_operator(Operator::Addition) || this->match_operator(Operator::Subtraction)))
+        {
+            Operator op = static_cast<Operator>(this->current().type);
+            this->advance();
+
+            Node* right = this->parse_multiplicative();
+
+            if(right == nullptr)
+                return nullptr;
+
+            left = this->arena.emplace<BinOpNode>(left, op, right, left->line(), left->column());
+        }
+
+        return left;
+    }
+
+    Node* parse_multiplicative() noexcept
+    {
+        Node* left = this->parse_unary();
+
+        if(left == nullptr)
+            return nullptr;
+
+        while(!this->at_end() &&
+              (this->match_operator(Operator::Multiplication) ||
+               this->match_operator(Operator::Division) ||
+               this->match_operator(Operator::Modulus) ||
+               this->match_operator(Operator::FloorDivision)))
+        {
+            Operator op = static_cast<Operator>(this->current().type);
+            this->advance();
+
+            Node* right = this->parse_unary();
+
+            if(right == nullptr)
+                return nullptr;
+
+            left = this->arena.emplace<BinOpNode>(left, op, right, left->line(), left->column());
+        }
+
+        return left;
+    }
+
+    Node* parse_unary() noexcept
+    {
+        if(!this->at_end() &&
+           (this->match_operator(Operator::Addition) ||
+            this->match_operator(Operator::Subtraction) ||
+            this->match_operator(Operator::BitwiseNot)))
+        {
+            Operator op = static_cast<Operator>(this->current().type);
+            std::uint32_t line = this->current().line;
+            std::uint32_t column = this->current().column;
+            this->advance();
+
+            Node* operand = this->parse_unary();
+
+            if(operand == nullptr)
+                return nullptr;
+
+            return this->arena.emplace<UnaryOpNode>(op, operand, line, column);
+        }
+
+        return this->parse_power();
+    }
+
+    Node* parse_power() noexcept
+    {
+        Node* left = this->parse_postfix();
+
+        if(left == nullptr)
+            return nullptr;
+
+        if(!this->at_end() && this->match_operator(Operator::Exponentiation))
+        {
+            this->advance();
+
+            // Right-associative: recurse into parse_unary
+            Node* right = this->parse_unary();
+
+            if(right == nullptr)
+                return nullptr;
+
+            left = this->arena.emplace<BinOpNode>(left, Operator::Exponentiation, right, left->line(), left->column());
+        }
+
+        return left;
+    }
+
+    // Postfix: calls, subscripts, attribute access
+
+    Node* parse_postfix() noexcept
+    {
+        Node* node = this->parse_primary();
+
+        if(node == nullptr)
+            return nullptr;
+
+        while(!this->at_end())
+        {
+            if(this->match_delimiter(Delimiter::LParen))
+            {
+                this->advance();
+
+                auto* call = this->arena.emplace<CallNode>(node, node->line(), node->column());
+
+                while(!this->at_end() && !this->match_delimiter(Delimiter::RParen))
+                {
+                    Node* arg = this->parse_expr();
+
+                    if(arg == nullptr)
+                        return nullptr;
+
+                    call->args.push_back(arg);
+
+                    if(this->match_delimiter(Delimiter::Comma))
+                        this->advance();
+                }
+
+                if(!this->expect_delimiter(Delimiter::RParen))
+                    return nullptr;
+
+                node = call;
+            }
+            else if(this->match_delimiter(Delimiter::LBracket))
+            {
+                this->advance();
+
+                Node* slice = this->parse_expr();
+
+                if(slice == nullptr)
+                    return nullptr;
+
+                if(!this->expect_delimiter(Delimiter::RBracket))
+                    return nullptr;
+
+                node = this->arena.emplace<SubscriptNode>(node, slice, node->line(), node->column());
+            }
+            else if(this->match_delimiter(Delimiter::Dot))
+            {
+                this->advance();
+
+                if(!this->check(Token::Kind::Identifier))
+                {
+                    this->logger->error("Expected attribute name ({}:{})", this->current().line, this->current().column);
+                    return nullptr;
+                }
+
+                StringD attr = std::move(StringD::make_from_c_str(this->current().value.c_str(), this->current().value.size()));
+                this->advance();
+
+                node = this->arena.emplace<AttributeNode>(node, std::move(attr), node->line(), node->column());
+            }
+            else
+            {
+                break;
+            }
+        }
+
+        return node;
+    }
+
+    // Primary: atoms
+
+    Node* parse_primary() noexcept
+    {
+        if(this->at_end())
+        {
+            this->logger->error("Unexpected end of input");
+            return nullptr;
+        }
+
+        // Identifier / Name
+        if(this->check(Token::Kind::Identifier))
+        {
+            auto* node = this->arena.emplace<NameNode>(
+                std::move(StringD::make_from_c_str(this->current().value.c_str(), this->current().value.size())),
+                this->current().line,
+                this->current().column);
+
+            this->advance();
+
+            return node;
+        }
+
+        // Literals
+        if(this->check(Token::Kind::Literal))
+        {
+            Literal lit = static_cast<Literal>(this->current().type);
+            auto* node = this->arena.emplace<ConstantNode>(
+                std::move(StringD::make_from_c_str(this->current().value.c_str(), this->current().value.size())),
+                lit,
+                this->current().line,
+                this->current().column);
+
+            this->advance();
+
+            return node;
+        }
+
+        // True / False / None as constants
+        if(this->match_keyword(Keyword::True) || this->match_keyword(Keyword::False) || this->match_keyword(Keyword::None))
+        {
+            auto* node = this->arena.emplace<ConstantNode>(
+                std::move(StringD::make_from_c_str(this->current().value.c_str(), this->current().value.size())),
+                Literal::String, // reuse; the raw value distinguishes them
+                this->current().line,
+                this->current().column);
+
+            this->advance();
+
+            return node;
+        }
+
+        // Parenthesized expression or tuple
+        if(this->match_delimiter(Delimiter::LParen))
+        {
+            this->advance();
+
+            // Empty tuple
+            if(this->match_delimiter(Delimiter::RParen))
+            {
+                auto* node = this->arena.emplace<TupleNode>(this->current().line, this->current().column);
+                this->advance();
+                return node;
+            }
+
+            Node* first = this->parse_expr();
+
+            if(first == nullptr)
+                return nullptr;
+
+            // Tuple with comma
+            if(this->match_delimiter(Delimiter::Comma))
+            {
+                auto* tup = arena.emplace<TupleNode>(first->line(), first->column());
+                tup->elts.push_back(first);
+
+                while(this->match_delimiter(Delimiter::Comma))
+                {
+                    this->advance();
+
+                    if(this->match_delimiter(Delimiter::RParen))
+                        break;
+
+                    Node* elt = this->parse_expr();
+
+                    if(elt == nullptr)
+                        return nullptr;
+
+                    tup->elts.push_back(elt);
+                }
+
+                if(!this->expect_delimiter(Delimiter::RParen))
+                    return nullptr;
+
+                return tup;
+            }
+
+            if(!this->expect_delimiter(Delimiter::RParen))
+                return nullptr;
+
+            return first;
+        }
+
+        // List literal
+        if(this->match_delimiter(Delimiter::LBracket))
+        {
+            std::uint32_t line = this->current().line;
+            std::uint32_t column = this->current().column;
+            this->advance();
+
+            auto* node = this->arena.emplace<ListNode>(line, column);
+
+            while(!this->at_end() && !this->match_delimiter(Delimiter::RBracket))
+            {
+                Node* elt = this->parse_expr();
+
+                if(elt == nullptr)
+                    return nullptr;
+
+                node->elts.push_back(elt);
+
+                if(this->match_delimiter(Delimiter::Comma))
+                    this->advance();
+            }
+
+            if(!this->expect_delimiter(Delimiter::RBracket))
+                return nullptr;
+
+            return node;
+        }
+
+        // Dict literal
+        if(this->match_delimiter(Delimiter::LBrace))
+        {
+            std::uint32_t line = this->current().line;
+            std::uint32_t column = this->current().column;
+            this->advance();
+
+            auto* node = arena.emplace<DictNode>(line, column);
+
+            while(!this->at_end() && !this->match_delimiter(Delimiter::RBrace))
+            {
+                Node* key = this->parse_expr();
+
+                if(key == nullptr)
+                    return nullptr;
+
+                if(!this->expect_delimiter(Delimiter::Colon))
+                    return nullptr;
+
+                Node* value = this->parse_expr();
+
+                if(value == nullptr)
+                    return nullptr;
+
+                node->keys.push_back(key);
+                node->values.push_back(value);
+
+                if(this->match_delimiter(Delimiter::Comma))
+                    this->advance();
+            }
+
+            if(!this->expect_delimiter(Delimiter::RBrace))
+                return nullptr;
+
+            return node;
+        }
+
+        this->logger->error("Unexpected token \"{}\" ({}:{})",
+                            this->current().value,
+                            this->current().line,
+                            this->current().column);
+
+        return nullptr;
+    }
+};
+
+bool AST::parse(const Vector<Token>& tokens) noexcept
+{
+    this->_logger->trace("Parsing tokens");
+
+    Parser parser(tokens, this->_nodes, this->_logger);
+
+    this->_root = parser.arena.emplace<ModuleNode>();
+
+    while(!parser.at_end())
+    {
+        parser.skip_newlines();
+
+        if(parser.at_end())
+            break;
+
+        Node* stmt = parser.parse_statement();
+
+        if(stmt == nullptr)
+            return false;
+
+        this->_root->body.push_back(stmt);
+    }
+
+    this->_logger->trace("Parsing successful");
+
     return true;
 }
 
@@ -666,25 +1927,41 @@ bool AST::from_text(const stdromano::StringD& buffer, const bool debug) noexcept
 {
     this->_nodes.clear();
 
-    this->_logger->trace("Parsing text");
-
     Vector<Token> tokens;
 
-    if(!lex(buffer.c_str(), tokens))
+    if(!this->lex(buffer.c_str(), tokens))
         return false;
 
     if(debug)
     {
         this->_logger->debug("{0:*^{1}}", "", 50);
-        this->_logger->debug("Tokens ({})", tokens.size());
+        this->_logger->debug("LEX: Tokens ({})", tokens.size());
 
         for(const auto token : tokens)
-            this->_logger->debug("{} ({}:{})", token.value, token.column, token.line);
+            this->_logger->debug("{} \"{}\" ({}:{})",
+                                 token_kind_as_string(token.kind),
+                                 token.value,
+                                 token.line,
+                                 token.column);
 
         this->_logger->debug("{0:*^{1}}", "", 50);
     }
 
-    this->_logger->trace("Parse successful");
+    if(!this->parse(tokens))
+        return false;
+
+    if(debug)
+    {
+        this->_logger->debug("{0:*^{1}}", "", 50);
+        this->_logger->debug("AST");
+
+        visit(this->_root, [&](Node* node, std::uint32_t depth) -> bool {
+            this->_logger->debug("{0: ^{1}}{2}", "", depth * 2, node->type_str());
+            return true;
+        });
+
+        this->_logger->debug("{0:*^{1}}", "", 50);
+    }
 
     return true;
 }

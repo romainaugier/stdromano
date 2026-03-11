@@ -11,7 +11,6 @@
 #include "stdromano/vector.hpp"
 
 #include "spdlog/spdlog.h"
-#include "spdlog/sinks/stdout_color_sinks.h"
 
 STDROMANO_NAMESPACE_BEGIN
 
@@ -25,6 +24,38 @@ STDROMANO_NAMESPACE_BEGIN
 //   - https://docs.python.org/3/library/ast.html
 
 PYTHON_NAMESPACE_BEGIN
+
+// Lexer Token
+
+struct Token
+{
+    enum Kind : std::uint32_t
+    {
+        Identifier = 0,
+        Keyword = 1,
+        Literal = 2,
+        Operator = 3,
+        Delimiter = 4,
+        Newline = 5,
+        Indent = 6,
+        Dedent = 7,
+    };
+
+    StringD value;
+
+    Kind kind;
+
+    std::uint32_t type;
+
+    std::uint32_t column;
+    std::uint32_t line;
+
+    Token(StringD value, Kind kind, std::uint32_t type, std::uint32_t column, std::uint32_t line) : value(std::move(value)),
+                                                                                                    kind(kind),
+                                                                                                    type(type),
+                                                                                                    column(column),
+                                                                                                    line(line) {}
+};
 
 enum Keyword : std::uint32_t
 {
@@ -59,10 +90,10 @@ enum Keyword : std::uint32_t
     Not = 28,
     With = 29,
     Async = 30,
-    Elif = 30,
-    If = 31,
-    Or = 32,
-    Yield = 33
+    Elif = 31,
+    If = 32,
+    Or = 33,
+    Yield = 34,
 };
 
 enum Delimiter : std::uint32_t
@@ -78,7 +109,7 @@ enum Delimiter : std::uint32_t
     Dot = 9,
     Semicolon = 10,
     At = 11,
-    RightArrow = 12
+    RightArrow = 12,
 };
 
 enum Operator : std::uint32_t
@@ -121,7 +152,7 @@ enum Operator : std::uint32_t
     IdentityIs = 36,
     IdentityIsNot = 37,
     MembershipIn = 38,
-    MembershipNotIn = 39
+    MembershipNotIn = 39,
 };
 
 enum Literal : std::uint32_t
@@ -135,27 +166,578 @@ enum Literal : std::uint32_t
     Float = 7
 };
 
+// AST Node
+
+enum NodeType : std::uint32_t
+{
+    NodeModule = 0,
+    NodeFunctionDef,
+    NodeClassDef,
+    NodeReturn,
+    NodeAssign,
+    NodeAugAssign,
+    NodeFor,
+    NodeWhile,
+    NodeIf,
+    NodeImport,
+    NodeImportFrom,
+    NodeExpr,
+    NodePass,
+    NodeBreak,
+    NodeContinue,
+    NodeRaise,
+    NodeBinOp,
+    NodeUnaryOp,
+    NodeBoolOp,
+    NodeCompare,
+    NodeCall,
+    NodeName,
+    NodeConstant,
+    NodeAttribute,
+    NodeSubscript,
+    NodeList,
+    NodeTuple,
+    NodeDict,
+    NodeLambda,
+    NodeCount,
+};
+
+struct Node
+{
+    std::uint32_t _type;
+    std::uint32_t _line;
+    std::uint32_t _column;
+
+    Node(std::uint32_t type, std::uint32_t line, std::uint32_t column) : _type(type),
+                                                                         _line(line),
+                                                                         _column(column) {}
+
+    std::uint32_t type() const noexcept { return _type; }
+    std::uint32_t line() const noexcept { return _line; }
+    std::uint32_t column() const noexcept { return _column; }
+
+    virtual const char* type_str() const noexcept { return "Node"; }
+};
+
+struct ModuleNode : Node
+{
+    Vector<Node*> body;
+
+    ModuleNode() : Node(NodeModule, 0, 0) {}
+
+    virtual const char* type_str() const noexcept override { return "MODULE"; }
+};
+
+struct FunctionDefNode : Node
+{
+    StringD name;
+    Vector<Node*> args;
+    Vector<Node*> body;
+    Node* return_annotation;
+
+    FunctionDefNode(StringD name, std::uint32_t line, std::uint32_t column) : Node(NodeFunctionDef, line, column),
+                                                                              name(std::move(name)),
+                                                                              return_annotation(nullptr) {}
+
+    virtual const char* type_str() const noexcept override { return "FUNCDEF"; }
+};
+
+struct ClassDefNode : Node
+{
+    StringD name;
+    Vector<Node*> bases;
+    Vector<Node*> body;
+
+    ClassDefNode(StringD name, std::uint32_t line, std::uint32_t column) : Node(NodeClassDef, line, column),
+                                                                           name(std::move(name)) {}
+
+    virtual const char* type_str() const noexcept override { return "CLASSDEF"; }
+};
+
+struct ReturnNode : Node
+{
+    Node* value;
+
+    ReturnNode(Node* value, std::uint32_t line, std::uint32_t column) : Node(NodeReturn, line, column),
+                                                                        value(value) {}
+
+    virtual const char* type_str() const noexcept override { return "RETURN"; }
+};
+
+struct AssignNode : Node
+{
+    Vector<Node*> targets;
+    Node* value;
+
+    AssignNode(Node* value, std::uint32_t line, std::uint32_t column) : Node(NodeAssign, line, column),
+                                                                        value(value) {}
+
+    virtual const char* type_str() const noexcept override { return "ASSIGN"; };
+};
+
+struct AugAssignNode : Node
+{
+    Node* target;
+    Operator op;
+    Node* value;
+
+    AugAssignNode(Node* target, Operator op, Node* value, std::uint32_t line, std::uint32_t column) : Node(NodeAugAssign, line, column),
+                                                                                                      target(target),
+                                                                                                      op(op),
+                                                                                                      value(value) {}
+
+    virtual const char* type_str() const noexcept override { return "AUGASSIGN"; }
+};
+
+struct ForNode : Node
+{
+    Node* target;
+    Node* iter;
+    Vector<Node*> body;
+    Vector<Node*> orelse;
+
+    ForNode(Node* target, Node* iter, std::uint32_t line, std::uint32_t column) : Node(NodeFor, line, column),
+                                                                                  target(target),
+                                                                                  iter(iter) {}
+
+    virtual const char* type_str() const noexcept override { return "FOR"; }
+};
+
+struct WhileNode : Node
+{
+    Node* test;
+    Vector<Node*> body;
+    Vector<Node*> orelse;
+
+    WhileNode(Node* test, std::uint32_t line, std::uint32_t column) : Node(NodeWhile, line, column),
+                                                                      test(test) {}
+
+    virtual const char* type_str() const noexcept override { return "WHILE"; }
+};
+
+struct IfNode : Node
+{
+    Node* test;
+    Vector<Node*> body;
+    Vector<Node*> orelse;
+
+    IfNode(Node* test, std::uint32_t line, std::uint32_t column) : Node(NodeIf, line, column),
+                                                                   test(test) {}
+
+    virtual const char* type_str() const noexcept override { return "IF"; }
+};
+
+struct ImportNode : Node
+{
+    Vector<StringD> names;
+    Vector<StringD> aliases;
+
+    ImportNode(std::uint32_t line, std::uint32_t column) : Node(NodeImport, line, column) {}
+
+    virtual const char* type_str() const noexcept override { return "IMPORT"; }
+};
+
+struct ImportFromNode : Node
+{
+    StringD module;
+    Vector<StringD> names;
+    Vector<StringD> aliases;
+
+    ImportFromNode(StringD module, std::uint32_t line, std::uint32_t column) : Node(NodeImportFrom, line, column),
+                                                                               module(std::move(module)) {}
+
+    virtual const char* type_str() const noexcept override { return "IMPORT FROM"; }
+};
+
+struct ExprNode : Node
+{
+    Node* value;
+
+    ExprNode(Node* value, std::uint32_t line, std::uint32_t column) : Node(NodeExpr, line, column),
+                                                                      value(value) {}
+
+    virtual const char* type_str() const noexcept override { return "EXPR"; }
+};
+
+struct PassNode : Node
+{
+    PassNode(std::uint32_t line, std::uint32_t column) : Node(NodePass, line, column) {}
+
+    virtual const char* type_str() const noexcept override { return "PASS"; }
+};
+
+struct BreakNode : Node
+{
+    BreakNode(std::uint32_t line, std::uint32_t column) : Node(NodeBreak, line, column) {}
+
+    virtual const char* type_str() const noexcept override { return "BREAK"; }
+};
+
+struct ContinueNode : Node
+{
+    ContinueNode(std::uint32_t line, std::uint32_t column) : Node(NodeContinue, line, column) {}
+
+    virtual const char* type_str() const noexcept override { return "CONTINUE"; }
+};
+
+struct RaiseNode : Node
+{
+    Node* exc;
+
+    RaiseNode(Node* exc, std::uint32_t line, std::uint32_t column) : Node(NodeRaise, line, column),
+                                                                     exc(exc) {}
+
+    virtual const char* type_str() const noexcept override { return "RAISE"; }
+};
+
+struct BinOpNode : Node
+{
+    Node* left;
+    Operator op;
+    Node* right;
+
+    BinOpNode(Node* left, Operator op, Node* right, std::uint32_t line, std::uint32_t column) : Node(NodeBinOp, line, column),
+                                                                                                left(left),
+                                                                                                op(op),
+                                                                                                right(right) {}
+
+    virtual const char* type_str() const noexcept override { return "BINOP"; }
+};
+
+struct UnaryOpNode : Node
+{
+    Operator op;
+    Node* operand;
+
+    UnaryOpNode(Operator op, Node* operand, std::uint32_t line, std::uint32_t column) : Node(NodeUnaryOp, line, column),
+                                                                                        op(op),
+                                                                                        operand(operand) {}
+
+    virtual const char* type_str() const noexcept override { return "UNOP"; }
+};
+
+struct BoolOpNode : Node
+{
+    Operator op;
+    Vector<Node*> values;
+
+    BoolOpNode(Operator op, std::uint32_t line, std::uint32_t column) : Node(NodeBoolOp, line, column),
+                                                                        op(op) {}
+
+    virtual const char* type_str() const noexcept override { return "BOOLOP"; }
+};
+
+struct CompareNode : Node
+{
+    Node* left;
+    Vector<Operator> ops;
+    Vector<Node*> comparators;
+
+    CompareNode(Node* left, std::uint32_t line, std::uint32_t column) : Node(NodeCompare, line, column),
+                                                                        left(left) {}
+
+    virtual const char* type_str() const noexcept override { return "COMPARE"; }
+};
+
+struct CallNode : Node
+{
+    Node* func;
+    Vector<Node*> args;
+
+    CallNode(Node* func, std::uint32_t line, std::uint32_t column) : Node(NodeCall, line, column),
+                                                                     func(func) {}
+
+    virtual const char* type_str() const noexcept override { return "CALL"; }
+};
+
+struct NameNode : Node
+{
+    StringD id;
+
+    NameNode(StringD id, std::uint32_t line, std::uint32_t column) : Node(NodeName, line, column),
+                                                                     id(std::move(id)) {}
+
+    virtual const char* type_str() const noexcept override { return "NAME"; }
+};
+
+struct ConstantNode : Node
+{
+    StringD raw;
+    Literal literal_type;
+
+    ConstantNode(StringD raw, Literal literal_type, std::uint32_t line, std::uint32_t column) : Node(NodeConstant, line, column),
+                                                                                                raw(std::move(raw)),
+                                                                                                literal_type(literal_type) {}
+
+    virtual const char* type_str() const noexcept override { return "CONSTANT"; }
+};
+
+struct AttributeNode : Node
+{
+    Node* value;
+    StringD attr;
+
+    AttributeNode(Node* value, StringD attr, std::uint32_t line, std::uint32_t column) : Node(NodeAttribute, line, column),
+                                                                                         value(value),
+                                                                                         attr(std::move(attr)) {}
+
+    virtual const char* type_str() const noexcept override { return "ATTRIBUTE"; }
+};
+
+struct SubscriptNode : Node
+{
+    Node* value;
+    Node* slice;
+
+    SubscriptNode(Node* value, Node* slice, std::uint32_t line, std::uint32_t column) : Node(NodeSubscript, line, column),
+                                                                                        value(value),
+                                                                                        slice(slice) {}
+
+    virtual const char* type_str() const noexcept override { return "SUBSCRIPT"; }
+};
+
+struct ListNode : Node
+{
+    Vector<Node*> elts;
+
+    ListNode(std::uint32_t line, std::uint32_t column) : Node(NodeList, line, column) {}
+
+    virtual const char* type_str() const noexcept override { return "LIST"; }
+};
+
+struct TupleNode : Node
+{
+    Vector<Node*> elts;
+
+    TupleNode(std::uint32_t line, std::uint32_t column) : Node(NodeTuple, line, column) {}
+
+    virtual const char* type_str() const noexcept override { return "TUPLE"; }
+};
+
+struct DictNode : Node
+{
+    Vector<Node*> keys;
+    Vector<Node*> values;
+
+    DictNode(std::uint32_t line, std::uint32_t column) : Node(NodeDict, line, column) {}
+
+    virtual const char* type_str() const noexcept override { return "DICT"; }
+};
+
+struct LambdaNode : Node
+{
+    Vector<Node*> args;
+    Node* body;
+
+    LambdaNode(Node* body, std::uint32_t line, std::uint32_t column) : Node(NodeLambda, line, column),
+                                                                       body(body) {}
+
+    virtual const char* type_str() const noexcept override { return "LAMBDA"; }
+};
+
+// Visitor
+
+// Collects the immediate children of a node into a flat vector.
+// Used by the generic visitor to recurse automatically.
+inline void node_children(Node* node, Vector<Node*>& out) noexcept
+{
+    if(node == nullptr)
+        return;
+
+    switch(node->type())
+    {
+        case NodeModule:
+        {
+            auto* n = static_cast<ModuleNode*>(node);
+            for(auto* c : n->body) out.push_back(c);
+            break;
+        }
+        case NodeFunctionDef:
+        {
+            auto* n = static_cast<FunctionDefNode*>(node);
+            for(auto* c : n->args) out.push_back(c);
+            for(auto* c : n->body) out.push_back(c);
+            if(n->return_annotation) out.push_back(n->return_annotation);
+            break;
+        }
+        case NodeClassDef:
+        {
+            auto* n = static_cast<ClassDefNode*>(node);
+            for(auto* c : n->bases) out.push_back(c);
+            for(auto* c : n->body) out.push_back(c);
+            break;
+        }
+        case NodeReturn:
+        {
+            auto* n = static_cast<ReturnNode*>(node);
+            if(n->value) out.push_back(n->value);
+            break;
+        }
+        case NodeAssign:
+        {
+            auto* n = static_cast<AssignNode*>(node);
+            for(auto* c : n->targets) out.push_back(c);
+            if(n->value) out.push_back(n->value);
+            break;
+        }
+        case NodeAugAssign:
+        {
+            auto* n = static_cast<AugAssignNode*>(node);
+            if(n->target) out.push_back(n->target);
+            if(n->value) out.push_back(n->value);
+            break;
+        }
+        case NodeFor:
+        {
+            auto* n = static_cast<ForNode*>(node);
+            if(n->target) out.push_back(n->target);
+            if(n->iter) out.push_back(n->iter);
+            for(auto* c : n->body) out.push_back(c);
+            for(auto* c : n->orelse) out.push_back(c);
+            break;
+        }
+        case NodeWhile:
+        {
+            auto* n = static_cast<WhileNode*>(node);
+            if(n->test) out.push_back(n->test);
+            for(auto* c : n->body) out.push_back(c);
+            for(auto* c : n->orelse) out.push_back(c);
+            break;
+        }
+        case NodeIf:
+        {
+            auto* n = static_cast<IfNode*>(node);
+            if(n->test) out.push_back(n->test);
+            for(auto* c : n->body) out.push_back(c);
+            for(auto* c : n->orelse) out.push_back(c);
+            break;
+        }
+        case NodeExpr:
+        {
+            auto* n = static_cast<ExprNode*>(node);
+            if(n->value) out.push_back(n->value);
+            break;
+        }
+        case NodeRaise:
+        {
+            auto* n = static_cast<RaiseNode*>(node);
+            if(n->exc) out.push_back(n->exc);
+            break;
+        }
+        case NodeBinOp:
+        {
+            auto* n = static_cast<BinOpNode*>(node);
+            if(n->left) out.push_back(n->left);
+            if(n->right) out.push_back(n->right);
+            break;
+        }
+        case NodeUnaryOp:
+        {
+            auto* n = static_cast<UnaryOpNode*>(node);
+            if(n->operand) out.push_back(n->operand);
+            break;
+        }
+        case NodeBoolOp:
+        {
+            auto* n = static_cast<BoolOpNode*>(node);
+            for(auto* c : n->values) out.push_back(c);
+            break;
+        }
+        case NodeCompare:
+        {
+            auto* n = static_cast<CompareNode*>(node);
+            if(n->left) out.push_back(n->left);
+            for(auto* c : n->comparators) out.push_back(c);
+            break;
+        }
+        case NodeCall:
+        {
+            auto* n = static_cast<CallNode*>(node);
+            if(n->func) out.push_back(n->func);
+            for(auto* c : n->args) out.push_back(c);
+            break;
+        }
+        case NodeAttribute:
+        {
+            auto* n = static_cast<AttributeNode*>(node);
+            if(n->value) out.push_back(n->value);
+            break;
+        }
+        case NodeSubscript:
+        {
+            auto* n = static_cast<SubscriptNode*>(node);
+            if(n->value) out.push_back(n->value);
+            if(n->slice) out.push_back(n->slice);
+            break;
+        }
+        case NodeList:
+        {
+            auto* n = static_cast<ListNode*>(node);
+            for(auto* c : n->elts) out.push_back(c);
+            break;
+        }
+        case NodeTuple:
+        {
+            auto* n = static_cast<TupleNode*>(node);
+            for(auto* c : n->elts) out.push_back(c);
+            break;
+        }
+        case NodeDict:
+        {
+            auto* n = static_cast<DictNode*>(node);
+            for(auto* c : n->keys) out.push_back(c);
+            for(auto* c : n->values) out.push_back(c);
+            break;
+        }
+        case NodeLambda:
+        {
+            auto* n = static_cast<LambdaNode*>(node);
+            for(auto* c : n->args) out.push_back(c);
+            if(n->body) out.push_back(n->body);
+            break;
+        }
+        default:
+            break;
+    }
+}
+
+// Visit all nodes depth-first. The visitor callable receives Node* and returns
+// true to recurse into children, false to skip them.
+template<typename F>
+void visit(Node* node, F&& visitor, std::uint32_t depth = 0) noexcept
+{
+    if(node == nullptr)
+        return;
+
+    if(!visitor(node, depth))
+        return;
+
+    Vector<Node*> children;
+
+    node_children(node, children);
+
+    for(auto* child : children)
+        visit(child, visitor, depth + 1);
+}
+
 class STDROMANO_API AST
 {
     Arena _nodes;
 
+    ModuleNode* _root;
+
     std::shared_ptr<spdlog::logger> _logger = nullptr;
 
+    bool lex(const char* buffer, Vector<Token>& tokens) noexcept;
+
+    bool parse(const Vector<Token>& tokens) noexcept;
+
 public:
-    AST(std::shared_ptr<spdlog::logger> logger = nullptr) : _logger(logger)
-    {
-        if(this->_logger == nullptr)
-        {
-            auto console_sink = std::make_shared<spdlog::sinks::stdout_color_sink_mt>();
-            console_sink->set_pattern("[%T] [%^%l%$] [python] %v");
+    AST(std::shared_ptr<spdlog::logger> logger = nullptr) : _root(nullptr),
+                                                            _logger(logger == nullptr ? spdlog::default_logger() : logger) {}
 
-            auto py_logger = std::make_shared<spdlog::logger>("python", spdlog::sinks_init_list{ console_sink });
-            py_logger->set_level(spdlog::get_level());
-            spdlog::register_logger(py_logger);
-
-            this->_logger = py_logger;
-        }
-    }
+    ModuleNode* root() noexcept { return this->_root; }
+    const ModuleNode* root() const noexcept { return this->_root; }
 
     bool from_text(const stdromano::StringD& buffer, const bool debug = false) noexcept;
 };
