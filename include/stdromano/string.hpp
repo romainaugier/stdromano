@@ -13,6 +13,9 @@
 
 #include "spdlog/fmt/fmt.h"
 
+#include <iterator>
+#include <functional>
+
 STDROMANO_NAMESPACE_BEGIN
 
 // Simple utf-8 iterator
@@ -1501,6 +1504,28 @@ using String1024 = String<1024>;
 using String260 = String<260>;
 using String128 = String<128>;
 using String32 = String<32>;
+
+// Join function to join container types as a string
+template<typename Container>
+StringD join(const Container& container,
+             std::function<StringD(const typename Container::value_type)>&& f,
+             const char* sep = ",") noexcept
+{
+    StringD res;
+    bool first = true;
+
+    for(const auto element : container)
+    {
+        if(first)
+            first = false;
+        else
+            res.appendc(sep);
+
+        res.appends(f(element));
+    }
+
+    return res;
+}
 
 #if defined(STDROMANO_WIN)
 STDROMANO_EXPIMP_TEMPLATE template class STDROMANO_API String<>;
