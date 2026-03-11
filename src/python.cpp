@@ -4,6 +4,9 @@
 
 #include "stdromano/hashmap.hpp"
 #include "stdromano/python.hpp"
+#include "stdromano/stackvector.hpp"
+
+#include <algorithm>
 
 STDROMANO_NAMESPACE_BEGIN
 
@@ -41,7 +44,7 @@ bool is_identifier_start(unsigned int c) noexcept
 
 bool is_identifier(unsigned int c) noexcept
 {
-    return is_letter(c) | is_digit(c) | c == '_';
+    return is_letter(c) | is_digit(c) | (c == '_');
 }
 
 const HashMap<StringD, Keyword> g_keywords = {
@@ -203,15 +206,11 @@ bool is_assignment_operator(unsigned int c)
 std::uint32_t is_logical_operator(char* c) noexcept
 {
     if(std::strncmp(c, "or", 2) == 0)
-    {
         return 2;
-    }
     else if(std::strncmp(c, "and", 3) == 0 || std::strncmp(c, "not", 3) == 0)
-    {
         return 3;
-    }
-
-    return 0;
+    else
+        return 0;
 }
 
 std::uint32_t is_identity_operator(char* c) noexcept
@@ -254,9 +253,7 @@ std::uint32_t is_operator(char* c) noexcept
     else if(is_unary_operator(*c))
     {
         if(is_assignment_operator(*(c + 1)))
-        {
             return 2;
-        }
 
         return LEX_ERROR;
     }
@@ -267,8 +264,8 @@ std::uint32_t is_operator(char* c) noexcept
 bool is_string_literal_prefix(unsigned int c) noexcept
 {
     return (c == 'r') |
-           (c == 'u') |
            (c == 'R') |
+           (c == 'u') |
            (c == 'U') |
            (c == 'f') |
            (c == 'F');
@@ -304,20 +301,40 @@ std::uint32_t is_string_literal_start(char* c) noexcept
     return 0;
 }
 
-std::uint32_t consume_string_literal(char* c, std::uint32_t& position, std::uint32_t& line) noexcept
+std::uint32_t consume_string_literal(char* c, std::uint32_t& column, std::uint32_t& line) noexcept
 {
     std::uint32_t length = 0;
 
     while(*c != '\0' && (*c != '"' && *c != '\''))
     {
-        position++;
-        c++;
-        length++;
-
-        if(*c == '\n')
+        if(*c == '\r')
         {
-            position = 0;
+            column = 1;
             line++;
+
+            c++;
+            length++;
+
+            // \r\n counts as one newline
+            if(*c == '\n')
+            {
+                c++;
+                length++;
+            }
+        }
+        else if(*c == '\n')
+        {
+            column = 1;
+            line++;
+
+            c++;
+            length++;
+        }
+        else
+        {
+            column++;
+            c++;
+            length++;
         }
     }
 
@@ -362,7 +379,7 @@ bool is_float_literal(unsigned int c) noexcept
     return is_digit(c) | (c == '.');
 }
 
-uint32_t consume_float_literal(char* c) noexcept
+std::uint32_t consume_float_literal(char* c) noexcept
 {
     std::uint32_t length = 0;
 
@@ -394,6 +411,28 @@ uint32_t consume_float_literal(char* c) noexcept
     return found_dot ? length : 0;
 }
 
+bool is_newline(unsigned int c) noexcept
+{
+    return (c == '\n') | (c == '\r');
+}
+
+std::uint32_t consume_new_line(char* c) noexcept
+{
+    if(*c == '\r')
+    {
+        c++;
+
+        if(*c == '\n')
+            return 2;
+    }
+    else if(*c == '\n')
+    {
+        return 1;
+    }
+
+    return LEX_ERROR;
+}
+
 static constexpr std::uint32_t INDENT_SZ_UNDEFINED = std::numeric_limits<std::uint32_t>::max();
 
 bool AST::lex(const char* buffer, Vector<Token>& tokens) noexcept
@@ -403,8 +442,10 @@ bool AST::lex(const char* buffer, Vector<Token>& tokens) noexcept
     char* s = const_cast<char*>(buffer);
 
     std::uint32_t indent_size = INDENT_SZ_UNDEFINED;
-    std::uint32_t indent_level = 0;
-    std::uint32_t position = 1;
+    StackVector<std::uint32_t, 256> indent_stack;
+    indent_stack.push_back(0);
+
+    std::uint32_t column = 1;
     std::uint32_t line = 1;
 
     while(*s != '\0')
@@ -414,23 +455,24 @@ bool AST::lex(const char* buffer, Vector<Token>& tokens) noexcept
         if(string_literal_prefix != 0)
         {
             s += string_literal_prefix;
-            position += string_literal_prefix;
+            column += string_literal_prefix;
 
             char* start = s;
-            std::uint32_t length = consume_string_literal(start, position, line);
-
-            s += length;
+            std::uint32_t length = consume_string_literal(start, column, line);
 
             tokens.emplace_back(StringD::make_ref(start, length),
                                 Token::Kind::Literal,
                                 Literal::String,
-                                position,
+                                column,
                                 line);
+
+            s += length;
+            column += length;
 
             while(*s != '\0' && (*s == '"' || *s == '\''))
             {
                 s++;
-                position++;
+                column++;
             }
         }
         else if(is_numeric_literal_start(*s))
@@ -443,11 +485,12 @@ bool AST::lex(const char* buffer, Vector<Token>& tokens) noexcept
                 tokens.emplace_back(StringD::make_ref(start, length),
                                     Token::Kind::Literal,
                                     Literal::Float,
-                                    position,
+                                    column,
                                     line);
 
                 s += length;
-                position += length;
+                column += length;
+
                 continue;
             }
 
@@ -458,11 +501,12 @@ bool AST::lex(const char* buffer, Vector<Token>& tokens) noexcept
                 tokens.emplace_back(StringD::make_ref(start, length),
                                     Token::Kind::Literal,
                                     Literal::Integer,
-                                    position,
+                                    column,
                                     line);
 
                 s += length;
-                position += length;
+                column += length;
+
                 continue;
             }
         }
@@ -472,15 +516,12 @@ bool AST::lex(const char* buffer, Vector<Token>& tokens) noexcept
             std::uint32_t length = 1;
 
             s++;
-            position++;
 
             while(*s != '\0' && is_identifier(*s))
             {
                 s++;
                 length++;
             }
-
-            position += length;
 
             StringD identifier = std::move(StringD::make_from_c_str(start, length));
 
@@ -491,10 +532,10 @@ bool AST::lex(const char* buffer, Vector<Token>& tokens) noexcept
                 tokens.emplace_back(identifier,
                                     Token::Kind::Keyword,
                                     keyword_it->second,
-                                    position - length,
+                                    column,
                                     line);
                 s++;
-                position++;
+                column += length;
                 continue;
             }
 
@@ -505,18 +546,20 @@ bool AST::lex(const char* buffer, Vector<Token>& tokens) noexcept
                 tokens.emplace_back(identifier,
                                     Token::Kind::Operator,
                                     operator_it->second,
-                                    position - length,
+                                    column,
                                     line);
                 s++;
-                position++;
+                column += length;
                 continue;
             }
 
             tokens.emplace_back(identifier,
                                 Token::Kind::Identifier,
                                 0,
-                                position - length,
+                                column,
                                 line);
+
+            column += length;
         }
         else if(is_delimiter(*s))
         {
@@ -524,7 +567,6 @@ bool AST::lex(const char* buffer, Vector<Token>& tokens) noexcept
             std::uint32_t length = 1;
 
             s++;
-            position++;
 
             if(*start == '-')
             {
@@ -535,8 +577,6 @@ bool AST::lex(const char* buffer, Vector<Token>& tokens) noexcept
                 }
             }
 
-            position += length;
-
             StringD delimiter = std::move(StringD::make_ref(start, length));
 
             auto delimiter_it = g_delimiters.find(delimiter);
@@ -544,14 +584,13 @@ bool AST::lex(const char* buffer, Vector<Token>& tokens) noexcept
             if(delimiter_it == g_delimiters.end())
             {
                 s -= length;
-                position -= length;
                 goto is_operator;
             }
 
             tokens.emplace_back(delimiter,
                                 Token::Kind::Delimiter,
                                 delimiter_it->second,
-                                position,
+                                column,
                                 line);
         }
         else if(is_operator_start(*s))
@@ -562,7 +601,6 @@ bool AST::lex(const char* buffer, Vector<Token>& tokens) noexcept
 
             if(length > 0)
             {
-                position += length;
                 StringD op = std::move(StringD::make_ref(start, length));
 
                 auto operator_it = g_operators.find(op);
@@ -570,40 +608,43 @@ bool AST::lex(const char* buffer, Vector<Token>& tokens) noexcept
                 if(operator_it == g_operators.end() || length == LEX_ERROR)
                 {
                     this->_logger->error("Syntax: Invalid operator {}", op);
-                    this->_logger->error("Line {}, Position {}", line, position);
+                    this->_logger->error("Line {}, Position {}", line, column);
                     return false;
                 }
 
                 tokens.emplace_back(op,
                                     Token::Kind::Operator,
                                     operator_it->second,
-                                    position,
+                                    column,
                                     line);
 
                 s += length;
+                column += length;
+
                 continue;
             }
         }
-        else if(*s == '\n')
+        else if(is_newline(*s))
         {
             tokens.emplace_back(StringD(),
                                 Token::Kind::Newline,
                                 0,
-                                position,
+                                column,
                                 line);
-            s++;
+
+            s += consume_new_line(s);
 
             line++;
-            position = 0;
+            column = 1;
 
-            while(*s != '\0' && *s == '\n')
+            while(*s != '\0' && is_newline(*s))
             {
                 tokens.emplace_back(StringD(),
                                     Token::Kind::Newline,
                                     0,
-                                    position,
+                                    column,
                                     line);
-                s++;
+                s += consume_new_line(s);
                 line++;
             }
 
@@ -613,44 +654,68 @@ bool AST::lex(const char* buffer, Vector<Token>& tokens) noexcept
             {
                 line_indent++;
                 s++;
-                position++;
+            }
+
+            if(*s == '\0' || is_newline(*s))
+            {
+                column = 1;
+                continue;
             }
 
             if(indent_size == INDENT_SZ_UNDEFINED || indent_size == 0)
             {
                 indent_size = line_indent;
             }
-            // else if(indent_size != 0 && line_indent % indent_size != 0)
-            // {
-            //     log_error("Indent Error: Inconsistent indent size {} (Found indent size is {})", line_indent, indent_size);
-            //     log_error("Line {}, Position {}", line, position);
-            //     return false;
-            // }
 
-            if(line_indent > indent_level)
+            if(line_indent > indent_stack.back())
             {
+                indent_stack.push_back(line_indent);
+
                 tokens.emplace_back(StringD(),
                                     Token::Kind::Indent,
                                     line_indent,
-                                    position,
+                                    column,
                                     line);
             }
-            else if(line_indent < indent_level)
+            else if(line_indent < indent_stack.back())
             {
-                tokens.emplace_back(StringD(),
-                                    Token::Kind::Dedent,
-                                    line_indent,
-                                    position,
-                                    line);
+                while(indent_stack.size() > 1 && indent_stack.back() > line_indent)
+                {
+                    indent_stack.pop_back();
+
+                    tokens.emplace_back(StringD(),
+                                        Token::Kind::Dedent,
+                                        line_indent,
+                                        column,
+                                        line);
+                }
+
+                if(indent_stack.back() != line_indent)
+                {
+                    this->_logger->error("IndentationError: unindent does not match any outer indentation level");
+                    this->_logger->error("Line {}, Column {}", line, column);
+                    return false;
+                }
             }
 
-            indent_level = line_indent;
+            column = line_indent + 1;
         }
         else
         {
             s++;
-            position++;
+            column++;
         }
+    }
+
+    while(indent_stack.size() > 1)
+    {
+        indent_stack.pop_back();
+
+        tokens.emplace_back(StringD(),
+                            Token::Kind::Dedent,
+                            indent_stack.back(),
+                            column,
+                            line);
     }
 
     this->_logger->trace("Lex successful");
@@ -665,12 +730,17 @@ struct Parser
     const Vector<Token>& tokens;
     Arena& arena;
     std::shared_ptr<spdlog::logger>& logger;
+    const StringD& source_code;
     std::uint32_t pos;
 
-    Parser(const Vector<Token>& tokens, Arena& arena, std::shared_ptr<spdlog::logger>& logger) : tokens(tokens),
-                                                                                                 arena(arena),
-                                                                                                 logger(logger),
-                                                                                                 pos(0) {}
+    Parser(const Vector<Token>& tokens,
+           Arena& arena,
+           std::shared_ptr<spdlog::logger>& logger,
+           const StringD& source_code) : tokens(tokens),
+                                         arena(arena),
+                                         logger(logger),
+                                         source_code(source_code),
+                                         pos(0) {}
 
     bool at_end() const noexcept { return pos >= tokens.size(); }
 
@@ -679,6 +749,35 @@ struct Parser
     const Token& peek(std::uint32_t offset = 1) const noexcept { return tokens[pos + offset]; }
 
     void advance() noexcept { pos++; }
+
+    template<typename... Args>
+    void error(std::uint32_t line, std::uint32_t column, std::uint32_t size, fmt::format_string<Args...> fmt, Args&&... args) const noexcept
+    {
+        const char* p = this->source_code.data();
+        std::uint32_t current_line = 1;
+
+        while(*p != '\0' && current_line < line)
+        {
+            if(*p == '\n')
+                current_line++;
+
+            p++;
+        }
+
+        const char* line_start = p;
+        const char* line_end = p;
+
+        while(*line_end != '\0' && *line_end != '\n')
+            line_end++;
+
+        std::uint32_t line_sz = static_cast<std::uint32_t>(line_end - line_start);
+
+        const StringD gutter = StringD::make_fmt("{} | ", line);
+
+        this->logger->error(fmt, std::forward<Args>(args)...);
+        this->logger->error("{}{}", gutter, fmt::string_view(line_start, line_sz));
+        this->logger->error("{0: ^{1}}^{0:~^{2}}", "", gutter.size() + column - 1, std::max(size, 1u) - 1);
+    }
 
     void skip_newlines() noexcept
     {
@@ -715,10 +814,11 @@ struct Parser
     {
         if(!this->match_keyword(kw))
         {
-            this->logger->error("Expected keyword, got \"{}\" ({}:{})",
-                                this->current().value,
-                                this->current().line,
-                                this->current().column);
+            this->error(this->current().line,
+                        this->current().column,
+                        this->current().value.size(),
+                        "Expected keyword, got \"{}\"",
+                        this->current().value);
 
             return false;
         }
@@ -732,10 +832,11 @@ struct Parser
     {
         if(!match_delimiter(d))
         {
-            this->logger->error("Expected delimiter, got \"{}\" ({}:{})",
-                                this->current().value,
-                                this->current().line,
-                                this->current().column);
+            this->error(this->current().line,
+                        this->current().column,
+                        this->current().value.size(),
+                        "Expected delimiter, got \"{}\"",
+                        this->current().value);
 
             return false;
         }
@@ -749,10 +850,12 @@ struct Parser
     {
         if(!this->check(Token::Kind::Newline) && !this->at_end())
         {
-            this->logger->error("Expected newline, got \"{}\" ({}:{})",
-                                this->current().value,
-                                this->current().line,
-                                this->current().column);
+            this->error(this->current().line,
+                        this->current().column,
+                        this->current().value.size(),
+                        "Expected newline, got \"{}\"",
+                        this->current().value);
+
             return false;
         }
 
@@ -770,7 +873,11 @@ struct Parser
 
         if(!this->check(Token::Kind::Indent))
         {
-            this->logger->error("Expected indented block ({}:{})", this->current().line, this->current().column);
+            this->error(this->current().line,
+                        this->current().column,
+                        this->current().value.size(),
+                        "Expected indented block");
+
             return false;
         }
 
@@ -841,7 +948,11 @@ struct Parser
 
         if(!this->check(Token::Kind::Identifier))
         {
-            this->logger->error("Expected function name ({}:{})", this->current().line, this->current().column);
+            this->error(this->current().line,
+                        this->current().column,
+                        this->current().value.size(),
+                        "Expected function name");
+
             return nullptr;
         }
 
@@ -900,7 +1011,11 @@ struct Parser
 
         if(!this->check(Token::Kind::Identifier))
         {
-            logger->error("Expected class name ({}:{})", this->current().line, this->current().column);
+            this->error(this->current().line,
+                        this->current().column,
+                        this->current().value.size(),
+                        "Expected class name");
+
             return nullptr;
         }
 
@@ -1151,7 +1266,11 @@ struct Parser
         {
             if(!this->check(Token::Kind::Identifier))
             {
-                logger->error("Expected module name ({}:{})", this->current().line, this->current().column);
+                this->error(this->current().line,
+                            this->current().column,
+                            this->current().value.size(),
+                            "Expected module name");
+
                 return nullptr;
             }
 
@@ -1165,7 +1284,11 @@ struct Parser
 
                 if(!this->check(Token::Kind::Identifier))
                 {
-                    this->logger->error("Expected name after dot ({}:{})", this->current().line, this->current().column);
+                    this->error(this->current().line,
+                                this->current().column,
+                                this->current().value.size(),
+                                "Expected name after .");
+
                     return nullptr;
                 }
 
@@ -1184,7 +1307,11 @@ struct Parser
 
                 if(!this->check(Token::Kind::Identifier))
                 {
-                    this->logger->error("Expected alias ({}:{})", this->current().line, this->current().column);
+                    this->error(this->current().line,
+                                this->current().column,
+                                this->current().value.size(),
+                                "Expected alias");
+
                     return nullptr;
                 }
 
@@ -1208,7 +1335,11 @@ struct Parser
 
         if(!this->check(Token::Kind::Identifier))
         {
-            this->logger->error("Expected module name ({}:{})", this->current().line, this->current().column);
+            this->error(this->current().line,
+                        this->current().column,
+                        this->current().value.size(),
+                        "Expected module name");
+
             return nullptr;
         }
 
@@ -1224,7 +1355,11 @@ struct Parser
         {
             if(!this->check(Token::Kind::Identifier))
             {
-                this->logger->error("Expected name ({}:{})", this->current().line, this->current().column);
+                this->error(this->current().line,
+                            this->current().column,
+                            this->current().value.size(),
+                            "Expected name");
+
                 return nullptr;
             }
 
@@ -1239,7 +1374,11 @@ struct Parser
 
                 if(!this->check(Token::Kind::Identifier))
                 {
-                    this->logger->error("Expected alias ({}:{})", this->current().line, this->current().column);
+                    this->error(this->current().line,
+                                this->current().column,
+                                this->current().value.size(),
+                                "Expected alias");
+
                     return nullptr;
                 }
 
@@ -1699,7 +1838,11 @@ struct Parser
 
                 if(!this->check(Token::Kind::Identifier))
                 {
-                    this->logger->error("Expected attribute name ({}:{})", this->current().line, this->current().column);
+                    this->error(this->current().line,
+                                this->current().column,
+                                this->current().value.size(),
+                                "Expected attribute name");
+
                     return nullptr;
                 }
 
@@ -1723,6 +1866,10 @@ struct Parser
     {
         if(this->at_end())
         {
+            this->error((this->tokens.end() - 1)->line,
+                        (this->tokens.end() - 1)->column,
+                        (this->tokens.end() - 1)->value.size(),
+                        "Expected attribute name");
             this->logger->error("Unexpected end of input");
             return nullptr;
         }
@@ -1885,20 +2032,21 @@ struct Parser
             return node;
         }
 
-        this->logger->error("Unexpected token \"{}\" ({}:{})",
-                            this->current().value,
-                            this->current().line,
-                            this->current().column);
+        this->error(this->current().line,
+                    this->current().column,
+                    this->current().value.size(),
+                    "Unexpected token \"{}\"",
+                    this->current().value);
 
         return nullptr;
     }
 };
 
-bool AST::parse(const Vector<Token>& tokens) noexcept
+bool AST::parse(const StringD& source_code, const Vector<Token>& tokens) noexcept
 {
     this->_logger->trace("Parsing tokens");
 
-    Parser parser(tokens, this->_nodes, this->_logger);
+    Parser parser(tokens, this->_nodes, this->_logger, source_code);
 
     this->_root = parser.arena.emplace<ModuleNode>();
 
@@ -1923,13 +2071,13 @@ bool AST::parse(const Vector<Token>& tokens) noexcept
 }
 
 //
-bool AST::from_text(const stdromano::StringD& buffer, const bool debug) noexcept
+bool AST::from_text(const StringD& source_code, const bool debug) noexcept
 {
     this->_nodes.clear();
 
     Vector<Token> tokens;
 
-    if(!this->lex(buffer.c_str(), tokens))
+    if(!this->lex(source_code.c_str(), tokens))
         return false;
 
     if(debug)
@@ -1947,7 +2095,7 @@ bool AST::from_text(const stdromano::StringD& buffer, const bool debug) noexcept
         this->_logger->debug("{0:*^{1}}", "", 50);
     }
 
-    if(!this->parse(tokens))
+    if(!this->parse(source_code, tokens))
         return false;
 
     if(debug)

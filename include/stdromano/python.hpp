@@ -882,7 +882,7 @@ class STDROMANO_API AST
 
     bool lex(const char* buffer, Vector<Token>& tokens) noexcept;
 
-    bool parse(const Vector<Token>& tokens) noexcept;
+    bool parse(const StringD& source_code, const Vector<Token>& tokens) noexcept;
 
 public:
     AST(std::shared_ptr<spdlog::logger> logger = nullptr) : _root(nullptr),
@@ -891,7 +891,7 @@ public:
     ModuleNode* root() noexcept { return this->_root; }
     const ModuleNode* root() const noexcept { return this->_root; }
 
-    bool from_text(const stdromano::StringD& buffer, const bool debug = false) noexcept;
+    bool from_text(const StringD& buffer, const bool debug = false) noexcept;
 };
 
 PYTHON_NAMESPACE_END

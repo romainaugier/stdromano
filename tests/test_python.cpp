@@ -28,6 +28,16 @@ int main()
     if(!ast.from_text(text, true))
         return 1;
 
+    const char* error_text = "import os\nprint(>>)";
+
+    if(ast.from_text(error_text, true))
+        return 1;
+
+    const char* func_text = "import os\n\ndef func(a, b):\n    print(\"func\")\n\n    return a + b\n\ndef func2(x, y):\n    return x + y";
+
+    if(!ast.from_text(func_text, true))
+        return 1;
+
     spdlog::info("Finished Python test");
 
     return 0;
