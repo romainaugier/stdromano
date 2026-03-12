@@ -168,38 +168,39 @@ enum Literal : std::uint32_t
 
 // AST Node
 
-enum NodeType : std::uint32_t
+enum ASTNodeType : std::uint32_t
 {
-    NodeModule = 0,
-    NodeFunctionDef,
-    NodeClassDef,
-    NodeReturn,
-    NodeAssign,
-    NodeAugAssign,
-    NodeFor,
-    NodeWhile,
-    NodeIf,
-    NodeImport,
-    NodeImportFrom,
-    NodeExpr,
-    NodePass,
-    NodeBreak,
-    NodeContinue,
-    NodeRaise,
-    NodeBinOp,
-    NodeUnaryOp,
-    NodeBoolOp,
-    NodeCompare,
-    NodeCall,
-    NodeName,
-    NodeConstant,
-    NodeAttribute,
-    NodeSubscript,
-    NodeList,
-    NodeTuple,
-    NodeDict,
-    NodeLambda,
-    NodeCount,
+    ASTNodeModule = 0,
+    ASTNodeFunctionArg,
+    ASTNodeFunctionDef,
+    ASTNodeClassDef,
+    ASTNodeReturn,
+    ASTNodeAssign,
+    ASTNodeAugAssign,
+    ASTNodeFor,
+    ASTNodeWhile,
+    ASTNodeIf,
+    ASTNodeImport,
+    ASTNodeImportFrom,
+    ASTNodeExpr,
+    ASTNodePass,
+    ASTNodeBreak,
+    ASTNodeContinue,
+    ASTNodeRaise,
+    ASTNodeBinOp,
+    ASTNodeUnaryOp,
+    ASTNodeBoolOp,
+    ASTNodeCompare,
+    ASTNodeCall,
+    ASTNodeName,
+    ASTNodeConstant,
+    ASTNodeAttribute,
+    ASTNodeSubscript,
+    ASTNodeList,
+    ASTNodeTuple,
+    ASTNodeDict,
+    ASTNodeLambda,
+    ASTNodeCount,
 };
 
 struct Node
@@ -228,13 +229,30 @@ struct ModuleNode : Node
 {
     Vector<Node*> body;
 
-    ModuleNode() : Node(NodeModule, 0, 0) {}
+    ModuleNode() : Node(ASTNodeModule, 0, 0) {}
 
     virtual const char* type_str() const noexcept override { return "MODULE"; }
 
     virtual void debug(std::shared_ptr<spdlog::logger> logger, std::uint32_t indent) const noexcept override
     {
         logger->debug("{0: ^{1}}MODULE", "", indent);
+    }
+};
+
+struct FunctionArgNode : Node
+{
+    StringD name;
+    Node* annotation;
+
+    FunctionArgNode(StringD name, Node* annotation, std::uint32_t line, std::uint32_t column) : Node(ASTNodeFunctionArg, line, column),
+                                                                                                name(std::move(name)),
+                                                                                                annotation(annotation) {}
+
+    virtual const char* type_str() const noexcept override { return "FUNCARG"; }
+
+    virtual void debug(std::shared_ptr<spdlog::logger> logger, std::uint32_t indent) const noexcept override
+    {
+        logger->debug("{0: ^{1}}FUNCARG ({2})", "", indent, this->name);
     }
 };
 
@@ -245,7 +263,7 @@ struct FunctionDefNode : Node
     Vector<Node*> body;
     Node* return_annotation;
 
-    FunctionDefNode(StringD name, std::uint32_t line, std::uint32_t column) : Node(NodeFunctionDef, line, column),
+    FunctionDefNode(StringD name, std::uint32_t line, std::uint32_t column) : Node(ASTNodeFunctionDef, line, column),
                                                                               name(std::move(name)),
                                                                               return_annotation(nullptr) {}
 
@@ -263,7 +281,7 @@ struct ClassDefNode : Node
     Vector<Node*> bases;
     Vector<Node*> body;
 
-    ClassDefNode(StringD name, std::uint32_t line, std::uint32_t column) : Node(NodeClassDef, line, column),
+    ClassDefNode(StringD name, std::uint32_t line, std::uint32_t column) : Node(ASTNodeClassDef, line, column),
                                                                            name(std::move(name)) {}
 
     virtual const char* type_str() const noexcept override { return "CLASSDEF"; }
@@ -278,7 +296,7 @@ struct ReturnNode : Node
 {
     Node* value;
 
-    ReturnNode(Node* value, std::uint32_t line, std::uint32_t column) : Node(NodeReturn, line, column),
+    ReturnNode(Node* value, std::uint32_t line, std::uint32_t column) : Node(ASTNodeReturn, line, column),
                                                                         value(value) {}
 
     virtual const char* type_str() const noexcept override { return "RETURN"; }
@@ -294,7 +312,7 @@ struct AssignNode : Node
     Vector<Node*> targets;
     Node* value;
 
-    AssignNode(Node* value, std::uint32_t line, std::uint32_t column) : Node(NodeAssign, line, column),
+    AssignNode(Node* value, std::uint32_t line, std::uint32_t column) : Node(ASTNodeAssign, line, column),
                                                                         value(value) {}
 
     virtual const char* type_str() const noexcept override { return "ASSIGN"; };
@@ -311,7 +329,7 @@ struct AugAssignNode : Node
     Operator op;
     Node* value;
 
-    AugAssignNode(Node* target, Operator op, Node* value, std::uint32_t line, std::uint32_t column) : Node(NodeAugAssign, line, column),
+    AugAssignNode(Node* target, Operator op, Node* value, std::uint32_t line, std::uint32_t column) : Node(ASTNodeAugAssign, line, column),
                                                                                                       target(target),
                                                                                                       op(op),
                                                                                                       value(value) {}
@@ -331,7 +349,7 @@ struct ForNode : Node
     Vector<Node*> body;
     Vector<Node*> orelse;
 
-    ForNode(Node* target, Node* iter, std::uint32_t line, std::uint32_t column) : Node(NodeFor, line, column),
+    ForNode(Node* target, Node* iter, std::uint32_t line, std::uint32_t column) : Node(ASTNodeFor, line, column),
                                                                                   target(target),
                                                                                   iter(iter) {}
 
@@ -349,7 +367,7 @@ struct WhileNode : Node
     Vector<Node*> body;
     Vector<Node*> orelse;
 
-    WhileNode(Node* test, std::uint32_t line, std::uint32_t column) : Node(NodeWhile, line, column),
+    WhileNode(Node* test, std::uint32_t line, std::uint32_t column) : Node(ASTNodeWhile, line, column),
                                                                       test(test) {}
 
     virtual const char* type_str() const noexcept override { return "WHILE"; }
@@ -366,7 +384,7 @@ struct IfNode : Node
     Vector<Node*> body;
     Vector<Node*> orelse;
 
-    IfNode(Node* test, std::uint32_t line, std::uint32_t column) : Node(NodeIf, line, column),
+    IfNode(Node* test, std::uint32_t line, std::uint32_t column) : Node(ASTNodeIf, line, column),
                                                                    test(test) {}
 
     virtual const char* type_str() const noexcept override { return "IF"; }
@@ -382,7 +400,7 @@ struct ImportNode : Node
     Vector<StringD> names;
     Vector<StringD> aliases;
 
-    ImportNode(std::uint32_t line, std::uint32_t column) : Node(NodeImport, line, column) {}
+    ImportNode(std::uint32_t line, std::uint32_t column) : Node(ASTNodeImport, line, column) {}
 
     virtual const char* type_str() const noexcept override { return "IMPORT"; }
 
@@ -400,7 +418,7 @@ struct ImportFromNode : Node
     Vector<StringD> names;
     Vector<StringD> aliases;
 
-    ImportFromNode(StringD module, std::uint32_t line, std::uint32_t column) : Node(NodeImportFrom, line, column),
+    ImportFromNode(StringD module, std::uint32_t line, std::uint32_t column) : Node(ASTNodeImportFrom, line, column),
                                                                                module(std::move(module)) {}
 
     virtual const char* type_str() const noexcept override { return "IMPORT FROM"; }
@@ -415,7 +433,7 @@ struct ExprNode : Node
 {
     Node* value;
 
-    ExprNode(Node* value, std::uint32_t line, std::uint32_t column) : Node(NodeExpr, line, column),
+    ExprNode(Node* value, std::uint32_t line, std::uint32_t column) : Node(ASTNodeExpr, line, column),
                                                                       value(value) {}
 
     virtual const char* type_str() const noexcept override { return "EXPR"; }
@@ -428,7 +446,7 @@ struct ExprNode : Node
 
 struct PassNode : Node
 {
-    PassNode(std::uint32_t line, std::uint32_t column) : Node(NodePass, line, column) {}
+    PassNode(std::uint32_t line, std::uint32_t column) : Node(ASTNodePass, line, column) {}
 
     virtual const char* type_str() const noexcept override { return "PASS"; }
 
@@ -440,7 +458,7 @@ struct PassNode : Node
 
 struct BreakNode : Node
 {
-    BreakNode(std::uint32_t line, std::uint32_t column) : Node(NodeBreak, line, column) {}
+    BreakNode(std::uint32_t line, std::uint32_t column) : Node(ASTNodeBreak, line, column) {}
 
     virtual const char* type_str() const noexcept override { return "BREAK"; }
 
@@ -452,7 +470,7 @@ struct BreakNode : Node
 
 struct ContinueNode : Node
 {
-    ContinueNode(std::uint32_t line, std::uint32_t column) : Node(NodeContinue, line, column) {}
+    ContinueNode(std::uint32_t line, std::uint32_t column) : Node(ASTNodeContinue, line, column) {}
 
     virtual const char* type_str() const noexcept override { return "CONTINUE"; }
 
@@ -466,7 +484,7 @@ struct RaiseNode : Node
 {
     Node* exc;
 
-    RaiseNode(Node* exc, std::uint32_t line, std::uint32_t column) : Node(NodeRaise, line, column),
+    RaiseNode(Node* exc, std::uint32_t line, std::uint32_t column) : Node(ASTNodeRaise, line, column),
                                                                      exc(exc) {}
 
     virtual const char* type_str() const noexcept override { return "RAISE"; }
@@ -483,7 +501,7 @@ struct BinOpNode : Node
     Operator op;
     Node* right;
 
-    BinOpNode(Node* left, Operator op, Node* right, std::uint32_t line, std::uint32_t column) : Node(NodeBinOp, line, column),
+    BinOpNode(Node* left, Operator op, Node* right, std::uint32_t line, std::uint32_t column) : Node(ASTNodeBinOp, line, column),
                                                                                                 left(left),
                                                                                                 op(op),
                                                                                                 right(right) {}
@@ -501,7 +519,7 @@ struct UnaryOpNode : Node
     Operator op;
     Node* operand;
 
-    UnaryOpNode(Operator op, Node* operand, std::uint32_t line, std::uint32_t column) : Node(NodeUnaryOp, line, column),
+    UnaryOpNode(Operator op, Node* operand, std::uint32_t line, std::uint32_t column) : Node(ASTNodeUnaryOp, line, column),
                                                                                         op(op),
                                                                                         operand(operand) {}
 
@@ -518,7 +536,7 @@ struct BoolOpNode : Node
     Operator op;
     Vector<Node*> values;
 
-    BoolOpNode(Operator op, std::uint32_t line, std::uint32_t column) : Node(NodeBoolOp, line, column),
+    BoolOpNode(Operator op, std::uint32_t line, std::uint32_t column) : Node(ASTNodeBoolOp, line, column),
                                                                         op(op) {}
 
     virtual const char* type_str() const noexcept override { return "BOOLOP"; }
@@ -535,7 +553,7 @@ struct CompareNode : Node
     Vector<Operator> ops;
     Vector<Node*> comparators;
 
-    CompareNode(Node* left, std::uint32_t line, std::uint32_t column) : Node(NodeCompare, line, column),
+    CompareNode(Node* left, std::uint32_t line, std::uint32_t column) : Node(ASTNodeCompare, line, column),
                                                                         left(left) {}
 
     virtual const char* type_str() const noexcept override { return "COMPARE"; }
@@ -551,7 +569,7 @@ struct CallNode : Node
     Node* func;
     Vector<Node*> args;
 
-    CallNode(Node* func, std::uint32_t line, std::uint32_t column) : Node(NodeCall, line, column),
+    CallNode(Node* func, std::uint32_t line, std::uint32_t column) : Node(ASTNodeCall, line, column),
                                                                      func(func) {}
 
     virtual const char* type_str() const noexcept override { return "CALL"; }
@@ -566,7 +584,7 @@ struct NameNode : Node
 {
     StringD id;
 
-    NameNode(StringD id, std::uint32_t line, std::uint32_t column) : Node(NodeName, line, column),
+    NameNode(StringD id, std::uint32_t line, std::uint32_t column) : Node(ASTNodeName, line, column),
                                                                      id(std::move(id)) {}
 
     virtual const char* type_str() const noexcept override { return "NAME"; }
@@ -582,7 +600,7 @@ struct ConstantNode : Node
     StringD raw;
     Literal literal_type;
 
-    ConstantNode(StringD raw, Literal literal_type, std::uint32_t line, std::uint32_t column) : Node(NodeConstant, line, column),
+    ConstantNode(StringD raw, Literal literal_type, std::uint32_t line, std::uint32_t column) : Node(ASTNodeConstant, line, column),
                                                                                                 raw(std::move(raw)),
                                                                                                 literal_type(literal_type) {}
 
@@ -599,7 +617,7 @@ struct AttributeNode : Node
     Node* value;
     StringD attr;
 
-    AttributeNode(Node* value, StringD attr, std::uint32_t line, std::uint32_t column) : Node(NodeAttribute, line, column),
+    AttributeNode(Node* value, StringD attr, std::uint32_t line, std::uint32_t column) : Node(ASTNodeAttribute, line, column),
                                                                                          value(value),
                                                                                          attr(std::move(attr)) {}
 
@@ -616,7 +634,7 @@ struct SubscriptNode : Node
     Node* value;
     Node* slice;
 
-    SubscriptNode(Node* value, Node* slice, std::uint32_t line, std::uint32_t column) : Node(NodeSubscript, line, column),
+    SubscriptNode(Node* value, Node* slice, std::uint32_t line, std::uint32_t column) : Node(ASTNodeSubscript, line, column),
                                                                                         value(value),
                                                                                         slice(slice) {}
 
@@ -632,7 +650,7 @@ struct ListNode : Node
 {
     Vector<Node*> elts;
 
-    ListNode(std::uint32_t line, std::uint32_t column) : Node(NodeList, line, column) {}
+    ListNode(std::uint32_t line, std::uint32_t column) : Node(ASTNodeList, line, column) {}
 
     virtual const char* type_str() const noexcept override { return "LIST"; }
 
@@ -646,7 +664,7 @@ struct TupleNode : Node
 {
     Vector<Node*> elts;
 
-    TupleNode(std::uint32_t line, std::uint32_t column) : Node(NodeTuple, line, column) {}
+    TupleNode(std::uint32_t line, std::uint32_t column) : Node(ASTNodeTuple, line, column) {}
 
     virtual const char* type_str() const noexcept override { return "TUPLE"; }
 
@@ -661,7 +679,7 @@ struct DictNode : Node
     Vector<Node*> keys;
     Vector<Node*> values;
 
-    DictNode(std::uint32_t line, std::uint32_t column) : Node(NodeDict, line, column) {}
+    DictNode(std::uint32_t line, std::uint32_t column) : Node(ASTNodeDict, line, column) {}
 
     virtual const char* type_str() const noexcept override { return "DICT"; }
 
@@ -676,7 +694,7 @@ struct LambdaNode : Node
     Vector<Node*> args;
     Node* body;
 
-    LambdaNode(Node* body, std::uint32_t line, std::uint32_t column) : Node(NodeLambda, line, column),
+    LambdaNode(Node* body, std::uint32_t line, std::uint32_t column) : Node(ASTNodeLambda, line, column),
                                                                        body(body) {}
 
     virtual const char* type_str() const noexcept override { return "LAMBDA"; }
@@ -698,13 +716,13 @@ inline void node_children(Node* node, Vector<Node*>& out) noexcept
 
     switch(node->type())
     {
-        case NodeModule:
+        case ASTNodeModule:
         {
             auto* n = static_cast<ModuleNode*>(node);
             for(auto* c : n->body) out.push_back(c);
             break;
         }
-        case NodeFunctionDef:
+        case ASTNodeFunctionDef:
         {
             auto* n = static_cast<FunctionDefNode*>(node);
             for(auto* c : n->args) out.push_back(c);
@@ -712,34 +730,34 @@ inline void node_children(Node* node, Vector<Node*>& out) noexcept
             if(n->return_annotation) out.push_back(n->return_annotation);
             break;
         }
-        case NodeClassDef:
+        case ASTNodeClassDef:
         {
             auto* n = static_cast<ClassDefNode*>(node);
             for(auto* c : n->bases) out.push_back(c);
             for(auto* c : n->body) out.push_back(c);
             break;
         }
-        case NodeReturn:
+        case ASTNodeReturn:
         {
             auto* n = static_cast<ReturnNode*>(node);
             if(n->value) out.push_back(n->value);
             break;
         }
-        case NodeAssign:
+        case ASTNodeAssign:
         {
             auto* n = static_cast<AssignNode*>(node);
             for(auto* c : n->targets) out.push_back(c);
             if(n->value) out.push_back(n->value);
             break;
         }
-        case NodeAugAssign:
+        case ASTNodeAugAssign:
         {
             auto* n = static_cast<AugAssignNode*>(node);
             if(n->target) out.push_back(n->target);
             if(n->value) out.push_back(n->value);
             break;
         }
-        case NodeFor:
+        case ASTNodeFor:
         {
             auto* n = static_cast<ForNode*>(node);
             if(n->target) out.push_back(n->target);
@@ -748,7 +766,7 @@ inline void node_children(Node* node, Vector<Node*>& out) noexcept
             for(auto* c : n->orelse) out.push_back(c);
             break;
         }
-        case NodeWhile:
+        case ASTNodeWhile:
         {
             auto* n = static_cast<WhileNode*>(node);
             if(n->test) out.push_back(n->test);
@@ -756,7 +774,7 @@ inline void node_children(Node* node, Vector<Node*>& out) noexcept
             for(auto* c : n->orelse) out.push_back(c);
             break;
         }
-        case NodeIf:
+        case ASTNodeIf:
         {
             auto* n = static_cast<IfNode*>(node);
             if(n->test) out.push_back(n->test);
@@ -764,84 +782,84 @@ inline void node_children(Node* node, Vector<Node*>& out) noexcept
             for(auto* c : n->orelse) out.push_back(c);
             break;
         }
-        case NodeExpr:
+        case ASTNodeExpr:
         {
             auto* n = static_cast<ExprNode*>(node);
             if(n->value) out.push_back(n->value);
             break;
         }
-        case NodeRaise:
+        case ASTNodeRaise:
         {
             auto* n = static_cast<RaiseNode*>(node);
             if(n->exc) out.push_back(n->exc);
             break;
         }
-        case NodeBinOp:
+        case ASTNodeBinOp:
         {
             auto* n = static_cast<BinOpNode*>(node);
             if(n->left) out.push_back(n->left);
             if(n->right) out.push_back(n->right);
             break;
         }
-        case NodeUnaryOp:
+        case ASTNodeUnaryOp:
         {
             auto* n = static_cast<UnaryOpNode*>(node);
             if(n->operand) out.push_back(n->operand);
             break;
         }
-        case NodeBoolOp:
+        case ASTNodeBoolOp:
         {
             auto* n = static_cast<BoolOpNode*>(node);
             for(auto* c : n->values) out.push_back(c);
             break;
         }
-        case NodeCompare:
+        case ASTNodeCompare:
         {
             auto* n = static_cast<CompareNode*>(node);
             if(n->left) out.push_back(n->left);
             for(auto* c : n->comparators) out.push_back(c);
             break;
         }
-        case NodeCall:
+        case ASTNodeCall:
         {
             auto* n = static_cast<CallNode*>(node);
             if(n->func) out.push_back(n->func);
             for(auto* c : n->args) out.push_back(c);
             break;
         }
-        case NodeAttribute:
+        case ASTNodeAttribute:
         {
             auto* n = static_cast<AttributeNode*>(node);
             if(n->value) out.push_back(n->value);
             break;
         }
-        case NodeSubscript:
+        case ASTNodeSubscript:
         {
             auto* n = static_cast<SubscriptNode*>(node);
             if(n->value) out.push_back(n->value);
             if(n->slice) out.push_back(n->slice);
             break;
         }
-        case NodeList:
+        case ASTNodeList:
         {
             auto* n = static_cast<ListNode*>(node);
             for(auto* c : n->elts) out.push_back(c);
             break;
         }
-        case NodeTuple:
+        case ASTNodeTuple:
         {
             auto* n = static_cast<TupleNode*>(node);
             for(auto* c : n->elts) out.push_back(c);
             break;
         }
-        case NodeDict:
+        case ASTNodeDict:
         {
             auto* n = static_cast<DictNode*>(node);
             for(auto* c : n->keys) out.push_back(c);
             for(auto* c : n->values) out.push_back(c);
             break;
         }
-        case NodeLambda:
+        case ASTNodeLambda:
         {
             auto* n = static_cast<LambdaNode*>(node);
             for(auto* c : n->args) out.push_back(c);

@@ -534,8 +534,8 @@ bool AST::lex(const char* buffer, Vector<Token>& tokens) noexcept
                                     keyword_it->second,
                                     column,
                                     line);
-                s++;
                 column += length;
+
                 continue;
             }
 
@@ -548,8 +548,8 @@ bool AST::lex(const char* buffer, Vector<Token>& tokens) noexcept
                                     operator_it->second,
                                     column,
                                     line);
-                s++;
                 column += length;
+
                 continue;
             }
 
@@ -592,6 +592,8 @@ bool AST::lex(const char* buffer, Vector<Token>& tokens) noexcept
                                 delimiter_it->second,
                                 column,
                                 line);
+
+            column += length;
         }
         else if(is_operator_start(*s))
         {
@@ -940,6 +942,52 @@ struct Parser
         return this->parse_expr_or_assign();
     }
 
+    Node* parse_funcarg() noexcept
+    {
+        if(this->check(Token::Kind::Identifier))
+        {
+            std::uint32_t name_line = this->current().line;
+            std::uint32_t name_column = this->current().column;
+            StringD name = std::move(this->current().value);
+            Node* annotation = nullptr;
+
+            this->advance();
+
+            if(this->check(Token::Kind::Delimiter))
+            {
+                if(this->match_delimiter(Delimiter::Colon))
+                {
+                    this->advance();
+                    annotation = this->parse_expr();
+                }
+                else if(!this->match_delimiter(Delimiter::Comma) && !this->match_delimiter(Delimiter::RParen))
+                {
+                    this->error(this->current().line,
+                                this->current().column,
+                                this->current().value.size(),
+                                "Unexpected delimiter \"{}\"",
+                                this->current().value);
+
+                    return nullptr;
+                }
+            }
+            else
+            {
+                this->error(this->current().line,
+                            this->current().column,
+                            this->current().value.size(),
+                            "Unexpected token \"{}\"",
+                            this->current().value);
+
+                return nullptr;
+            }
+
+            return this->arena.emplace<FunctionArgNode>(std::move(name), annotation, name_line, name_column);
+        }
+
+        return nullptr;
+    }
+
     Node* parse_funcdef() noexcept
     {
         std::uint32_t line = this->current().line;
@@ -964,17 +1012,17 @@ struct Parser
 
         auto* node = this->arena.emplace<FunctionDefNode>(std::move(name), line, column);
 
-        // Parse parameters as simple names
+        // Parse arguments
         while(!this->at_end() && !this->match_delimiter(Delimiter::RParen))
         {
             if(this->check(Token::Kind::Identifier))
             {
-                auto* param = this->arena.emplace<NameNode>(
-                    std::move(StringD::make_from_c_str(this->current().value.c_str(), this->current().value.size())),
-                    this->current().line,
-                    this->current().column);
-                node->args.push_back(param);
-                this->advance();
+                Node* arg = this->parse_funcarg();
+
+                if(arg == nullptr)
+                    return nullptr;
+
+                node->args.push_back(arg);
             }
 
             if(this->match_delimiter(Delimiter::Comma))

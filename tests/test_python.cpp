@@ -33,9 +33,19 @@ int main()
     if(ast.from_text(error_text, true))
         return 1;
 
-    const char* func_text = "import os\n\ndef func(a, b):\n    print(\"func\")\n\n    return a + b\n\ndef func2(x, y):\n    return x + y";
+    const char* func_text = "import os\n\ndef func(a: int, b: int) -> int:\n    print(\"func\")\n\n    return a + b\n\ndef func2(x, y):\n    return x + y";
 
     if(!ast.from_text(func_text, true))
+        return 1;
+
+    const char* func_forloop_text = "import typing\n\ndef sum(l: typing.List[int]) -> int:\n    res = 0\n    for x in l:\n        res += x\n\n    return res\n";
+
+    if(!ast.from_text(func_forloop_text, true))
+        return 1;
+
+    const char* bad_func_text = "def badfunc(x: int, y) -> int:    z = x + y\n    return z";
+
+    if(ast.from_text(bad_func_text, true))
         return 1;
 
     spdlog::info("Finished Python test");
