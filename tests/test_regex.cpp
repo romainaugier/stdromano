@@ -42,7 +42,7 @@
                stdromano::StringD(expected_str));                               \
     } while(0)
 
-int main(int argc, char** argv)
+int main()
 {
     stdromano::set_log_level(stdromano::LogLevel::Debug);
     stdromano::log_info("Starting Regex tests");

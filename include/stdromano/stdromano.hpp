@@ -173,6 +173,7 @@
 
 #define STDROMANO_NO_DISCARD [[nodiscard]]
 #define STDROMANO_MAYBE_UNUSED [[maybe_unused]]
+#define STDROMANO_UNUSED(x) ((void)x)
 
 #if defined(STDROMANO_MSVC)
 #define dump_struct(s)

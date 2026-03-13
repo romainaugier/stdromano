@@ -19,8 +19,8 @@ extern "C" bool asm__detail_strcmp_avx_cs(const char* lhs,
 
 STDROMANO_NAMESPACE_BEGIN
 
-/*  
-    tolower with simd kernels for fast conversion. based on 
+/*
+    tolower with simd kernels for fast conversion. based on
     https://lemire.me/blog/2024/08/03/converting-ascii-strings-to-lower-case-at-crazy-speeds-with-avx-512/
 */
 
@@ -53,9 +53,7 @@ STDROMANO_FORCE_INLINE __m256i tolower32(const __m256i c) noexcept
 void tolower_scalar_kernel(char* str, std::size_t length) noexcept
 {
     for(std::size_t i = 0; i < length; ++i)
-    {
         str[i] = to_lower(static_cast<unsigned int>(str[i]));
-    }
 }
 
 void tolower_sse_kernel(char* str, std::size_t length) noexcept
@@ -73,9 +71,7 @@ void tolower_sse_kernel(char* str, std::size_t length) noexcept
     }
 
     for(; i < length; ++i)
-    {
         str[i] = to_lower(static_cast<unsigned int>(str[i]));
-    }
 }
 
 void tolower_avx_kernel(char* str, std::size_t length) noexcept
@@ -93,9 +89,7 @@ void tolower_avx_kernel(char* str, std::size_t length) noexcept
     }
 
     for(; i < length; ++i)
-    {
         str[i] = to_lower(static_cast<unsigned int>(str[i]));
-    }
 }
 
 DETAIL_NAMESPACE_BEGIN
@@ -126,17 +120,11 @@ bool strcmp_scalar_kernel(const char* __restrict lhs,
                           const bool case_sensitive) noexcept
 {
     if(case_sensitive)
-    {
         return asm__detail_strcmp_cs(lhs, rhs, length);
-    }
 
     for(std::size_t i = 0; i < length; ++i)
-    {
         if(to_lower(lhs[i]) != to_lower(rhs[i]))
-        {
             return false;
-        }
-    }
 
     return true;
 }
@@ -158,9 +146,7 @@ bool strcmp_sse_kernel_case_sensitive(const char* __restrict lhs,
         const __m128i res = _mm_cmpeq_epi8(_lhs, _rhs);
 
         if(_mm_movemask_epi8(res) != 0xFFFF)
-        {
             return false;
-        }
     }
 
     return std::memcmp(std::addressof(lhs[i]), std::addressof(rhs[i]), remaining_size) == 0;
@@ -183,9 +169,7 @@ bool strcmp_sse_kernel_case_insensitive(const char* __restrict lhs,
         const __m128i res = _mm_cmpeq_epi8(_lhs, _rhs);
 
         if(_mm_movemask_epi8(res) != 0xFFFF)
-        {
             return false;
-        }
     }
 
     char __lhs[simd_width];
@@ -223,9 +207,7 @@ bool strcmp_avx_kernel_case_sensitive(const char* __restrict lhs,
         const __m256i res = _mm256_cmpeq_epi8(_lhs, _rhs);
 
         if(_mm256_movemask_epi8(res) != 0xFFFFFFFF)
-        {
             return false;
-        }
     }
 
     return std::memcmp(std::addressof(lhs[i]), std::addressof(rhs[i]), remaining_size) == 0;
@@ -248,9 +230,7 @@ bool strcmp_avx_kernel_case_insensitive(const char* __restrict lhs,
         const __m256i res = _mm256_cmpeq_epi8(_lhs, _rhs);
 
         if(_mm256_movemask_epi8(res) != 0xFFFFFFFF)
-        {
             return false;
-        }
     }
 
     char __lhs[simd_width];
@@ -278,11 +258,11 @@ bool strcmp(const char* __restrict lhs,
     switch(simd_get_vectorization_mode())
     {
         case VectorizationMode_SSE:
-            return case_sensitive ? asm__detail_strcmp_sse_cs(lhs, rhs, length) : 
+            return case_sensitive ? asm__detail_strcmp_sse_cs(lhs, rhs, length) :
                                     strcmp_sse_kernel_case_insensitive(lhs, rhs, length);
         case VectorizationMode_AVX:
         case VectorizationMode_AVX2:
-            return case_sensitive ? asm__detail_strcmp_avx_cs(lhs, rhs, length) : 
+            return case_sensitive ? asm__detail_strcmp_avx_cs(lhs, rhs, length) :
                                     strcmp_avx_kernel_case_insensitive(lhs, rhs, length);
         default:
             return strcmp_scalar_kernel(lhs, rhs, length, case_sensitive);
@@ -295,6 +275,10 @@ DETAIL_NAMESPACE_END
 
 bool validate_utf8_scalar(const char* str, std::size_t size) noexcept
 {
+    // TODO
+
+    STDROMANO_UNUSED(str);
+
     std::size_t i = 0;
 
     while(i < size)
@@ -384,24 +368,24 @@ __m128i validate_utf8_sse_kernel(const __m128i input,
     static const __m128i mask_0F = _mm_set1_epi8(0x0F);
 
     const __m128i prev1 = _mm_alignr_epi8(input, prev_input, 15);
-    
+
     __m128i byte1_high = _mm_and_si128(_mm_srli_epi16(prev1, 4), mask_0F);
     byte1_high = _mm_shuffle_epi8(t1, byte1_high);
-    
+
     __m128i byte1_low = _mm_and_si128(prev1, mask_0F);
     byte1_low = _mm_shuffle_epi8(t2, byte1_low);
-    
+
     __m128i byte2_high = _mm_and_si128(_mm_srli_epi16(input, 4), mask_0F);
     byte2_high = _mm_shuffle_epi8(t3, byte2_high);
-    
+
     __m128i potential_errors = _mm_and_si128(byte1_high, byte1_low);
     potential_errors = _mm_and_si128(potential_errors, byte2_high);
 
     const __m128i prev2 = _mm_alignr_epi8(input, prev_input, 14);
     const __m128i prev3 = _mm_alignr_epi8(input, prev_input, 13);
 
-    const __m128i is_3_byte_lead = _mm_subs_epu8(prev2, _mm_set1_epi8(0xDF));
-    const __m128i is_4_byte_lead = _mm_subs_epu8(prev3, _mm_set1_epi8(0xEF));
+    const __m128i is_3_byte_lead = _mm_subs_epu8(prev2, _mm_set1_epi8(static_cast<char>(0xDF)));
+    const __m128i is_4_byte_lead = _mm_subs_epu8(prev3, _mm_set1_epi8(static_cast<char>(0xEF)));
 
     const __m128i must_be_cont = _mm_or_si128(is_3_byte_lead, is_4_byte_lead);
 
@@ -417,56 +401,56 @@ bool validate_utf8_sse(const char* str, std::size_t size) noexcept
 {
     const std::uint8_t* input = reinterpret_cast<const std::uint8_t*>(str);
     std::size_t i = 0;
-    
+
     __m128i prev_input = _mm_setzero_si128();
     __m128i err = _mm_setzero_si128();
-    
-    while(i + 16 <= size) 
+
+    while(i + 16 <= size)
     {
         const __m128i current_input = _mm_loadu_si128(reinterpret_cast<const __m128i*>(input + i));
-        
+
         const __m128i err_in_current = validate_utf8_sse_kernel(current_input, prev_input);
         err = _mm_or_si128(err, err_in_current);
-        
+
         prev_input = current_input;
         i += 16;
     }
 
-    if(i < size) 
+    if(i < size)
     {
         const std::size_t remaining = size - i;
         alignas(16) char tail_buffer[16];
-        
+
         std::memcpy(tail_buffer, input + i, remaining);
-        
+
         std::memset(tail_buffer + remaining, ' ', 16 - remaining);
-        
+
         const __m128i current_input = _mm_load_si128(reinterpret_cast<const __m128i*>(tail_buffer));
         const __m128i err_in_current = validate_utf8_sse_kernel(current_input, prev_input);
         err = _mm_or_si128(err, err_in_current);
     }
 
-    if(size > 0) 
+    if(size > 0)
     {
         const std::uint8_t last_byte = input[size - 1];
         if(last_byte >= 0xC0)
             return false;
     }
 
-    if(size > 1) 
+    if(size > 1)
     {
         const std::uint8_t second_last = input[size - 2];
         if(second_last >= 0xE0 && (input[size-1] & 0xC0) != 0x80)
             return false;
     }
 
-    if(size > 2) 
+    if(size > 2)
     {
         const std::uint8_t third_last = input[size - 3];
         if(third_last >= 0xF0 && (input[size-2] & 0xC0) != 0x80)
             return false;
     }
-    
+
     return _mm_testz_si128(err, err) == 1;
 }
 
@@ -496,9 +480,9 @@ __m256i validate_utf8_avx_kernel(const __m256i input,
 
     const __m256i prev2 = _mm256_alignr_epi8(input, _mm256_permute2x128_si256(prev_input, input, 0x21), 14);
     const __m256i prev3 = _mm256_alignr_epi8(input, _mm256_permute2x128_si256(prev_input, input, 0x21), 13);
-    
-    const __m256i is_3_byte_lead = _mm256_subs_epu8(prev2, _mm256_set1_epi8(0xDF));
-    const __m256i is_4_byte_lead = _mm256_subs_epu8(prev3, _mm256_set1_epi8(0xEF));
+
+    const __m256i is_3_byte_lead = _mm256_subs_epu8(prev2, _mm256_set1_epi8(static_cast<char>(0xDF)));
+    const __m256i is_4_byte_lead = _mm256_subs_epu8(prev3, _mm256_set1_epi8(static_cast<char>(0xEF)));
 
     const __m256i must_be_cont = _mm256_or_si256(is_3_byte_lead, is_4_byte_lead);
 
@@ -506,7 +490,7 @@ __m256i validate_utf8_avx_kernel(const __m256i input,
         _mm256_cmpgt_epi8(must_be_cont, _mm256_setzero_si256()),
         _mm256_set1_epi8(TWO_CONTS)
     );
-    
+
     return _mm256_xor_si256(potential_errors, must_be_cont_mask);
 }
 
@@ -518,7 +502,7 @@ bool validate_utf8_avx(const char* str, std::size_t size) noexcept
     __m256i prev_input = _mm256_setzero_si256();
     __m256i err = _mm256_setzero_si256();
 
-    while(i + 32 <= size) 
+    while(i + 32 <= size)
     {
         const __m256i current_input = _mm256_loadu_si256(reinterpret_cast<const __m256i*>(input + i));
 
@@ -535,27 +519,27 @@ bool validate_utf8_avx(const char* str, std::size_t size) noexcept
         alignas(32) char tail_buffer[32];
         std::memcpy(tail_buffer, input + i, remaining);
         std::memset(tail_buffer + remaining, ' ', 32 - remaining);
-        
+
         const __m256i current_input = _mm256_load_si256(reinterpret_cast<const __m256i*>(tail_buffer));
         const __m256i err_in_current = validate_utf8_avx_kernel(current_input, prev_input);
         err = _mm256_or_si256(err, err_in_current);
     }
-    
-    if(size > 0) 
+
+    if(size > 0)
     {
         const std::uint8_t last_byte = input[size - 1];
         if(last_byte >= 0xC0)
             return false;
     }
 
-    if(size > 1) 
+    if(size > 1)
     {
         const std::uint8_t second_last = input[size - 2];
         if(second_last >= 0xE0 && (input[size-1] & 0xC0) != 0x80)
             return false;
     }
 
-    if(size > 2) 
+    if(size > 2)
     {
         const std::uint8_t third_last = input[size - 3];
         if(third_last >= 0xF0 && (input[size-2] & 0xC0) != 0x80)
@@ -619,11 +603,11 @@ bool case_sensitive_less(char lhs, char rhs) noexcept
 
 int strcmp(const StringD& lhs, const StringD& rhs, bool case_sensitive) noexcept
 {
-    bool ret = std::lexicographical_compare(lhs.begin(), 
+    bool ret = std::lexicographical_compare(lhs.begin(),
                                             lhs.end(),
                                             rhs.begin(),
                                             rhs.end(),
-                                            case_sensitive ? case_sensitive_less : 
+                                            case_sensitive ? case_sensitive_less :
                                                              case_insensitive_less);
 
     return ret ? -1 : 1;

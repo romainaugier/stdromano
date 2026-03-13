@@ -268,8 +268,8 @@ struct RegexCompiler
 
                 std::size_t loop_start = this->bytecode.size();
 
-                Regex::ByteCode primary_copy(this->bytecode.begin() + primary_start,
-                                             this->bytecode.begin() + primary_end);
+                Regex::ByteCode primary_copy(this->bytecode.begin() + static_cast<Regex::ByteCode::difference_type>(primary_start),
+                                             this->bytecode.begin() + static_cast<Regex::ByteCode::difference_type>(primary_end));
 
                 this->bytecode.insert(this->bytecode.end(), primary_copy.begin(), primary_copy.end());
 
@@ -1136,7 +1136,7 @@ Vector<RegexMatch> Regex::match_all(const StringD& str) const noexcept
 
 StringD Regex::replace_all(const StringD& str, const StringD& replace) const noexcept
 {
-    return this->replace_iter(str, [&](const RegexMatch& m) {
+    return this->replace_iter(str, [&](const RegexMatch&) {
         return replace;
     });
 }

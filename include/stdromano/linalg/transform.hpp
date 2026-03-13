@@ -12,7 +12,7 @@
 
 STDROMANO_NAMESPACE_BEGIN
 
-/* 
+/*
     Data in those matrices is stored in row-major layout
 */
 
@@ -50,7 +50,7 @@ template<typename T>
 class Transform44
 {
 private:
-    T _data[16]; 
+    T _data[16];
 
 public:
     constexpr explicit Transform44() noexcept {}
@@ -99,7 +99,7 @@ public:
         return tr;
     }
 
-    constexpr static Transform44<T> ident() noexcept 
+    constexpr static Transform44<T> ident() noexcept
     {
         return Transform44<T>(make_one_v<T>, make_zero_v<T>, make_zero_v<T>, make_zero_v<T>,
                               make_zero_v<T>, make_one_v<T>, make_zero_v<T>, make_zero_v<T>,
@@ -128,7 +128,7 @@ public:
 
         return tr;
     }
-    
+
     /*
         Rx(θ) = [ 1  0     0
                   0 cosθ  sinθ
@@ -152,10 +152,10 @@ public:
 
         return tr;
     }
-    
+
     /*
-        Ry(θ) = [ cosθ  0 -sinθ 
-                   0    1   0 
+        Ry(θ) = [ cosθ  0 -sinθ
+                   0    1   0
                   sinθ  0 cosθ ]
 
         (formula is transposed as storage is row-major)
@@ -176,7 +176,7 @@ public:
 
         return tr;
     }
-    
+
     /*
         Rz(θ) = [ cosθ  sinθ 0
                   -sinθ cosθ 0
@@ -204,7 +204,7 @@ public:
     /*
         Builds a transform from an axis and an angle given in radians or degrees
 
-        R = [ ux²(1 - cosθ) + cosθ      ux*uy(1 - cosθ) + uz*sinθ  ux*uz(1 - cosθ) - uy*sinθ   
+        R = [ ux²(1 - cosθ) + cosθ      ux*uy(1 - cosθ) + uz*sinθ  ux*uz(1 - cosθ) - uy*sinθ
               ux*uy(1 - cosθ) - uz*sinθ uy²(1 - cosθ) + cosθ       uy*uz(1 - cosθ) + ux*sinθ
               ux*uz(1 - cosθ) + uy*sinθ uy*uz(1 - cosθ) - ux*sinθ  uz²(1 - cosθ) + cosθ      ]
 
@@ -216,7 +216,7 @@ public:
     {
         Transform44<T> tr = Transform44<T>::ident();
 
-        T theta = radians ? angle : maths::deg2rad(angle); 
+        T theta = radians ? angle : maths::deg2rad(angle);
 
         T c, s;
         maths::sincos(theta, &s, &c);
@@ -226,11 +226,11 @@ public:
         tr._data[0] = axis.x * axis.x * one_minus_c + c;
         tr._data[1] = axis.x * axis.y * one_minus_c + axis.z * s;
         tr._data[2] = axis.x * axis.z * one_minus_c - axis.y * s;
-        
+
         tr._data[4] = axis.x * axis.y * one_minus_c - axis.z * s;
         tr._data[5] = axis.y * axis.y * one_minus_c + c;
         tr._data[6] = axis.y * axis.z * one_minus_c + axis.x * s;
-        
+
         tr._data[8] = axis.x * axis.z * one_minus_c + axis.y * s;
         tr._data[9] = axis.y * axis.z * one_minus_c - axis.x * s;
         tr._data[10] = axis.z * axis.z * one_minus_c + c;
@@ -239,8 +239,8 @@ public:
     }
 
     /*
-        Builds a transform from translation, rotation and scale given the transform order and 
-        rotation order. Rotation is in radians by default 
+        Builds a transform from translation, rotation and scale given the transform order and
+        rotation order. Rotation is in radians by default
     */
     constexpr static Transform44<T> from_trs(const Vector3<T>& translation,
                                              const Vector3<T>& rotation,
@@ -304,7 +304,7 @@ public:
     }
 
     /*
-        Builds a transform from x, y and z axis and translation 
+        Builds a transform from x, y and z axis and translation
     */
     constexpr static Transform44<T> from_xyzt(const Vector3<T>& x,
                                               const Vector3<T>& y,
@@ -317,8 +317,8 @@ public:
                               make_zero_v<T>, make_zero_v<T>, make_zero_v<T>, make_one_v<T>);
     }
 
-    /* 
-        Builds a transform from a point of view and a target 
+    /*
+        Builds a transform from a point of view and a target
     */
     constexpr static Transform44<T> from_lookat(const Vector3<T>& eye,
                                                 const Vector3<T>& target,
@@ -378,25 +378,10 @@ public:
     {
         Transform44<T> res = Transform44<T>::zero();
 
-        /* TODO: simd with sse instructions */
-        switch(simd_get_vectorization_mode())
-        {
-            default:
-            {
-                for(std::size_t i = 0; i < 4; ++i)
-                {
-                    for(std::size_t j = 0; j < 4; ++j)
-                    {
-                        for(std::size_t k = 0; k < 4; ++k)
-                        {
-                            res._data[i * 4 + j] = maths::fma(this->_data[i * 4 + k],
-                                                              other._data[k * 4 + j],
-                                                              res._data[i * 4 + j]);
-                        }
-                    }
-                }
-            }
-        }
+        for(std::size_t i = 0; i < 4; ++i)
+            for(std::size_t j = 0; j < 4; ++j)
+                for(std::size_t k = 0; k < 4; ++k)
+                    res._data[i * 4 + j] = maths::fma(this->_data[i * 4 + k], other._data[k * 4 + j], res._data[i * 4 + j]);
 
         return res;
     }
@@ -521,7 +506,7 @@ public:
         }
     }
 
-    /* 
+    /*
         Angles will be in radians by default
     */
     void decomp_tait_bryan(Vector3<T>* angles,

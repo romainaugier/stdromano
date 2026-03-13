@@ -818,7 +818,7 @@ struct Parser
         {
             this->error(this->current().line,
                         this->current().column,
-                        this->current().value.size(),
+                        static_cast<std::uint32_t>(this->current().value.size()),
                         "Expected keyword, got \"{}\"",
                         this->current().value);
 
@@ -836,7 +836,7 @@ struct Parser
         {
             this->error(this->current().line,
                         this->current().column,
-                        this->current().value.size(),
+                        static_cast<std::uint32_t>(this->current().value.size()),
                         "Expected delimiter, got \"{}\"",
                         this->current().value);
 
@@ -854,7 +854,7 @@ struct Parser
         {
             this->error(this->current().line,
                         this->current().column,
-                        this->current().value.size(),
+                        static_cast<std::uint32_t>(this->current().value.size()),
                         "Expected newline, got \"{}\"",
                         this->current().value);
 
@@ -877,13 +877,12 @@ struct Parser
         {
             this->error(this->current().line,
                         this->current().column,
-                        this->current().value.size(),
+                        static_cast<std::uint32_t>(this->current().value.size()),
                         "Expected indented block");
 
             return false;
         }
 
-        std::uint32_t block_indent = this->current().type;
         this->advance();
 
         while(!this->at_end())
@@ -964,7 +963,7 @@ struct Parser
                 {
                     this->error(this->current().line,
                                 this->current().column,
-                                this->current().value.size(),
+                                static_cast<std::uint32_t>(this->current().value.size()),
                                 "Unexpected delimiter \"{}\"",
                                 this->current().value);
 
@@ -975,7 +974,7 @@ struct Parser
             {
                 this->error(this->current().line,
                             this->current().column,
-                            this->current().value.size(),
+                            static_cast<std::uint32_t>(this->current().value.size()),
                             "Unexpected token \"{}\"",
                             this->current().value);
 
@@ -998,7 +997,7 @@ struct Parser
         {
             this->error(this->current().line,
                         this->current().column,
-                        this->current().value.size(),
+                        static_cast<std::uint32_t>(this->current().value.size()),
                         "Expected function name");
 
             return nullptr;
@@ -1061,7 +1060,7 @@ struct Parser
         {
             this->error(this->current().line,
                         this->current().column,
-                        this->current().value.size(),
+                        static_cast<std::uint32_t>(this->current().value.size()),
                         "Expected class name");
 
             return nullptr;
@@ -1316,7 +1315,7 @@ struct Parser
             {
                 this->error(this->current().line,
                             this->current().column,
-                            this->current().value.size(),
+                            static_cast<std::uint32_t>(this->current().value.size()),
                             "Expected module name");
 
                 return nullptr;
@@ -1334,7 +1333,7 @@ struct Parser
                 {
                     this->error(this->current().line,
                                 this->current().column,
-                                this->current().value.size(),
+                                static_cast<std::uint32_t>(this->current().value.size()),
                                 "Expected name after .");
 
                     return nullptr;
@@ -1357,7 +1356,7 @@ struct Parser
                 {
                     this->error(this->current().line,
                                 this->current().column,
-                                this->current().value.size(),
+                                static_cast<std::uint32_t>(this->current().value.size()),
                                 "Expected alias");
 
                     return nullptr;
@@ -1385,7 +1384,7 @@ struct Parser
         {
             this->error(this->current().line,
                         this->current().column,
-                        this->current().value.size(),
+                        static_cast<std::uint32_t>(this->current().value.size()),
                         "Expected module name");
 
             return nullptr;
@@ -1405,7 +1404,7 @@ struct Parser
             {
                 this->error(this->current().line,
                             this->current().column,
-                            this->current().value.size(),
+                            static_cast<std::uint32_t>(this->current().value.size()),
                             "Expected name");
 
                 return nullptr;
@@ -1424,7 +1423,7 @@ struct Parser
                 {
                     this->error(this->current().line,
                                 this->current().column,
-                                this->current().value.size(),
+                                static_cast<std::uint32_t>(this->current().value.size()),
                                 "Expected alias");
 
                     return nullptr;
@@ -1888,7 +1887,7 @@ struct Parser
                 {
                     this->error(this->current().line,
                                 this->current().column,
-                                this->current().value.size(),
+                                static_cast<std::uint32_t>(this->current().value.size()),
                                 "Expected attribute name");
 
                     return nullptr;
@@ -1916,7 +1915,7 @@ struct Parser
         {
             this->error((this->tokens.end() - 1)->line,
                         (this->tokens.end() - 1)->column,
-                        (this->tokens.end() - 1)->value.size(),
+                        static_cast<std::uint32_t>((this->tokens.end() - 1)->value.size()),
                         "Expected attribute name");
             this->logger->error("Unexpected end of input");
             return nullptr;
@@ -2082,7 +2081,7 @@ struct Parser
 
         this->error(this->current().line,
                     this->current().column,
-                    this->current().value.size(),
+                    static_cast<std::uint32_t>(this->current().value.size()),
                     "Unexpected token \"{}\"",
                     this->current().value);
 

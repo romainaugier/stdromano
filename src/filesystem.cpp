@@ -197,8 +197,8 @@ String<> fs_expand_from_lib_dir(const String<>& path_to_expand) noexcept
 String<> fs_tmp_dir() noexcept
 {
 #if defined(STDROMANO_WIN)
-    std::size_t buf_sz = MAX_PATH + 1;
-    String<> buf = String<>::make_zeroed(buf_sz);
+    DWORD buf_sz = MAX_PATH + 1;
+    String<> buf = String<>::make_zeroed(static_cast<std::size_t>(buf_sz));
 
     DWORD sz = GetTempPathA(buf_sz, buf.data());
 

@@ -34,10 +34,10 @@ struct constants<float>
     static constexpr float pi_over_two = 1.57079632679489661923f;
     static constexpr float pi_over_four = 0.785398163397448309616f;
     static constexpr float one_over_pi = 0.318309886183790671538f;
-    static constexpr float two_over_pi = 0.636619772367581343076;
+    static constexpr float two_over_pi = 0.636619772367581343076f;
     static constexpr float inv_pi = one_over_pi;
-    static constexpr float inv_two_pi = 0.15915494309189533577;
-    static constexpr float inv_four_pi = 0.07957747154594766788;
+    static constexpr float inv_two_pi = 0.15915494309189533577f;
+    static constexpr float inv_four_pi = 0.07957747154594766788f;
 
     static constexpr float inf = std::numeric_limits<float>::infinity();
     static constexpr float neginf = -std::numeric_limits<float>::infinity();
