@@ -4,7 +4,49 @@
 
 #include "stdromano/random.hpp"
 
+#if defined(STDROMANO_WIN)
+#include <Windows.h>
+#include <bcrypt.h>
+#elif defined(STDROMANO_LINUX)
+#include <fcntl.h>
+#include <unistd.h>
+#endif // defined(STDROMANO_WIN)
+
+#include <limits>
+
 STDROMANO_NAMESPACE_BEGIN
+
+std::uint32_t random_seed() noexcept
+{
+    std::uint32_t value;
+
+#if defined(STDROMANO_WIN)
+    NTSTATUS status = BCryptGenRandom(nullptr,
+                                      reinterpret_cast<PUCHAR>(&value),
+                                      sizeof(value),
+                                      BCRYPT_USE_SYSTEM_PREFERRED_RNG);
+
+    if (!BCRYPT_SUCCESS(status))
+        return std::numeric_limits<std::uint32_t>::max();
+
+#elif defined(STDROMANO_LINUX)
+    std::int32_t fd = std::open("/dev/urandom", O_RDONLY);
+
+    if(fd < 0)
+        return std::numeric_limits<std::uint32_t>::max();
+
+    std::ssize_t bytes_read = std::fread(fd, &value, sizeof(value));
+    std::fclose(fd);
+
+    if(bytes_read != sizeof(value))
+        return std::numeric_limits<std::uint32_t>::max();
+
+#else
+#error "random_seed not implemented on this platform"
+#endif // defined(STDROMANO_WIN)
+
+    return value;
+}
 
 STDROMANO_FORCE_INLINE uint64_t rotl(const uint64_t x, int k)
 {

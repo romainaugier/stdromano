@@ -41,7 +41,7 @@ if(UNIX)
     target_link_libraries(${PROJECT_NAME} PUBLIC ${MATH_LIBRARY})
     target_link_libraries(${PROJECT_NAME} PUBLIC ${GTK_LIBRARIES})
 elseif(WIN32)
-    target_link_libraries(${PROJECT_NAME} PUBLIC wsock32 ws2_32 Shlwapi Pathcch PowrProf)
+    target_link_libraries(${PROJECT_NAME} PUBLIC wsock32 ws2_32 Shlwapi Pathcch PowrProf bcrypt)
 endif()
 
 target_link_libraries(${PROJECT_NAME} PRIVATE jemalloc)

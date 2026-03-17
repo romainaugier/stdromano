@@ -13,6 +13,9 @@
 
 STDROMANO_NAMESPACE_BEGIN
 
+// Cryptographically secure random seed (uses bcrypt on Windows, urandom on Linux)
+STDROMANO_API std::uint32_t random_seed() noexcept;
+
 /* Very fast pseudo random generator with a good distribution */
 
 STDROMANO_FORCE_INLINE float pcg_float(unsigned int state) noexcept
