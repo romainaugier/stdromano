@@ -195,7 +195,7 @@ STDROMANO_FORCE_INLINE StringD expand(const char* str) noexcept
 
     if(ret != 0)
     {
-        if(ret != WRDE_NOSPACE)
+        if(ret == WRDE_NOSPACE)
             wordfree(&wx);
 
         return StringD(str);
