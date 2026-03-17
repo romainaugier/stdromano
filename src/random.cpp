@@ -8,8 +8,7 @@
 #include <Windows.h>
 #include <bcrypt.h>
 #elif defined(STDROMANO_LINUX)
-#include <fcntl.h>
-#include <unistd.h>
+#include <sys/random.h>
 #endif // defined(STDROMANO_WIN)
 
 #include <limits>
@@ -30,15 +29,9 @@ std::uint32_t random_seed() noexcept
         return std::numeric_limits<std::uint32_t>::max();
 
 #elif defined(STDROMANO_LINUX)
-    std::int32_t fd = std::open("/dev/urandom", O_RDONLY);
+    ssize_t res = getrandom(&value, sizeof(value), 0);
 
-    if(fd < 0)
-        return std::numeric_limits<std::uint32_t>::max();
-
-    std::ssize_t bytes_read = std::fread(fd, &value, sizeof(value));
-    std::fclose(fd);
-
-    if(bytes_read != sizeof(value))
+    if(res != sizeof(value))
         return std::numeric_limits<std::uint32_t>::max();
 
 #else
