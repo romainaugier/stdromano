@@ -299,24 +299,21 @@ ListDirIterator::~ListDirIterator()
 {
 #if defined(STDROMANO_WIN)
     if(this->_h_find != INVALID_HANDLE_VALUE)
-    {
         FindClose(this->_h_find);
-    }
+
 #elif defined(STDROMANO_LINUX)
     if(this->_dir != nullptr)
-    {
         closedir(this->_dir);
-    }
+
 #endif /* defined(STDROMANO_WIN) */
 }
 
 String<> ListDirIterator::get_current_path() const noexcept
 {
 #if defined(STDROMANO_WIN)
-    return String<>(
-        "{}{}",
-        fmt::string_view(this->_directory_path.c_str(), this->_directory_path.size() - 1),
-        this->_find_data.cFileName);
+    return String<>("{}{}",
+                    fmt::string_view(this->_directory_path.c_str(), this->_directory_path.size() - 1),
+                    this->_find_data.cFileName);
 #elif defined(STDROMANO_LINUX)
     return String<>("{}/{}",
                     fmt::string_view(this->_directory_path.c_str(), this->_directory_path.size()),
@@ -348,12 +345,10 @@ bool ListDirIterator::is_directory() const noexcept
 #endif /* defined(STDROMANO_WIN) */
 }
 
-bool fs_list_dir(ListDirIterator& it, const String<>& directory_path, const uint32_t flags) noexcept
+bool fs_list_dir(ListDirIterator& it, const String<>& directory_path, const std::uint32_t flags) noexcept
 {
     if(!fs_path_exists(directory_path))
-    {
         return false;
-    }
 
 #if defined(STDROMANO_WIN)
     if(it._h_find == INVALID_HANDLE_VALUE)

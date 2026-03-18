@@ -53,7 +53,7 @@ class STDROMANO_API ListDirIterator
 public:
     friend STDROMANO_API bool fs_list_dir(ListDirIterator&,
                                           const String<>&,
-                                          const uint32_t) noexcept;
+                                          const std::uint32_t) noexcept;
 
 private:
     String<> _directory_path;
@@ -68,6 +68,49 @@ private:
 
 public:
     ListDirIterator() = default;
+
+    STDROMANO_NON_COPYABLE(ListDirIterator);
+
+    ListDirIterator(ListDirIterator&& other) noexcept : _directory_path(std::move(other._directory_path))
+    {
+#if defined(STDROMANO_WIN)
+        this->_h_find = other._h_find;
+        std::memcpy(&this->_find_data, &other._find_data, sizeof(WIN32_FIND_DATAA));
+
+        other._h_find = INVALID_HANDLE_VALUE;
+        std::memset(&other._find_data, 0, sizeof(WIN32_FIND_DATAA));
+#elif defined(STDROMANO_LINUX)
+        this->_dir = other._dir;
+        this->_entry = other._entry;
+
+        other._dir = nullptr;
+        other._entry = nullptr;
+#endif // defined(STDROMANO_WIN)
+    }
+
+    ListDirIterator& operator=(ListDirIterator&& other) noexcept
+    {
+        if(this != &other)
+        {
+            this->_directory_path = std::move(other._directory_path);
+
+#if defined(STDROMANO_WIN)
+            this->_h_find = other._h_find;
+            std::memcpy(&this->_find_data, &other._find_data, sizeof(WIN32_FIND_DATAA));
+
+            other._h_find = INVALID_HANDLE_VALUE;
+            std::memset(&other._find_data, 0, sizeof(WIN32_FIND_DATAA));
+#elif defined(STDROMANO_LINUX)
+            this->_dir = other._dir;
+            this->_entry = other._entry;
+
+            other._dir = nullptr;
+            other._entry = nullptr;
+#endif // defined(STDROMANO_WIN)
+        }
+
+        return *this;
+    }
 
     ~ListDirIterator();
 
