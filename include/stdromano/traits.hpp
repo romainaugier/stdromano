@@ -9,7 +9,13 @@
 
 #include "stdromano/stdromano.hpp"
 
+#include <iterator>
+
 STDROMANO_NAMESPACE_BEGIN
+
+template<class It>
+using is_forward_iterator = std::is_base_of<std::forward_iterator_tag,
+                                            typename std::iterator_traits<It>::iterator_category>;
 
 STDROMANO_NAMESPACE_END
 

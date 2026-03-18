@@ -12,6 +12,7 @@
 #endif /* !defined(STDROMANO_NULL_VECTOR_ASSERTIONS) */
 
 #include "stdromano/memory.hpp"
+#include "stdromano/traits.hpp"
 
 #include <algorithm>
 #include <cstdint>
@@ -19,6 +20,16 @@
 #include <initializer_list>
 
 STDROMANO_NAMESPACE_BEGIN
+
+// Utility to check if an iterator has an index member (for Vector iterators)
+template<class, class = std::void_t<>>
+struct has_index : std::false_type {};
+
+template<class T>
+struct has_index<T, std::void_t<decltype(std::declval<T>().index)>> : std::true_type {};
+
+template<class T>
+constexpr bool has_index_v = has_index<T>::value;
 
 template <typename T>
 class Vector
@@ -256,11 +267,16 @@ public:
         return this->size() == 0;
     }
 
+    class const_iterator;
+
     class iterator
     {
         friend class Vector;
         Vector* vector;
         size_t index;
+
+        template<class, class>
+        friend struct has_index;
 
         void advance()
         {
@@ -377,6 +393,11 @@ public:
         {
             return this->index >= other.index;
         }
+
+        operator const_iterator() const
+        {
+            return const_iterator(this->vector, this->index);
+        }
     };
 
     class const_iterator
@@ -384,6 +405,9 @@ public:
         friend class Vector;
         const Vector* vector;
         std::size_t index;
+
+        template<class, class>
+        friend struct has_index;
 
         void advance()
         {
@@ -489,6 +513,11 @@ public:
         bool operator>=(const const_iterator& other) const
         {
             return this->index >= other.index;
+        }
+
+        operator iterator() const
+        {
+            return iterator(this->vector, this->index);
         }
     };
 
@@ -646,7 +675,7 @@ public:
         this->incr_size();
     }
 
-    void insert(const T& element, const std::size_t position) noexcept
+    void insert(T element, const std::size_t position) noexcept
     {
 #if STDROMANO_NULL_VECTOR_ASSERTIONS
         STDROMANO_ASSERT(this->_data != nullptr, "Vector has not been allocated");
@@ -656,46 +685,92 @@ public:
         if(this->size() == this->capacity())
             this->grow();
 
-        std::memmove(this->data() + position + 1,
-                     this->data() + position,
-                     (this->size() - position) * sizeof(T));
+        if(position == this->size())
+        {
+            this->emplace_back(std::move(element));
+        }
+        else
+        {
+            if constexpr (std::is_trivially_copyable_v<T>)
+            {
+                std::memmove(this->data() + position + 1,
+                            this->data() + position,
+                            (this->size() - position) * sizeof(T));
+            }
+            else
+            {
+                ::new(this->data() + this->size()) T(std::move(this->operator[](this->size() - 1)));
 
-        ::new(this->data() + position) T(element);
+                std::move_backward(this->data() + position,
+                                this->data() + this->size() - 1,
+                                this->data() + this->size());
+            }
 
-        this->incr_size();
+            this->operator[](position) = std::move(element);
+
+            this->incr_size();
+        }
     }
 
-    iterator insert(const_iterator pos, std::size_t count, const T& value) noexcept
+    template<class It>
+    iterator insert(It pos, std::size_t count, const T& value) noexcept
     {
+        static_assert(has_index_v<It>, "It has not index member (hint: use Vector::iterator or Vector::const_iterator)");
+
 #if STDROMANO_NULL_VECTOR_ASSERTIONS
         STDROMANO_ASSERT(this->_data != nullptr, "Vector has not been allocated");
 #endif /* STDROMANO_NULL_VECTOR_ASSERTIONS */
 
-        const size_t position = pos.index;
+        const std::size_t position = pos.index;
 
         if(position > this->size())
             return this->end();
 
-        const std::size_t new_size = this->size() + count;
+        const std::size_t old_size = this->size();
+        const std::size_t tail = old_size - position;
+        const std::size_t new_size = old_size + count;
 
         while(this->capacity() < new_size)
             this->grow();
 
-        std::memmove(this->data() + position + count,
-                     this->data() + position,
-                     (this->size() - position) * sizeof(T));
+        if constexpr (std::is_trivially_copyable_v<T>)
+        {
+            std::memmove(this->data() + position + count,
+                         this->data() + position,
+                         tail * sizeof(T));
+        }
+        else
+        {
+            if(count <= tail)
+            {
+                std::uninitialized_move(this->data() + old_size - count,
+                                        this->data() + old_size,
+                                        this->data() + old_size);
 
-        for(std::size_t i = 0; i < count; ++i)
-            ::new(this->data() + position + i) T(value);
+                std::move_backward(this->data() + position,
+                                   this->data() + old_size,
+                                   this->data() + old_size);
+            }
+            else
+            {
+                std::uninitialized_move(this->data() + position,
+                                        this->data() + old_size,
+                                        this->data() + position + count);
+            }
+        }
+
+        std::uninitialized_fill_n(this->data() + position, count, value);
 
         this->set_size(new_size);
 
         return iterator(this, position);
     }
 
-    template <class InputIt>
-    iterator insert(iterator pos, InputIt first, InputIt last) noexcept
+    template<class It, class InputIt>
+    iterator insert(It pos, InputIt first, InputIt last) noexcept
     {
+        static_assert(has_index_v<It>, "It has not index member (hint: use Vector::iterator or Vector::const_iterator)");
+
 #if STDROMANO_NULL_VECTOR_ASSERTIONS
         STDROMANO_ASSERT(this->_data != nullptr, "Vector has not been allocated");
 #endif /* STDROMANO_NULL_VECTOR_ASSERTIONS */
@@ -708,84 +783,88 @@ public:
         if(position > this->size())
             return this->end();
 
-        const std::size_t count = static_cast<std::size_t>(std::distance(first, last));
-        const std::size_t new_size = this->size() + count;
+        const std::size_t old_size = this->size();
 
-        while(this->capacity() < new_size)
-            this->grow();
-
-        std::size_t offset = 0;
-
-        if(pos == this->end())
+        if constexpr (is_forward_iterator<InputIt>::value)
         {
-            for(auto it = first; it != last; ++it)
+            const std::size_t count = static_cast<std::size_t>(std::distance(first, last));
+            const std::size_t tail = old_size - position;
+            const std::size_t new_size = this->size() + count;
+
+            while(this->capacity() < new_size)
+                this->grow();
+
+            std::size_t offset = 0;
+
+            if(pos == this->end())
             {
-                this->emplace_back(*it);
-                ++offset;
+                for(auto it = first; it != last; ++it)
+                {
+                    this->emplace_back(*it);
+                    ++offset;
+                }
             }
+            else
+            {
+                if constexpr (std::is_trivially_copyable_v<T>)
+                {
+                    std::memmove(this->data() + position + count,
+                                this->data() + position,
+                                tail * sizeof(T));
+                }
+                else
+                {
+                    if(count <= tail)
+                    {
+                        std::uninitialized_move(this->data() + old_size - count,
+                                                this->data() + old_size,
+                                                this->data() + old_size);
+
+                        std::move_backward(this->data() + position,
+                                        this->data() + old_size - count,
+                                        this->data() + old_size);
+                    }
+                    else
+                    {
+                        std::uninitialized_move(this->data() + position,
+                                                this->data() + old_size,
+                                                this->data() + position + count);
+                    }
+                }
+
+                std::uninitialized_copy(first, last, this->data() + position);
+
+                this->set_size(new_size);
+            }
+
+            return iterator(this, position);
         }
         else
         {
-            std::memmove(this->data() + position + count,
-                         this->data() + position,
-                         (this->size() - position) * sizeof(T));
+            std::size_t pos_index = pos.index;
 
-            for(auto it = first; it != last; ++it, ++offset)
-                ::new(this->data() + position + offset) T(*it);
+            for(; first != last; ++first)
+                this->emplace_back(*first);
 
-            this->set_size(new_size);
+            std::rotate(this->data() + pos_index,
+                        this->data() + old_size,
+                        this->data() + this->size());
+
+            return iterator(this, pos_index);
         }
-
-        return iterator(this, position);
     }
 
-    iterator insert(const_iterator pos, std::initializer_list<T> list) noexcept
+    template<class It>
+    iterator insert(It pos, std::initializer_list<T> list) noexcept
     {
-#if STDROMANO_NULL_VECTOR_ASSERTIONS
-        STDROMANO_ASSERT(this->_data != nullptr, "Vector has not been allocated");
-#endif /* STDROMANO_NULL_VECTOR_ASSERTIONS */
-
-        const std::size_t position = pos.index;
-
-        if(position > this->size())
-            return this->end();
-
-        const std::size_t count = list.size();
-        const std::size_t new_size = this->size() + count;
-
-        while(this->capacity() < new_size)
-            this->grow();
-
-        std::size_t offset = 0;
-
-        if(pos == this->cend())
-        {
-            for(const auto& item : list)
-            {
-                this->emplace_back(item);
-                ++offset;
-            }
-        }
-        else
-        {
-            std::memmove(this->data() + position + count,
-                         this->data() + position,
-                         (this->size() - position) * sizeof(T));
-
-            for(const auto& item : list)
-            {
-                ::new(this->data() + position + offset) T(item);
-                ++offset;
-            }
-
-            this->set_size(new_size);
-        }
-
-        return iterator(this, position + offset);
+        return this->insert(pos, list.begin(), list.end());
     }
 
-    iterator erase(const_iterator pos) noexcept
+    template<class It>
+    iterator erase(It pos) noexcept
     {
+        static_assert(has_index_v<It>, "It has not index member (hint: use Vector::iterator or Vector::const_iterator)");
+
 #if STDROMANO_NULL_VECTOR_ASSERTIONS
         STDROMANO_ASSERT(this->_data != nullptr, "Vector has not been allocated");
 #endif /* STDROMANO_NULL_VECTOR_ASSERTIONS */
@@ -794,34 +873,62 @@ public:
 
         const std::size_t position = pos.index;
 
-        this->at(position)->~T();
+        if constexpr (std::is_trivially_copyable_v<T>)
+        {
+            std::memmove(this->data() + position,
+                         this->data() + position + 1,
+                         (this->size() - position - 1) * sizeof(T));
+        }
+        else
+        {
+            std::move(this->data() + position + 1,
+                      this->data() + this->size(),
+                      this->data() + position);
+        }
 
-        std::memmove(this->data() + position,
-                     this->data() + position + 1,
-                     (this->size() - position - 1) * sizeof(T));
+        if constexpr (!std::is_trivially_destructible_v<T>)
+            std::destroy_at(this->data() + (this->size() - 1));
 
         this->decr_size();
 
         return iterator(this, position);
     }
 
-    iterator erase(iterator first, iterator last) noexcept
+    template<typename It>
+    iterator erase(It first, It last) noexcept
     {
+        static_assert(has_index_v<It>, "It has not index member (hint: use Vector::iterator or Vector::const_iterator)");
+
 #if STDROMANO_NULL_VECTOR_ASSERTIONS
         STDROMANO_ASSERT(this->_data != nullptr, "Vector has not been allocated");
 #endif /* STDROMANO_NULL_VECTOR_ASSERTIONS */
 
-        if(first.index < this->size() && first.index < last.index && last.index < this->size())
+        if(first.index < this->size() &&
+           first.index <= last.index &&
+           last.index <= this->size())
         {
+            if(first.index == last.index)
+                return iterator(this, first.index);
+
             const std::size_t start_pos = first.index;
             const std::size_t count = last.index - first.index;
 
-            for(std::size_t i = 0; i < count; ++i)
-                this->at(start_pos + i)->~T();
+            if constexpr (std::is_trivially_copyable_v<T>)
+            {
+                std::memmove(this->data() + start_pos,
+                            this->data() + start_pos + count,
+                            (this->size() - start_pos - count) * sizeof(T));
+            }
+            else
+            {
+                std::move(this->data() + start_pos + count, // first
+                          this->data() + this->size(),      // last
+                          this->data() + start_pos);        // output first
+            }
 
-            std::memmove(this->data() + start_pos,
-                         this->data() + start_pos + count,
-                         (this->size() - start_pos - count) * sizeof(T));
+            if constexpr (!std::is_trivially_destructible_v<T>)
+                std::destroy(this->data() + (this->size() - count),
+                             this->data() + this->size());
 
             this->set_size(this->size() - count);
 
@@ -829,23 +936,6 @@ public:
         }
 
         return this->end();
-    }
-
-    void remove(const std::size_t position) noexcept
-    {
-#if STDROMANO_NULL_VECTOR_ASSERTIONS
-        STDROMANO_ASSERT(this->_data != nullptr, "Vector has not been allocated");
-#endif /* STDROMANO_NULL_VECTOR_ASSERTIONS */
-        STDROMANO_ASSERT(this->size() > 0, "No elements present in the vector");
-        STDROMANO_ASSERT(position < this->size(), "Position must be lower than the vector size");
-
-        this->at(position)->~T();
-
-        std::memmove(this->data() + position,
-                     this->data() + position + 1,
-                     (this->size() - position - 1) * sizeof(T));
-
-        this->decr_size();
     }
 
     T pop_back() noexcept

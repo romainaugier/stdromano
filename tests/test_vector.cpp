@@ -230,7 +230,7 @@ TEST_CASE(test_insert_count)
     vec.push_back(TestObject("a"));
     vec.push_back(TestObject("d"));
 
-    auto it = vec.insert(vec.cbegin() + 1, 2, TestObject("x"));
+    auto it = vec.insert(vec.begin() + 1, 2, TestObject("x"));
     ASSERT_EQUAL(4u, vec.size());
     ASSERT_EQUAL("a", vec[0].get_data());
     ASSERT_EQUAL("x", vec[1].get_data());
@@ -307,27 +307,10 @@ TEST_CASE(test_erase_range)
     vec.push_back(TestObject("c"));
     vec.push_back(TestObject("d"));
 
-    vec.erase(vec.begin() + 1, vec.begin() + 3);
+    vec.erase(vec.cbegin() + 1, vec.cbegin() + 3);
     ASSERT_EQUAL(2u, vec.size());
     ASSERT_EQUAL("a", vec[0].get_data());
     ASSERT_EQUAL("d", vec[1].get_data());
-}
-
-TEST_CASE(test_remove)
-{
-    stdromano::Vector<TestObject> vec;
-    vec.push_back(TestObject("a"));
-    vec.push_back(TestObject("b"));
-    vec.push_back(TestObject("c"));
-
-    vec.remove(0);
-    ASSERT_EQUAL(2u, vec.size());
-    ASSERT_EQUAL("b", vec[0].get_data());
-    ASSERT_EQUAL("c", vec[1].get_data());
-
-    vec.remove(1);
-    ASSERT_EQUAL(1u, vec.size());
-    ASSERT_EQUAL("b", vec[0].get_data());
 }
 
 TEST_CASE(test_find)
@@ -539,7 +522,6 @@ int main()
     runner.add_test("Insert Initializer List", test_insert_initializer_list);
     runner.add_test("Erase Single", test_erase_single);
     runner.add_test("Erase Range", test_erase_range);
-    runner.add_test("Remove", test_remove);
     runner.add_test("Find", test_find);
     runner.add_test("CFind", test_cfind);
     runner.add_test("Iterators", test_iterators);
