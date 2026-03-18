@@ -54,6 +54,7 @@ dkms.conf
 
 # Folders
 .vscode
+.zed
 build
 bin
 .cache
