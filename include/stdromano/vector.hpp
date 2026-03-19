@@ -18,6 +18,7 @@
 #include <cstdint>
 #include <functional>
 #include <initializer_list>
+#include <memory>
 
 STDROMANO_NAMESPACE_BEGIN
 
