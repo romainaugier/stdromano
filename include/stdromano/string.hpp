@@ -1504,6 +1504,7 @@ using String1024 = String<1024>;
 using String260 = String<260>;
 using String128 = String<128>;
 using String32 = String<32>;
+using String16 = String<16>;
 
 // Join function to join container types as a string
 template<typename Container>
