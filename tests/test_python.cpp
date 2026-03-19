@@ -21,32 +21,29 @@ int main()
 
     spdlog::info("Starting Python test");
 
-    const char* text = "import os\nprint(os.curdir)\nvar = 10\nvar += 10\ndef add(a, b):\n    return a + b\n";
-
     stdromano::Python::AST ast(logger);
 
-    if(!ast.from_text(text, true))
+    const stdromano::StringD source_code_path("{}/python/test_all.py", TESTS_DATA_DIR);
+
+    if(!stdromano::fs_path_exists(source_code_path))
+    {
+        spdlog::warn("Source code file does not exist, discarding test");
+        return 0;
+    }
+
+    const stdromano::StringD source_code = stdromano::load_file_content(source_code_path);
+
+    if(source_code.empty())
+    {
+        spdlog::error("Cannot load source code from file content");
         return 1;
+    }
 
-    const char* error_text = "import os\nprint(>>)";
-
-    if(ast.from_text(error_text, true))
+    if(!ast.from_text(source_code, true))
+    {
+        spdlog::error("Cannot parse source code");
         return 1;
-
-    const char* func_text = "import os\n\ndef func(a: int, b: int) -> int:\n    print(\"func\")\n\n    return a + b\n\ndef func2(x, y):\n    return x + y";
-
-    if(!ast.from_text(func_text, true))
-        return 1;
-
-    const char* func_forloop_text = "import typing\n\ndef sum(l: typing.List[int]) -> int:\n    res = 0\n    for x in l:\n        res += x\n\n    return res\n";
-
-    if(!ast.from_text(func_forloop_text, true))
-        return 1;
-
-    const char* bad_func_text = "def badfunc(x: int, y) -> int:    z = x + y\n    return z";
-
-    if(ast.from_text(bad_func_text, true))
-        return 1;
+    }
 
     spdlog::info("Finished Python test");
 

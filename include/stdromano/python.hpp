@@ -25,6 +25,9 @@ STDROMANO_NAMESPACE_BEGIN
 
 PYTHON_NAMESPACE_BEGIN
 
+// Helps debugging the parser
+#define STDROMANO_PYTHON_PARSER_ASSERT_ON_ERROR
+
 // Lexer Token
 
 struct Token
@@ -55,6 +58,8 @@ struct Token
                                                                                                     type(type),
                                                                                                     column(column),
                                                                                                     line(line) {}
+
+    static const char* kind_as_string(Kind kind) noexcept;
 };
 
 enum Keyword : std::uint32_t
@@ -153,6 +158,7 @@ enum Operator : std::uint32_t
     IdentityIsNot = 37,
     MembershipIn = 38,
     MembershipNotIn = 39,
+    Bang = 40,
 };
 
 enum Literal : std::uint32_t
@@ -163,7 +169,8 @@ enum Literal : std::uint32_t
     FormattedString = 4,
     Bytes = 5,
     Integer = 6,
-    Float = 7
+    Float = 7,
+    Complex = 8,
 };
 
 // AST Node
@@ -584,6 +591,8 @@ struct NameNode : Node
 {
     StringD id;
 
+    Node* type = nullptr;
+
     NameNode(StringD id, std::uint32_t line, std::uint32_t column) : Node(ASTNodeName, line, column),
                                                                      id(std::move(id)) {}
 
@@ -915,6 +924,20 @@ public:
 PYTHON_NAMESPACE_END
 
 STDROMANO_NAMESPACE_END
+
+template<>
+struct fmt::formatter<stdromano::Python::Token::Kind>
+{
+    constexpr auto parse(format_parse_context& ctx)
+    {
+        return ctx.begin();
+    }
+
+    auto format(const stdromano::Python::Token::Kind& kind, format_context& ctx) const
+    {
+        return format_to(ctx.out(), stdromano::Python::Token::kind_as_string(kind));
+    }
+};
 
 template<>
 struct fmt::formatter<stdromano::Python::Operator>

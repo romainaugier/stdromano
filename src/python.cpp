@@ -12,42 +12,83 @@ STDROMANO_NAMESPACE_BEGIN
 
 PYTHON_NAMESPACE_BEGIN
 
-// Lexer
+// Token utilities
 
-static constexpr std::uint32_t LEX_ERROR = std::numeric_limits<std::uint32_t>::max();
-
-static const char* const g_token_kind_as_string[8] = {
-    "IDENTIFIER",
-    "KEYWORD",
-    "LITERAL",
-    "OPERATOR",
-    "DELIMITER",
-    "NEWLINE",
-    "INDENT",
-    "DEDENT",
+static const char* const g_token_kind_names[] = {
+    "IDENTIFIER", "KEYWORD", "LITERAL", "OPERATOR",
+    "DELIMITER",  "NEWLINE", "INDENT",  "DEDENT",
 };
 
-const char* token_kind_as_string(Token::Kind kind) noexcept
+const char* Token::kind_as_string(Token::Kind kind) noexcept
 {
-    const std::uint32_t k = static_cast<std::uint32_t>(kind);
-
-    if(k > 7)
-        return nullptr;
-
-    return g_token_kind_as_string[k];
+    auto k = static_cast<std::uint32_t>(kind);
+    return k < 8 ? g_token_kind_names[k] : nullptr;
 }
 
-bool is_identifier_start(unsigned int c) noexcept
-{
-    return is_letter(c) | (c == '_');
-}
+// Lexer
 
-bool is_identifier(unsigned int c) noexcept
+struct Lexer
 {
-    return is_letter(c) | is_digit(c) | (c == '_');
-}
+    const char* buffer;
+    char* cursor;
+    std::uint32_t line;
+    std::uint32_t column;
 
-const HashMap<StringD, Keyword> g_keywords = {
+    std::uint32_t indent_size;
+    StackVector<std::uint32_t, 256> indent_stack;
+
+    std::shared_ptr<spdlog::logger> logger;
+
+    static const HashMap<StringD, Keyword>    keyword_map;
+    static const HashMap<StringD, Delimiter>  delimiter_map;
+    static const HashMap<StringD, Operator>   operator_map;
+
+    explicit Lexer(const char* source,
+                   std::shared_ptr<spdlog::logger>& logger) noexcept;
+
+    bool tokenize(Vector<Token>& out) noexcept;
+
+private:
+    static constexpr std::uint32_t LEX_ERROR = std::numeric_limits<std::uint32_t>::max();
+    static constexpr std::uint32_t INDENT_UNDEFINED = std::numeric_limits<std::uint32_t>::max();
+
+    static bool is_id_start(unsigned int c) noexcept { return is_letter(c) || c == '_'; }
+    static bool is_id_continue(unsigned int c) noexcept { return is_letter(c) || is_digit(c) || c == '_'; }
+    static bool is_hex(unsigned int c) noexcept { return is_digit(c) || (c-'a' < 6u) || (c-'A' < 6u); }
+    static bool is_oct(unsigned int c) noexcept { return c - '0' < 8u; }
+    static bool is_bin(unsigned int c) noexcept { return c == '0' || c == '1'; }
+    static bool is_newline(unsigned int c) noexcept { return c == '\n' || c == '\r'; }
+    // TODO: more robust unicode functions
+    static bool is_unicode_id_start(unsigned int c) noexcept { return c >= 128; }
+    static bool is_unicode_id_continue(unsigned int c) noexcept { if(c < 128) return isalnum(c) | (c == '_'); return true; }
+
+    char  peek(std::uint32_t ahead = 0) const noexcept;
+    char  advance() noexcept;
+    void  advance_n(std::uint32_t n) noexcept;
+    bool  at_end() const noexcept;
+    bool  match(char expected) noexcept;
+
+    bool lex_string(Vector<Token>& out) noexcept;
+    bool lex_number(Vector<Token>& out) noexcept;
+    bool lex_identifier(Vector<Token>& out) noexcept;
+    bool lex_delimiter(Vector<Token>& out) noexcept;
+    bool lex_operator(Vector<Token>& out) noexcept;
+    bool lex_newline_indent(Vector<Token>& out) noexcept;
+    void skip_comment() noexcept;
+
+    std::uint32_t consume_digits(bool (*pred)(unsigned int)) noexcept;
+    std::uint32_t consume_exponent() noexcept;
+
+    Literal classify_string_prefix(const char* start, std::uint32_t len) const noexcept;
+    bool consume_string_body(char quote, bool triple, Literal type) noexcept;
+
+    bool emit_indentation(std::uint32_t spaces, Vector<Token>& out) noexcept;
+
+    template<typename... Args>
+    void report_error(fmt::format_string<Args...> fmt, Args&&... args) noexcept;
+};
+
+const HashMap<StringD, Keyword> Lexer::keyword_map = {
     { StringD::make_ref("False"), Keyword::False },
     { StringD::make_ref("await"), Keyword::Await },
     { StringD::make_ref("else"), Keyword::Else },
@@ -85,7 +126,7 @@ const HashMap<StringD, Keyword> g_keywords = {
     { StringD::make_ref("yield"), Keyword::Yield },
 };
 
-const HashMap<StringD, Delimiter> g_delimiters = {
+const HashMap<StringD, Delimiter> Lexer::delimiter_map = {
     { StringD::make_ref("("), Delimiter::LParen },
     { StringD::make_ref(")"), Delimiter::RParen },
     { StringD::make_ref("["), Delimiter::LBracket },
@@ -100,24 +141,7 @@ const HashMap<StringD, Delimiter> g_delimiters = {
     { StringD::make_ref("->"), Delimiter::RightArrow },
 };
 
-bool is_delimiter(unsigned int c) noexcept
-{
-    return (c == '(') |
-           (c == ')') |
-           (c == '[') |
-           (c == ']') |
-           (c == '{') |
-           (c == '}') |
-           (c == ',') |
-           (c == ':') |
-           (c == '.') |
-           (c == ';') |
-           (c == '@') |
-           (c == '-') |
-           (c == '>');
-}
-
-const HashMap<StringD, Operator> g_operators = {
+const HashMap<StringD, Operator> Lexer::operator_map = {
     { StringD::make_ref("+"), Operator::Addition },
     { StringD::make_ref("-"), Operator::Subtraction },
     { StringD::make_ref("*"), Operator::Multiplication },
@@ -159,248 +183,422 @@ const HashMap<StringD, Operator> g_operators = {
     { StringD::make_ref("not in"), Operator::MembershipNotIn },
 };
 
-bool is_operator_start(unsigned int c) noexcept
+Lexer::Lexer(const char* source,
+             std::shared_ptr<spdlog::logger>& logger) noexcept : buffer(source),
+                                                                 cursor(const_cast<char*>(source)),
+                                                                 line(1),
+                                                                 column(1),
+                                                                 indent_size(INDENT_UNDEFINED),
+                                                                 logger(logger)
 {
-    return (c == '+') |
-           (c == '-') |
-           (c == '*') |
-           (c == '/') |
-           (c == '&') |
-           (c == '|') |
-           (c == '^') |
-           (c == '>') |
-           (c == '<') |
-           (c == '=') |
-           (c == '!') |
-           (c == '%') |
-           (c == 'a') |
-           (c == 'i') |
-           (c == 'n') |
-           (c == 'o');
+    indent_stack.push_back(0);
 }
 
-bool is_binary_operator(unsigned int c) noexcept
+char Lexer::peek(std::uint32_t ahead) const noexcept
 {
-    return (c == '+') |
-           (c == '-') |
-           (c == '*') |
-           (c == '/') |
-           (c == '&') |
-           (c == '|') |
-           (c == '^') |
-           (c == '>') |
-           (c == '<') |
-           (c == '%');
+    const char* p = cursor;
+
+    for(std::uint32_t i = 0; i < ahead && *p != '\0'; ++i)
+        ++p;
+
+    return *p;
 }
 
-bool is_unary_operator(unsigned int c) noexcept
+char Lexer::advance() noexcept
 {
-    return c == '!';
+    char c = *cursor++;
+    column++;
+    return c;
 }
 
-bool is_assignment_operator(unsigned int c)
+void Lexer::advance_n(std::uint32_t n) noexcept
 {
-    return c == '=';
-}
-
-std::uint32_t is_logical_operator(char* c) noexcept
-{
-    if(std::strncmp(c, "or", 2) == 0)
-        return 2;
-    else if(std::strncmp(c, "and", 3) == 0 || std::strncmp(c, "not", 3) == 0)
-        return 3;
-    else
-        return 0;
-}
-
-std::uint32_t is_identity_operator(char* c) noexcept
-{
-    if(std::strncmp(c, "is", 2) == 0)
-        return std::strncmp(c + 2, " not", 4) == 0 ? 6 : 2;
-
-    return 0;
-}
-
-std::uint32_t is_membership_operator(char* c) noexcept
-{
-    if(std::strncmp(c, "in", 2) == 0)
-        return 2;
-    else if(std::strncmp(c, "not in", 6))
-        return 6;
-    else
-        return 0;
-}
-
-std::uint32_t is_operator(char* c) noexcept
-{
-    if(is_binary_operator(*c))
+    for(std::uint32_t i = 0; i < n && *cursor != '\0'; ++i)
     {
-        std::uint32_t length = 1;
-        c++;
+        cursor++;
+        column++;
+    }
+}
 
-        while(is_binary_operator(*c) || is_assignment_operator(*c))
+bool Lexer::at_end() const noexcept { return *cursor == '\0'; }
+
+bool Lexer::match(char expected) noexcept
+{
+    if(*cursor == expected)
+    {
+        advance();
+        return true;
+    }
+
+    return false;
+}
+
+template<typename... Args>
+void Lexer::report_error(fmt::format_string<Args...> fmt, Args&&... args) noexcept
+{
+    const char* p = this->buffer;
+    std::uint32_t cur = 1;
+
+    while(*p != '\0' && cur < line)
+    {
+        if(*p == '\n')
+            cur++;
+
+        p++;
+    }
+
+    const char* line_start = p;
+    const char* line_end = p;
+
+    while(*line_end != '\0' && *line_end != '\n')
+        line_end++;
+
+    std::uint32_t line_len = static_cast<std::uint32_t>(line_end - line_start);
+    const String16 gutter = String16::make_fmt("{} | ", line);
+
+    this->logger->error(fmt, std::forward<Args>(args)...);
+    this->logger->error("{}{}", gutter, fmt::string_view(line_start, line_len));
+    this->logger->error("{0: ^{1}}^", "", gutter.size() + column - 1);
+}
+
+Literal Lexer::classify_string_prefix(const char* start, std::uint32_t len) const noexcept
+{
+    bool has_r = false, has_u = false, has_f = false, has_b = false, has_t = false;
+
+    for(std::uint32_t i = 0; i < len; ++i)
+    {
+        char c = start[i];
+
+        if(c == '"' || c == '\'')
+            break;
+
+        switch (c)
         {
-            c++;
-            length++;
+            case 'r':
+            case 'R':
+                has_r = true;
+                break;
+            case 'u':
+            case 'U':
+                has_u = true;
+                break;
+            case 'f':
+            case 'F':
+                has_f = true;
+                break;
+            case 'b':
+            case 'B':
+                has_b = true;
+                break;
+            case 't':
+            case 'T':
+                has_t = true;
+                break;
+            default:
+                break;
+        }
+    }
+
+    if(has_f || has_t)
+        return Literal::FormattedString;
+
+    if(has_b)
+        return Literal::Bytes;
+
+    if(has_r)
+        return Literal::RawString;
+
+    if(has_u)
+        return Literal::UnicodeString;
+
+    return Literal::String;
+}
+
+bool Lexer::consume_string_body(char quote, bool triple, Literal type) noexcept
+{
+    std::uint32_t depth = 0;
+
+    while(!this->at_end())
+    {
+        char c = *cursor;
+
+        if (c == '\\')
+        {
+            this->advance();
+
+            if(!this->at_end())
+                this->advance();
+
+            continue;
         }
 
-        return length;
-    }
-    else if(is_assignment_operator(*c))
-    {
-        return 1;
-    }
-    else if(is_unary_operator(*c))
-    {
-        if(is_assignment_operator(*(c + 1)))
-            return 2;
-
-        return LEX_ERROR;
-    }
-
-    return 0;
-}
-
-bool is_string_literal_prefix(unsigned int c) noexcept
-{
-    return (c == 'r') |
-           (c == 'R') |
-           (c == 'u') |
-           (c == 'U') |
-           (c == 'f') |
-           (c == 'F');
-}
-
-std::uint32_t is_string_literal_start(char* c) noexcept
-{
-    if(is_string_literal_prefix(*c) && *(c + 1) != '\0')
-    {
-        if(*(c + 1) == '"' || *(c + 1) == '\'')
+        if(c == quote)
         {
-            return 2;
-        }
-        else if(is_string_literal_prefix(*(c + 1)))
-        {
-            if(*(c + 2) != '\0' && (*(c + 2) == '"' || *(c + 2) == '\''))
-                return 3;
-            else
-                return 0;
-        }
-
-        return 0;
-    }
-    else if(*c == '"' || *c == '\'')
-    {
-        if(*(c + 1) != '\0' && (*(c + 1) == '"' || *(c + 1) == '\''))
-            if(*(c + 2) != '\0' && (*(c + 2) == '"' || *(c + 2) == '\''))
-                return 3;
-
-        return 1;
-    }
-
-    return 0;
-}
-
-std::uint32_t consume_string_literal(char* c, std::uint32_t& column, std::uint32_t& line) noexcept
-{
-    std::uint32_t length = 0;
-
-    while(*c != '\0' && (*c != '"' && *c != '\''))
-    {
-        if(*c == '\r')
-        {
-            column = 1;
-            line++;
-
-            c++;
-            length++;
-
-            // \r\n counts as one newline
-            if(*c == '\n')
+            if(triple)
             {
-                c++;
-                length++;
+                if(this->peek(1) == quote && this->peek(2) == quote && depth == 0)
+                {
+                    this->advance_n(3);
+                    return true;
+                }
+
+                this->advance();
+
+                continue;
+            }
+            else if(depth == 0)
+            {
+                this->advance();
+                return true;
             }
         }
-        else if(*c == '\n')
-        {
-            column = 1;
-            line++;
 
-            c++;
-            length++;
+        if(c == '\r')
+        {
+            this->cursor++;
+            this->column = 1;
+            this->line++;
+
+            if(*this->cursor == '\n')
+                this->cursor++;
+        }
+        else if(c == '\n')
+        {
+            this->cursor++;
+            this->column = 1;
+            this->line++;
+        }
+        else if(c == '{' && type == Literal::FormattedString)
+        {
+            depth++;
+
+            this->advance();
+        }
+        else if(c == '}' && type == Literal::FormattedString)
+        {
+            if(depth == 0)
+            {
+                this->report_error("Unexpected \"}\" in formatted string");
+                return false;
+            }
+
+            depth--;
+
+            this->advance();
         }
         else
         {
-            column++;
-            c++;
-            length++;
+            this->advance();
         }
     }
 
-    return length;
+    this->report_error("Unterminated string literal");
+
+    return false;
 }
 
-bool is_numeric_literal_start(unsigned int c) noexcept
+bool Lexer::lex_string(Vector<Token>& out) noexcept
 {
-    return is_digit(c);
+    char* start = this->cursor;
+    std::uint32_t col_start = this->column;
+
+    auto is_str_prefix = [](unsigned int c) {
+        return (c == 'r') | (c == 'R') | (c == 'u') | (c == 'U') | (c == 'f') | (c == 'F') | (c == 'b') | (c == 'B');
+    };
+
+    std::uint32_t prefix_len = 0;
+
+    while(is_str_prefix(this->peek(prefix_len)))
+        prefix_len++;
+
+    char quote_char = this->peek(prefix_len);
+
+    if(quote_char != '"' && quote_char != '\'')
+        return false;
+
+    Literal lit_type = this->classify_string_prefix(start, prefix_len);
+
+    this->advance_n(prefix_len);
+
+    bool triple = (this->peek(0) == quote_char && this->peek(1) == quote_char && this->peek(2) == quote_char);
+
+    if(triple)
+        this->advance_n(3);
+    else
+        this->advance();
+
+    char* body_start = this->cursor;
+
+    if(!this->consume_string_body(quote_char, triple, lit_type))
+        return false;
+
+    char* body_end = triple ? (this->cursor - 3) : (this->cursor - 1);
+    std::uint32_t body_len = static_cast<std::uint32_t>(body_end - body_start);
+
+    out.emplace_back(StringD::make_ref(body_start, body_len),
+                     Token::Kind::Literal,
+                     static_cast<std::uint32_t>(lit_type),
+                     col_start,
+                     this->line);
+    return true;
 }
 
-bool is_int_literal_start(unsigned int c) noexcept
+std::uint32_t Lexer::consume_digits(bool (*pred)(unsigned)) noexcept
 {
-    return is_digit(c);
-}
+    std::uint32_t n = 0;
 
-bool is_int_literal(unsigned int c) noexcept
-{
-    return is_digit(c);
-}
-
-std::uint32_t consume_int_literal(char* c) noexcept
-{
-    std::uint32_t length = 0;
-
-    while(*c != '\0' && is_digit(*c))
+    while (!this->at_end() && (pred(static_cast<unsigned int>(*this->cursor)) || *this->cursor == '_'))
     {
-        c++;
-        length++;
+        this->advance();
+        n++;
     }
 
-    return length;
+    return n;
 }
 
-bool is_float_literal_start(unsigned int c) noexcept
+std::uint32_t Lexer::consume_exponent() noexcept
 {
-    return is_digit(c);
-}
+    if(this->at_end())
+        return 0;
 
-bool is_float_literal(unsigned int c) noexcept
-{
-    return is_digit(c) | (c == '.');
-}
+    char c = *this->cursor;
 
-std::uint32_t consume_float_literal(char* c) noexcept
-{
-    std::uint32_t length = 0;
+    if(c != 'e' && c != 'E')
+        return 0;
 
-    bool found_dot = false;
+    std::uint32_t n = 1;
 
-    while(*c != '\0')
+    this->advance();
+
+    if(*this->cursor == '+' || *this->cursor == '-')
     {
-        if(*c == '.')
+        this->advance();
+        n++;
+    }
+
+    n += this->consume_digits(is_digit);
+
+    return n;
+}
+
+bool Lexer::lex_number(Vector<Token>& out) noexcept
+{
+    char* start = this->cursor;
+    std::uint32_t col_start = this->column;
+    Literal lit = Literal::Integer;
+
+    if(*this->cursor == '0' && !this->at_end())
+    {
+        char next = this->peek(1);
+
+        if(next == 'x' || next == 'X')
         {
-            if(found_dot)
-                break;
+            this->advance_n(2);
 
-            found_dot = true;
+            if(this->consume_digits(is_hex) == 0)
+            {
+                this->report_error("Invalid hex literal");
+                return false;
+            }
 
-            c++;
-            length++;
+            goto emit;
         }
-        else if(is_digit(*c))
+
+        if(next == 'o' || next == 'O')
         {
-            c++;
-            length++;
+            this->advance_n(2);
+
+            if(this->consume_digits(is_oct) == 0)
+            {
+                this->report_error("Invalid octal literal");
+                return false;
+            }
+
+            goto emit;
+        }
+
+        if(next == 'b' || next == 'B')
+        {
+            this->advance_n(2);
+
+            if(this->consume_digits(is_bin) == 0)
+            {
+                this->report_error("Invalid binary literal");
+                return false;
+            }
+
+            goto emit;
+        }
+    }
+
+    {
+        bool has_dot = false;
+
+        this->consume_digits(is_digit);
+
+        if(*this->cursor == '.')
+        {
+            char after_dot = this->peek(1);
+
+            if(is_digit(static_cast<unsigned int>(after_dot)) ||
+               after_dot == 'e' ||
+               after_dot == 'E' ||
+               after_dot == 'j' ||
+               after_dot == 'J' ||
+               this->is_newline(after_dot) ||
+               this->cursor == start)
+            {
+                has_dot = true;
+                this->advance();
+                this->consume_digits(is_digit);
+            }
+        }
+
+        bool has_exp = this->consume_exponent() > 0;
+
+        if(has_dot || has_exp)
+            lit = Literal::Float;
+    }
+
+    if(*this->cursor == 'j' || *this->cursor == 'J')
+    {
+        this->advance();
+        lit = Literal::Complex;
+    }
+
+emit:
+    std::uint32_t length = static_cast<std::uint32_t>(this->cursor - start);
+
+    if(length == 0)
+        return false;
+
+    out.emplace_back(StringD::make_ref(start, length),
+                     Token::Kind::Literal,
+                     static_cast<std::uint32_t>(lit),
+                     col_start,
+                     line);
+    return true;
+}
+
+bool Lexer::lex_identifier(Vector<Token>& out) noexcept
+{
+    char* start = this->cursor;
+    std::uint32_t col_start = column;
+
+    this->advance();
+
+    while(!this->at_end())
+    {
+        if(this->is_id_continue(static_cast<unsigned int>(*this->cursor)))
+        {
+            this->advance();
+        }
+        else if(this->is_unicode_id_start(static_cast<unsigned int>(*this->cursor)))
+        {
+            this->advance();
+
+            while(this->is_unicode_id_continue(static_cast<unsigned int>(*this->cursor)))
+                this->advance();
         }
         else
         {
@@ -408,321 +606,417 @@ std::uint32_t consume_float_literal(char* c) noexcept
         }
     }
 
-    return found_dot ? length : 0;
-}
+    std::uint32_t length = static_cast<std::uint32_t>(this->cursor - start);
+    StringD word = StringD::make_from_c_str(start, length);
 
-bool is_newline(unsigned int c) noexcept
-{
-    return (c == '\n') | (c == '\r');
-}
-
-std::uint32_t consume_new_line(char* c) noexcept
-{
-    if(*c == '\r')
+    if(length == 2 && std::strncmp(start, "is", 2) == 0)
     {
-        c++;
+        char* save_cur = this->cursor;
+        std::uint32_t save_col = this->column;
 
-        if(*c == '\n')
-            return 2;
+        if(*this->cursor == ' ')
+        {
+            this->advance();
+
+            if(std::strncmp(this->cursor, "not", 3) == 0 && !this->is_id_continue(static_cast<unsigned int>(this->peek(3))))
+            {
+                this->advance_n(3);
+
+                out.emplace_back(StringD::make_ref(start, 6),
+                                 Token::Kind::Operator,
+                                 static_cast<std::uint32_t>(Operator::IdentityIsNot),
+                                 col_start, line);
+
+                return true;
+            }
+
+            this->cursor = save_cur;
+            this->column = save_col;
+        }
     }
-    else if(*c == '\n')
+
+    if(length == 3 && std::strncmp(start, "not", 3) == 0)
     {
-        return 1;
+        char* save_cur = this->cursor;
+        std::uint32_t save_col = this->column;
+
+        if(*this->cursor == ' ')
+        {
+            this->advance();
+
+            if(std::strncmp(this->cursor, "in", 2) == 0 && !this->is_id_continue(static_cast<unsigned int>(this->peek(2))))
+            {
+                this->advance_n(2);
+
+                out.emplace_back(StringD::make_ref(start, 6),
+                                 Token::Kind::Operator,
+                                 static_cast<std::uint32_t>(Operator::MembershipNotIn),
+                                 col_start, line);
+
+                return true;
+            }
+
+            this->cursor = save_cur;
+            this->column = save_col;
+        }
     }
 
-    return LEX_ERROR;
+    auto kw = keyword_map.find(word);
+
+    if(kw != keyword_map.end())
+    {
+        out.emplace_back(std::move(word),
+                         Token::Kind::Keyword,
+                         static_cast<std::uint32_t>(kw->second),
+                         col_start,
+                         line);
+
+        return true;
+    }
+
+    auto op = operator_map.find(word);
+
+    if(op != operator_map.end())
+    {
+        out.emplace_back(std::move(word),
+                         Token::Kind::Operator,
+                         static_cast<std::uint32_t>(op->second),
+                         col_start,
+                         line);
+
+        return true;
+    }
+
+    out.emplace_back(std::move(word), Token::Kind::Identifier, 0, col_start, line);
+
+    return true;
 }
 
-static constexpr std::uint32_t INDENT_SZ_UNDEFINED = std::numeric_limits<std::uint32_t>::max();
-
-bool AST::lex(const char* buffer, Vector<Token>& tokens) noexcept
+bool Lexer::lex_delimiter(Vector<Token>& out) noexcept
 {
-    this->_logger->trace("Lexing source code");
+    char* start = this->cursor;
+    std::uint32_t col_start = this->column;
 
-    char* s = const_cast<char*>(buffer);
-
-    std::uint32_t indent_size = INDENT_SZ_UNDEFINED;
-    StackVector<std::uint32_t, 256> indent_stack;
-    indent_stack.push_back(0);
-
-    std::uint32_t column = 1;
-    std::uint32_t line = 1;
-
-    while(*s != '\0')
+    if(*this->cursor == '-' && this->peek(1) == '>')
     {
-        std::uint32_t string_literal_prefix = is_string_literal_start(s);
+        this->advance_n(2);
 
-        if(string_literal_prefix != 0)
+        out.emplace_back(StringD::make_ref(start, 2),
+                         Token::Kind::Delimiter,
+                         static_cast<std::uint32_t>(Delimiter::RightArrow),
+                         col_start,
+                         line);
+
+        return true;
+    }
+
+    StringD d = StringD::make_ref(start, 1);
+
+    auto it = delimiter_map.find(d);
+
+    if(it != delimiter_map.end())
+    {
+        this->advance();
+
+        out.emplace_back(std::move(d),
+                         Token::Kind::Delimiter,
+                         static_cast<std::uint32_t>(it->second),
+                         col_start,
+                         line);
+
+        return true;
+    }
+
+    return false;
+}
+
+bool Lexer::lex_operator(Vector<Token>& out) noexcept
+{
+    char* start = this->cursor;
+    std::uint32_t col_start = this->column;
+
+    for(std::uint32_t try_len = 3; try_len >= 1; --try_len)
+    {
+        bool enough = true;
+
+        for (std::uint32_t i = 0; i < try_len; ++i)
         {
-            s += string_literal_prefix;
-            column += string_literal_prefix;
-
-            char* start = s;
-            std::uint32_t length = consume_string_literal(start, column, line);
-
-            tokens.emplace_back(StringD::make_ref(start, length),
-                                Token::Kind::Literal,
-                                Literal::String,
-                                column,
-                                line);
-
-            s += length;
-            column += length;
-
-            while(*s != '\0' && (*s == '"' || *s == '\''))
+            if(this->peek(i) == '\0')
             {
-                s++;
-                column++;
+                enough = false;
+                break;
             }
         }
-        else if(is_numeric_literal_start(*s))
+
+        if(!enough)
+            continue;
+
+        StringD candidate = StringD::make_ref(start, try_len);
+        auto it = operator_map.find(candidate);
+
+        if(it != operator_map.end())
         {
-            char* start = s;
-            std::uint32_t length = consume_float_literal(s);
+            this->advance_n(try_len);
 
-            if(length > 0)
-            {
-                tokens.emplace_back(StringD::make_ref(start, length),
-                                    Token::Kind::Literal,
-                                    Literal::Float,
-                                    column,
-                                    line);
+            out.emplace_back(std::move(candidate),
+                             Token::Kind::Operator,
+                             static_cast<std::uint32_t>(it->second),
+                             col_start,
+                             line);
 
-                s += length;
-                column += length;
-
-                continue;
-            }
-
-            length = consume_int_literal(s);
-
-            if(length > 0)
-            {
-                tokens.emplace_back(StringD::make_ref(start, length),
-                                    Token::Kind::Literal,
-                                    Literal::Integer,
-                                    column,
-                                    line);
-
-                s += length;
-                column += length;
-
-                continue;
-            }
+            return true;
         }
-        else if(is_identifier_start(*s))
+    }
+
+    if(*this->cursor == '!')
+    {
+        char next = this->peek(1);
+
+        if(next == 'r' || next == 's' || next == 'a')
         {
-            char* start = s;
-            std::uint32_t length = 1;
+            this->advance();
 
-            s++;
+            out.emplace_back(StringD::make_ref(start, 1),
+                             Token::Kind::Operator,
+                             static_cast<std::uint32_t>(Operator::Bang),
+                             col_start,
+                             line);
 
-            while(*s != '\0' && is_identifier(*s))
-            {
-                s++;
-                length++;
-            }
-
-            StringD identifier = std::move(StringD::make_from_c_str(start, length));
-
-            auto keyword_it = g_keywords.find(identifier);
-
-            if(keyword_it != g_keywords.end())
-            {
-                tokens.emplace_back(identifier,
-                                    Token::Kind::Keyword,
-                                    keyword_it->second,
-                                    column,
-                                    line);
-                column += length;
-
-                continue;
-            }
-
-            auto operator_it = g_operators.find(identifier);
-
-            if(operator_it != g_operators.end())
-            {
-                tokens.emplace_back(identifier,
-                                    Token::Kind::Operator,
-                                    operator_it->second,
-                                    column,
-                                    line);
-                column += length;
-
-                continue;
-            }
-
-            tokens.emplace_back(identifier,
-                                Token::Kind::Identifier,
-                                0,
-                                column,
-                                line);
-
-            column += length;
+            return true;
         }
-        else if(is_delimiter(*s))
+
+        this->report_error("Unexpected character '!'");
+
+        return false;
+    }
+
+    return false;
+}
+
+bool Lexer::emit_indentation(std::uint32_t spaces, Vector<Token>& out) noexcept
+{
+    if(this->indent_size == INDENT_UNDEFINED || this->indent_size == 0)
+        this->indent_size = spaces;
+
+    if(spaces > this->indent_stack.back())
+    {
+        this->indent_stack.push_back(spaces);
+        out.emplace_back(StringD(), Token::Kind::Indent, spaces, this->column, this->line);
+    }
+    else if(spaces < this->indent_stack.back())
+    {
+        while(this->indent_stack.size() > 1 && this->indent_stack.back() > spaces)
         {
-            char* start = s;
-            std::uint32_t length = 1;
-
-            s++;
-
-            if(*start == '-')
-            {
-                while(*s != '\0' && is_delimiter(*s))
-                {
-                    s++;
-                    length++;
-                }
-            }
-
-            StringD delimiter = std::move(StringD::make_ref(start, length));
-
-            auto delimiter_it = g_delimiters.find(delimiter);
-
-            if(delimiter_it == g_delimiters.end())
-            {
-                s -= length;
-                goto is_operator;
-            }
-
-            tokens.emplace_back(delimiter,
-                                Token::Kind::Delimiter,
-                                delimiter_it->second,
-                                column,
-                                line);
-
-            column += length;
+            this->indent_stack.pop_back();
+            out.emplace_back(StringD(), Token::Kind::Dedent, spaces, this->column, this->line);
         }
-        else if(is_operator_start(*s))
+
+        if(this->indent_stack.back() != spaces)
         {
-            is_operator:
-            char* start = s;
-            std::uint32_t length = is_operator(s);
+            this->logger->error("IndentationError: unindent does not match any outer indentation level");
+            this->logger->error("Line {}, Column {}", this->line, this->column);
 
-            if(length > 0)
-            {
-                StringD op = std::move(StringD::make_ref(start, length));
-
-                auto operator_it = g_operators.find(op);
-
-                if(operator_it == g_operators.end() || length == LEX_ERROR)
-                {
-                    this->_logger->error("Syntax: Invalid operator {}", op);
-                    this->_logger->error("Line {}, Position {}", line, column);
-                    return false;
-                }
-
-                tokens.emplace_back(op,
-                                    Token::Kind::Operator,
-                                    operator_it->second,
-                                    column,
-                                    line);
-
-                s += length;
-                column += length;
-
-                continue;
-            }
+            return false;
         }
-        else if(is_newline(*s))
+    }
+
+    return true;
+}
+
+bool Lexer::lex_newline_indent(Vector<Token>& out) noexcept
+{
+    out.emplace_back(StringD(), Token::Kind::Newline, 0, this->column, this->line);
+
+    if(*this->cursor == '\r')
+    {
+        this->cursor++;
+
+        if(*this->cursor == '\n')
+            this->cursor++;
+    }
+    else
+    {
+        this->cursor++;
+    }
+
+    this->line++;
+    this->column = 1;
+
+    while(!this->at_end() && this->is_newline(static_cast<unsigned int>(*this->cursor)))
+    {
+        out.emplace_back(StringD(), Token::Kind::Newline, 0, this->column, this->line);
+
+        if(*this->cursor == '\r')
         {
-            tokens.emplace_back(StringD(),
-                                Token::Kind::Newline,
-                                0,
-                                column,
-                                line);
+            this->cursor++;
 
-            s += consume_new_line(s);
-
-            line++;
-            column = 1;
-
-            while(*s != '\0' && is_newline(*s))
-            {
-                tokens.emplace_back(StringD(),
-                                    Token::Kind::Newline,
-                                    0,
-                                    column,
-                                    line);
-                s += consume_new_line(s);
-                line++;
-            }
-
-            std::uint32_t line_indent = 0;
-
-            while(*s != '\0' && *s == ' ')
-            {
-                line_indent++;
-                s++;
-            }
-
-            if(*s == '\0' || is_newline(*s))
-            {
-                column = 1;
-                continue;
-            }
-
-            if(indent_size == INDENT_SZ_UNDEFINED || indent_size == 0)
-            {
-                indent_size = line_indent;
-            }
-
-            if(line_indent > indent_stack.back())
-            {
-                indent_stack.push_back(line_indent);
-
-                tokens.emplace_back(StringD(),
-                                    Token::Kind::Indent,
-                                    line_indent,
-                                    column,
-                                    line);
-            }
-            else if(line_indent < indent_stack.back())
-            {
-                while(indent_stack.size() > 1 && indent_stack.back() > line_indent)
-                {
-                    indent_stack.pop_back();
-
-                    tokens.emplace_back(StringD(),
-                                        Token::Kind::Dedent,
-                                        line_indent,
-                                        column,
-                                        line);
-                }
-
-                if(indent_stack.back() != line_indent)
-                {
-                    this->_logger->error("IndentationError: unindent does not match any outer indentation level");
-                    this->_logger->error("Line {}, Column {}", line, column);
-                    return false;
-                }
-            }
-
-            column = line_indent + 1;
+            if(*this->cursor == '\n')
+                this->cursor++;
         }
         else
         {
-            s++;
-            column++;
+            this->cursor++;
         }
+
+        this->line++;
     }
 
-    while(indent_stack.size() > 1)
+    std::uint32_t spaces = 0;
+
+    while(!this->at_end() && *this->cursor == ' ')
     {
-        indent_stack.pop_back();
-
-        tokens.emplace_back(StringD(),
-                            Token::Kind::Dedent,
-                            indent_stack.back(),
-                            column,
-                            line);
+        spaces++;
+        this->cursor++;
     }
 
-    this->_logger->trace("Lex successful");
+    if(this->at_end() || this->is_newline(static_cast<unsigned int>(*this->cursor)))
+    {
+        this->column = 1;
+        return true;
+    }
+
+    this->column = spaces + 1;
+
+    return this->emit_indentation(spaces, out);
+}
+
+void Lexer::skip_comment() noexcept
+{
+    while(!this->at_end() && !this->is_newline(static_cast<unsigned int>(*this->cursor)))
+        this->advance();
+}
+
+bool Lexer::tokenize(Vector<Token>& out) noexcept
+{
+    this->logger->trace("Lexing source code");
+
+    while(!at_end())
+    {
+        char c = *cursor;
+
+        if(c == ' ' || c == '\t')
+        {
+            this->advance();
+            continue;
+        }
+
+        if(c == '\\')
+        {
+            this->advance();
+
+            while(!this->at_end() && (this->is_newline(static_cast<unsigned int>(*this->cursor)) || *this->cursor == ' '))
+                this->advance();
+
+            continue;
+        }
+
+        if(c == '#')
+        {
+            this->skip_comment();
+            continue;
+        }
+
+        if(this->is_newline(static_cast<unsigned int>(c)))
+        {
+            if (!this->lex_newline_indent(out))
+                return false;
+
+            continue;
+        }
+
+        {
+            auto is_str_prefix = [](char ch) {
+                return ch=='r'||ch=='R'||ch=='u'||ch=='U' || ch=='f'||ch=='F'||ch=='b'||ch=='B';
+            };
+
+            bool might_be_string = false;
+
+            if(c == '"' || c == '\'')
+            {
+                might_be_string = true;
+            }
+            else if(is_str_prefix(c))
+            {
+                char n1 = this->peek(1);
+
+                if (n1 == '"' || n1 == '\'')
+                {
+                    might_be_string = true;
+                }
+                else if(is_str_prefix(n1))
+                {
+                    char n2 = this->peek(2);
+
+                    if(n2 == '"' || n2 == '\'')
+                        might_be_string = true;
+                }
+            }
+
+            if(might_be_string)
+            {
+                if(!this->lex_string(out))
+                    return false;
+
+                continue;
+            }
+        }
+
+        if(is_digit(static_cast<unsigned int>(c)) ||
+           (c == '.' && is_digit(static_cast<unsigned int>(this->peek(1)))))
+        {
+            if(!this->lex_number(out))
+                return false;
+
+            continue;
+        }
+
+        if(this->is_id_start(static_cast<unsigned int>(c)))
+        {
+            if(!this->lex_identifier(out))
+                return false;
+
+            continue;
+        }
+
+        if(this->lex_delimiter(out))
+            continue;
+
+        if(this->lex_operator(out))
+            continue;
+
+        if(this->is_unicode_id_start(static_cast<unsigned int>(c)))
+        {
+            if(!this->lex_identifier(out))
+                return false;
+
+            continue;
+        }
+
+        this->report_error("Unexpected character '{}'", c);
+        this->advance();
+    }
+
+    while(this->indent_stack.size() > 1)
+    {
+        this->indent_stack.pop_back();
+
+        out.emplace_back(StringD(),
+                         Token::Kind::Dedent,
+                         this->indent_stack.back(),
+                         this->column,
+                         this->line);
+    }
+
+    this->logger->trace("Lex successful");
 
     return true;
+}
+
+bool AST::lex(const char* buffer, Vector<Token>& tokens) noexcept
+{
+    Lexer lexer(buffer, this->_logger);
+
+    return lexer.tokenize(tokens);
 }
 
 // Parser
@@ -744,16 +1038,20 @@ struct Parser
                                          source_code(source_code),
                                          pos(0) {}
 
-    bool at_end() const noexcept { return pos >= tokens.size(); }
+    bool at_end() const noexcept { return this->pos >= this->tokens.size(); }
 
-    const Token& current() const noexcept { return tokens[pos]; }
+    const Token& current() const noexcept { return tokens[this->pos]; }
 
-    const Token& peek(std::uint32_t offset = 1) const noexcept { return tokens[pos + offset]; }
+    const Token& peek(std::uint32_t offset = 1) const noexcept { return this->tokens[this->pos + offset]; }
 
-    void advance() noexcept { pos++; }
+    void advance(const std::uint32_t n = 1) noexcept { this->pos += n; }
 
     template<typename... Args>
-    void error(std::uint32_t line, std::uint32_t column, std::uint32_t size, fmt::format_string<Args...> fmt, Args&&... args) const noexcept
+    void error(std::uint32_t line,
+               std::uint32_t column,
+               std::uint32_t size,
+               fmt::format_string<Args...> fmt,
+               Args&&... args) const noexcept
     {
         const char* p = this->source_code.data();
         std::uint32_t current_line = 1;
@@ -779,11 +1077,37 @@ struct Parser
         this->logger->error(fmt, std::forward<Args>(args)...);
         this->logger->error("{}{}", gutter, fmt::string_view(line_start, line_sz));
         this->logger->error("{0: ^{1}}^{0:~^{2}}", "", gutter.size() + column - 1, std::max(size, 1u) - 1);
+
+#if defined(STDROMANO_PYTHON_PARSER_ASSERT_ON_ERROR)
+        STDROMANO_ASSERT(false, "Parser error");
+#endif // defined(STDROMANO_PYTHON_PARSER_ASSERT_ON_ERROR)
+    }
+
+    template<typename... Args>
+    void error_at_current(fmt::format_string<Args...> fmt, Args&&... args) const noexcept
+    {
+        return this->error(this->current().line,
+                           this->current().column,
+                           static_cast<std::uint32_t>(this->current().value.size()),
+                           fmt,
+                           std::forward<Args>(args)...);
     }
 
     void skip_newlines() noexcept
     {
         while(!this->at_end() && this->current().kind == Token::Kind::Newline)
+            this->advance();
+    }
+
+    void skip_indents() noexcept
+    {
+        while(!this->at_end() && this->current().kind == Token::Kind::Indent)
+            this->advance();
+    }
+
+    void skip_dedents() noexcept
+    {
+        while(!this->at_end() && this->current().kind == Token::Kind::Dedent)
             this->advance();
     }
 
@@ -832,7 +1156,7 @@ struct Parser
 
     bool expect_delimiter(Delimiter d) noexcept
     {
-        if(!match_delimiter(d))
+        if(!this->match_delimiter(d))
         {
             this->error(this->current().line,
                         this->current().column,
@@ -972,11 +1296,9 @@ struct Parser
             }
             else
             {
-                this->error(this->current().line,
-                            this->current().column,
-                            static_cast<std::uint32_t>(this->current().value.size()),
-                            "Unexpected token \"{}\"",
-                            this->current().value);
+                this->error_at_current("Unexpected token \"{}\" ({})",
+                                       this->current().value,
+                                       this->current().kind);
 
                 return nullptr;
             }
@@ -1453,10 +1775,44 @@ struct Parser
         if(left == nullptr)
             return nullptr;
 
+        Vector<Node*> targets;
+        targets.push_back(left);
+
         // Simple assignment: target = value
+        // or
+        // Multi assignment: target1 = target2 = target3 = value
         if(this->match_operator(Operator::Assign))
         {
             this->advance();
+
+            while(!this->at_end())
+            {
+                const Token& assign = this->peek();
+
+                if(assign.kind == Token::Kind::Operator && assign.type == Operator::Assign)
+                {
+                    if(!this->check(Token::Kind::Identifier))
+                    {
+                        this->error_at_current("Expecting identifier, not \"{}\" ({})",
+                                               this->current().value,
+                                               this->current().kind);
+
+                        return nullptr;
+                    }
+
+                    auto* target = this->arena.emplace<NameNode>(this->current().value,
+                                                                 this->current().line,
+                                                                 this->current().column);
+
+                    targets.push_back(target);
+
+                    this->advance(2);
+                }
+                else
+                {
+                    break;
+                }
+            }
 
             Node* value = this->parse_expr();
 
@@ -1464,7 +1820,9 @@ struct Parser
                 return nullptr;
 
             auto* node = this->arena.emplace<AssignNode>(value, line, column);
-            node->targets.push_back(left);
+
+            node->targets = std::move(targets);
+
             return node;
         }
 
@@ -1917,19 +2275,29 @@ struct Parser
                         (this->tokens.end() - 1)->column,
                         static_cast<std::uint32_t>((this->tokens.end() - 1)->value.size()),
                         "Expected attribute name");
+
             this->logger->error("Unexpected end of input");
+
             return nullptr;
         }
+
+        this->skip_dedents();
 
         // Identifier / Name
         if(this->check(Token::Kind::Identifier))
         {
-            auto* node = this->arena.emplace<NameNode>(
-                std::move(StringD::make_from_c_str(this->current().value.c_str(), this->current().value.size())),
-                this->current().line,
-                this->current().column);
+            auto* node = this->arena.emplace<NameNode>(std::move(StringD::make_from_c_str(this->current().value.c_str(),
+                                                                                          this->current().value.size())),
+                                                       this->current().line,
+                                                       this->current().column);
 
             this->advance();
+
+            if(this->match_delimiter(Delimiter::Colon))
+            {
+                this->advance();
+                node->type = this->parse_expr();
+            }
 
             return node;
         }
@@ -1938,11 +2306,17 @@ struct Parser
         if(this->check(Token::Kind::Literal))
         {
             Literal lit = static_cast<Literal>(this->current().type);
-            auto* node = this->arena.emplace<ConstantNode>(
-                std::move(StringD::make_from_c_str(this->current().value.c_str(), this->current().value.size())),
-                lit,
-                this->current().line,
-                this->current().column);
+
+            if(lit == FormattedString)
+            {
+
+            }
+
+            auto* node = this->arena.emplace<ConstantNode>(std::move(StringD::make_from_c_str(this->current().value.c_str(),
+                                                                                              this->current().value.size())),
+                                                           lit,
+                                                           this->current().line,
+                                                           this->current().column);
 
             this->advance();
 
@@ -1950,13 +2324,15 @@ struct Parser
         }
 
         // True / False / None as constants
-        if(this->match_keyword(Keyword::True) || this->match_keyword(Keyword::False) || this->match_keyword(Keyword::None))
+        if(this->match_keyword(Keyword::True) ||
+           this->match_keyword(Keyword::False) ||
+           this->match_keyword(Keyword::None))
         {
-            auto* node = this->arena.emplace<ConstantNode>(
-                std::move(StringD::make_from_c_str(this->current().value.c_str(), this->current().value.size())),
-                Literal::String, // reuse; the raw value distinguishes them
-                this->current().line,
-                this->current().column);
+            auto* node = this->arena.emplace<ConstantNode>(std::move(StringD::make_from_c_str(this->current().value.c_str(),
+                                                                     this->current().value.size())),
+                                                           Literal::String, // TODO: store as a byte instead of full string
+                                                           this->current().line,
+                                                           this->current().column);
 
             this->advance();
 
@@ -2007,6 +2383,52 @@ struct Parser
 
                 return tup;
             }
+            // String concatenation across lines
+            // ex:
+            // s = ("concat"
+            //      "across"
+            //      "lines")
+            else if(first->type() == ASTNodeConstant)
+            {
+                auto* literal = static_cast<ConstantNode*>(first);
+
+                if(literal->literal_type <= Literal::Bytes)
+                {
+                    while(!this->match_delimiter(Delimiter::RParen))
+                    {
+                        if(!this->expect_newline())
+                        {
+                            this->error_at_current("Expecting new line");
+                            return nullptr;
+                        }
+
+                        this->skip_newlines();
+                        this->skip_indents();
+
+                        if(!this->check(Token::Kind::Literal))
+                        {
+                            this->error_at_current("Expecting a string literal, got {}",
+                                                   this->current().kind);
+                            return nullptr;
+                        }
+
+                        if(this->current().type > Literal::FormattedString)
+                        {
+                            this->error_at_current("Expecting a string literal");
+                            return nullptr;
+                        }
+
+                        literal->raw.appends(this->current().value);
+
+                        this->advance();
+                    }
+                }
+
+                if(!this->expect_delimiter(Delimiter::RParen))
+                    return nullptr;
+
+                return literal;
+            }
 
             if(!this->expect_delimiter(Delimiter::RParen))
                 return nullptr;
@@ -2049,7 +2471,7 @@ struct Parser
             std::uint32_t column = this->current().column;
             this->advance();
 
-            auto* node = arena.emplace<DictNode>(line, column);
+            auto* node = this->arena.emplace<DictNode>(line, column);
 
             while(!this->at_end() && !this->match_delimiter(Delimiter::RBrace))
             {
@@ -2079,11 +2501,29 @@ struct Parser
             return node;
         }
 
-        this->error(this->current().line,
-                    this->current().column,
-                    static_cast<std::uint32_t>(this->current().value.size()),
-                    "Unexpected token \"{}\"",
-                    this->current().value);
+        // Ellipsis ...
+        if(this->match_delimiter(Delimiter::Dot))
+        {
+            this->advance();
+
+            for(std::uint32_t i = 0; i < 2; i++)
+            {
+                if(!this->expect_delimiter(Delimiter::Dot))
+                {
+                    this->error_at_current("Unexpected token \"{}\" ({})",
+                                           this->current().value,
+                                           this->current().kind);
+
+                    return nullptr;
+                }
+            }
+
+            return this->arena.emplace<NameNode>("Ellipsis", this->current().line, this->current().column);
+        }
+
+        this->error_at_current("Unexpected token \"{}\" ({})",
+                               this->current().value,
+                               this->current().kind);
 
         return nullptr;
     }
@@ -2134,7 +2574,7 @@ bool AST::from_text(const StringD& source_code, const bool debug) noexcept
 
         for(const auto token : tokens)
             this->_logger->debug("{} \"{}\" ({}:{})",
-                                 token_kind_as_string(token.kind),
+                                 Token::kind_as_string(token.kind),
                                  token.value,
                                  token.line,
                                  token.column);
