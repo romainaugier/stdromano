@@ -26,7 +26,7 @@ template<class, class = std::void_t<>>
 struct has_index : std::false_type {};
 
 template<class T>
-struct has_index<T, std::void_t<decltype(std::declval<T>().index)>> : std::true_type {};
+struct has_index<T, std::void_t<typename T::has_index_tag>> : std::true_type {};
 
 template<class T>
 constexpr bool has_index_v = has_index<T>::value;
@@ -272,11 +272,9 @@ public:
     class iterator
     {
         friend class Vector;
+
         Vector* vector;
         size_t index;
-
-        template<class, class>
-        friend struct has_index;
 
         void advance()
         {
@@ -285,6 +283,7 @@ public:
         }
 
     public:
+        using has_index_tag = void;
         using iterator_category = std::random_access_iterator_tag;
         using value_type = T;
         using difference_type = std::int32_t;
@@ -403,11 +402,9 @@ public:
     class const_iterator
     {
         friend class Vector;
+
         const Vector* vector;
         std::size_t index;
-
-        template<class, class>
-        friend struct has_index;
 
         void advance()
         {
@@ -416,6 +413,7 @@ public:
         }
 
     public:
+        using has_index_tag = void;
         using iterator_category = std::random_access_iterator_tag;
         using value_type = T;
         using difference_type = int32_t;
