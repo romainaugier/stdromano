@@ -65,112 +65,117 @@ struct Token
 enum Keyword : std::uint32_t
 {
     False = 0,
-    Await = 1,
-    Else = 2,
-    Import = 3,
-    Pass = 4,
-    None = 5,
-    Break = 6,
-    Except = 7,
-    In = 8,
-    Raise = 9,
-    True = 10,
-    Class = 11,
-    Finally = 12,
-    Is = 13,
-    Return = 14,
-    And = 15,
-    Continue = 16,
-    For = 17,
-    Lambda = 18,
-    Try = 19,
-    As = 20,
-    Def = 21,
-    From = 22,
-    Nonlocal = 23,
-    While = 24,
-    Assert = 25,
-    Del = 26,
-    Global = 27,
-    Not = 28,
-    With = 29,
-    Async = 30,
-    Elif = 31,
-    If = 32,
-    Or = 33,
-    Yield = 34,
+    Await,
+    Else,
+    Import,
+    Pass,
+    None,
+    Break,
+    Except,
+    In,
+    Raise,
+    True,
+    Class,
+    Finally,
+    Is,
+    Return,
+    And,
+    Continue,
+    For,
+    Lambda,
+    Try,
+    As,
+    Def,
+    From,
+    Nonlocal,
+    While,
+    Assert,
+    Del,
+    Global,
+    Not,
+    With,
+    Async,
+    Elif,
+    If,
+    Or,
+    Yield,
+    Match,
+    Case,
+    Type,
 };
 
 enum Delimiter : std::uint32_t
 {
     LParen = 1,
-    RParen = 2,
-    LBracket = 3,
-    RBracket = 4,
-    LBrace = 5,
-    RBrace = 6,
-    Comma = 7,
-    Colon = 8,
-    Dot = 9,
-    Semicolon = 10,
-    At = 11,
-    RightArrow = 12,
+    RParen,
+    LBracket,
+    RBracket,
+    LBrace,
+    RBrace,
+    Comma,
+    Colon,
+    Dot,
+    Semicolon,
+    RightArrow,
 };
 
 enum Operator : std::uint32_t
 {
     Addition = 1,
-    Subtraction = 2,
-    Multiplication = 3,
-    Division = 4,
-    Modulus = 5,
-    Exponentiation = 6,
-    FloorDivision = 7,
-    Assign = 8,
-    AdditionAssign = 9,
-    SubtractionAssign = 10,
-    MultiplicationAssign = 11,
-    DivisionAssign = 12,
-    ModulusAssign = 13,
-    FloorDivisionAssign = 14,
-    ExponentiationAssign = 15,
-    BitwiseAndAssign = 16,
-    BitwiseOrAssign = 17,
-    BitwiseXorAssign = 18,
-    BitwiseLShiftAssign = 19,
-    BitwiseRShiftAssign = 20,
-    BitwiseAnd = 21,
-    BitwiseOr = 22,
-    BitwiseXor = 23,
-    BitwiseNot = 24,
-    BitwiseLShift = 25,
-    BitwiseRShift = 26,
-    ComparatorEquals = 27,
-    ComparatorNotEquals = 28,
-    ComparatorGreaterThan = 29,
-    ComparatorLessThan = 30,
-    ComparatorGreaterEqualsThan = 31,
-    ComparatorLessEqualsThan = 32,
-    LogicalAnd = 33,
-    LogicalOr = 34,
-    LogicalNot = 35,
-    IdentityIs = 36,
-    IdentityIsNot = 37,
-    MembershipIn = 38,
-    MembershipNotIn = 39,
-    Bang = 40,
+    Subtraction,
+    Multiplication,
+    Division,
+    Modulus,
+    Exponentiation,
+    FloorDivision,
+    MatMul,
+    Assign,
+    WalrusAssign,
+    AdditionAssign,
+    SubtractionAssign,
+    MultiplicationAssign,
+    DivisionAssign,
+    ModulusAssign,
+    FloorDivisionAssign,
+    MatMulAssign,
+    ExponentiationAssign,
+    BitwiseAndAssign,
+    BitwiseOrAssign,
+    BitwiseXorAssign,
+    BitwiseLShiftAssign,
+    BitwiseRShiftAssign,
+    BitwiseAnd,
+    BitwiseOr,
+    BitwiseXor,
+    BitwiseNot,
+    BitwiseLShift,
+    BitwiseRShift,
+    ComparatorEquals,
+    ComparatorNotEquals,
+    ComparatorGreaterThan,
+    ComparatorLessThan,
+    ComparatorGreaterEqualsThan,
+    ComparatorLessEqualsThan,
+    LogicalAnd,
+    LogicalOr,
+    LogicalNot,
+    IdentityIs,
+    IdentityIsNot,
+    MembershipIn,
+    MembershipNotIn,
+    Bang,
 };
 
 enum Literal : std::uint32_t
 {
     String = 1,
-    UnicodeString = 2,
-    RawString = 3,
-    FormattedString = 4,
-    Bytes = 5,
-    Integer = 6,
-    Float = 7,
-    Complex = 8,
+    UnicodeString,
+    RawString,
+    FormattedString,
+    Bytes,
+    Integer,
+    Float,
+    Complex,
 };
 
 // AST Node
@@ -178,12 +183,15 @@ enum Literal : std::uint32_t
 enum ASTNodeType : std::uint32_t
 {
     ASTNodeModule = 0,
+    ASTNodeDecorator,
     ASTNodeFunctionArg,
     ASTNodeFunctionDef,
     ASTNodeClassDef,
     ASTNodeReturn,
     ASTNodeAssign,
+    ASTNodeMultiAssign,
     ASTNodeAugAssign,
+    ASTNodeWalrusAssign,
     ASTNodeFor,
     ASTNodeWhile,
     ASTNodeIf,
@@ -196,17 +204,40 @@ enum ASTNodeType : std::uint32_t
     ASTNodeRaise,
     ASTNodeBinOp,
     ASTNodeUnaryOp,
+    ASTNodeTernaryOp,
     ASTNodeBoolOp,
     ASTNodeCompare,
+    ASTNodeKeywordArg,
     ASTNodeCall,
     ASTNodeName,
     ASTNodeConstant,
     ASTNodeAttribute,
     ASTNodeSubscript,
+    ASTNodeStarred,
     ASTNodeList,
+    ASTNodeSet,
     ASTNodeTuple,
     ASTNodeDict,
+    ASTNodeComprehension,
+    ASTNodeListComp,
+    ASTNodeSetComp,
+    ASTNodeDictComp,
+    ASTNodeGeneratorExpr,
     ASTNodeLambda,
+    ASTNodeMatch,
+    ASTNodeMatchCase,
+    ASTNodeMatchOr,
+    ASTNodeMatchAs,
+    ASTNodeMatchValue,
+    ASTNodeMatchSingleton,
+    ASTNodeMatchSequence,
+    ASTNodeMatchMapping,
+    ASTNodeMatchClass,
+    ASTNodeMatchStar,
+    ASTNodeYield,
+    ASTNodeYieldFrom,
+    ASTNodeTypeParam,
+    ASTNodeTypeAlias,
     ASTNodeCount,
 };
 
@@ -246,14 +277,40 @@ struct ModuleNode : Node
     }
 };
 
+struct DecoratorNode : Node
+{
+    Node* expr;
+    Node* target; // the FunctionDefNode or ClassDefNode being decorated
+
+    DecoratorNode(Node* expr,
+                  Node* target,
+                  std::uint32_t line,
+                  std::uint32_t column) : Node(ASTNodeDecorator, line, column),
+                                          expr(expr),
+                                          target(target) {}
+
+        virtual const char* type_str() const noexcept override { return "DECORATOR"; }
+
+        virtual void debug(std::shared_ptr<spdlog::logger> logger, std::uint32_t indent) const noexcept override
+        {
+            logger->debug("{0: ^{1}}DECORATOR", "", indent);
+        }
+};
+
 struct FunctionArgNode : Node
 {
     StringD name;
     Node* annotation;
+    Node* default_value;
+    bool is_vararg; // *args
+    bool is_kwarg; // **kwargs
 
     FunctionArgNode(StringD name, Node* annotation, std::uint32_t line, std::uint32_t column) : Node(ASTNodeFunctionArg, line, column),
                                                                                                 name(std::move(name)),
-                                                                                                annotation(annotation) {}
+                                                                                                annotation(annotation),
+                                                                                                default_value(nullptr),
+                                                                                                is_vararg(false),
+                                                                                                is_kwarg(false) {}
 
     virtual const char* type_str() const noexcept override { return "FUNCARG"; }
 
@@ -269,6 +326,9 @@ struct FunctionDefNode : Node
     Vector<Node*> args;
     Vector<Node*> body;
     Node* return_annotation;
+    Vector<Node*> type_params;
+    std::int32_t posonly_index = -1; // index of '/' separator, -1 if absent
+    std::int32_t kwonly_index = -1; // index of bare '*' separator, -1 if absent
 
     FunctionDefNode(StringD name, std::uint32_t line, std::uint32_t column) : Node(ASTNodeFunctionDef, line, column),
                                                                               name(std::move(name)),
@@ -287,6 +347,7 @@ struct ClassDefNode : Node
     StringD name;
     Vector<Node*> bases;
     Vector<Node*> body;
+    Vector<Node*> type_params;
 
     ClassDefNode(StringD name, std::uint32_t line, std::uint32_t column) : Node(ASTNodeClassDef, line, column),
                                                                            name(std::move(name)) {}
@@ -330,6 +391,21 @@ struct AssignNode : Node
     }
 };
 
+struct MultiAssignNode : Node
+{
+    Vector<Node*> targets;
+    Vector<Node*> values;
+
+    MultiAssignNode(std::uint32_t line, std::uint32_t column) : Node(ASTNodeMultiAssign, line, column) {}
+
+    virtual const char* type_str() const noexcept override { return "MULTIASSIGN"; };
+
+    virtual void debug(std::shared_ptr<spdlog::logger> logger, std::uint32_t indent) const noexcept override
+    {
+        logger->debug("{0: ^{1}}MULTIASSIGN", "", indent);
+    }
+};
+
 struct AugAssignNode : Node
 {
     Node* target;
@@ -346,6 +422,23 @@ struct AugAssignNode : Node
     virtual void debug(std::shared_ptr<spdlog::logger> logger, std::uint32_t indent) const noexcept override
     {
         logger->debug("{0: ^{1}}AUGASSIGN ({2})", "", indent, this->op);
+    }
+};
+
+struct WalrusAssignNode : Node
+{
+    Node* target;
+    Node* value;
+
+    WalrusAssignNode(Node* target, Node* value, std::uint32_t line, std::uint32_t column) : Node(ASTNodeWalrusAssign, line, column),
+                                                                                            target(target),
+                                                                                            value(value) {}
+
+    virtual const char* type_str() const noexcept override { return "WALRUSASSIGN"; }
+
+    virtual void debug(std::shared_ptr<spdlog::logger> logger, std::uint32_t indent) const noexcept override
+    {
+        logger->debug("{0: ^{1}}WALRUSASSIGN", "", indent);
     }
 };
 
@@ -538,6 +631,29 @@ struct UnaryOpNode : Node
     }
 };
 
+struct TernaryOpNode : Node
+{
+    Node* body; // x
+    Node* test; // y
+    Node* orelse; // z
+
+    TernaryOpNode(Node* body,
+                  Node* test,
+                  Node* orelse,
+                  std::uint32_t line,
+                  std::uint32_t column) : Node(ASTNodeTernaryOp, line, column),
+                                          body(body),
+                                          test(test),
+                                          orelse(orelse) {}
+
+    virtual const char* type_str() const noexcept override { return "TERNARYOP"; }
+
+    virtual void debug(std::shared_ptr<spdlog::logger> logger, std::uint32_t indent) const noexcept override
+    {
+        logger->debug("{0: ^{1}}TERNARYOP", "", indent);
+    }
+};
+
 struct BoolOpNode : Node
 {
     Operator op;
@@ -568,6 +684,28 @@ struct CompareNode : Node
     virtual void debug(std::shared_ptr<spdlog::logger> logger, std::uint32_t indent) const noexcept override
     {
         logger->debug("{0: ^{1}}COMPARE", "", indent);
+    }
+};
+
+// Function calls and args/kwarfs
+
+struct KeywordArgNode : Node
+{
+    StringD name; // empty when **expr unpacking
+    Node* value;
+
+    KeywordArgNode(StringD name,
+                   Node* value,
+                   std::uint32_t line,
+                   std::uint32_t column) : Node(ASTNodeKeywordArg, line, column),
+                                           name(std::move(name)),
+                                           value(value) {}
+
+    virtual const char* type_str() const noexcept override { return "KEYWORDARG"; }
+
+    virtual void debug(std::shared_ptr<spdlog::logger> logger, std::uint32_t indent) const noexcept override
+    {
+        logger->debug("{0: ^{1}}KEYWORDARG", "", indent);
     }
 };
 
@@ -655,6 +793,21 @@ struct SubscriptNode : Node
     }
 };
 
+struct StarredNode : Node
+{
+    Node* value;
+
+    StarredNode(Node* value, std::uint32_t line, std::uint32_t column) : Node(ASTNodeStarred, line, column),
+                                                                         value(value) {}
+
+    virtual const char* type_str() const noexcept override { return "STARRED"; }
+
+    virtual void debug(std::shared_ptr<spdlog::logger> logger, std::uint32_t indent) const noexcept override
+    {
+        logger->debug("{0: ^{1}}STARRED", "", indent);
+    }
+};
+
 struct ListNode : Node
 {
     Vector<Node*> elts;
@@ -666,6 +819,20 @@ struct ListNode : Node
     virtual void debug(std::shared_ptr<spdlog::logger> logger, std::uint32_t indent) const noexcept override
     {
         logger->debug("{0: ^{1}}LIST ({2} elements)", "", indent, this->elts.size());
+    }
+};
+
+struct SetNode : Node
+{
+    Vector<Node*> elts;
+
+    SetNode(std::uint32_t line, std::uint32_t column) : Node(ASTNodeSet, line, column) {}
+
+    virtual const char* type_str() const noexcept override { return "SET"; }
+
+    virtual void debug(std::shared_ptr<spdlog::logger> logger, std::uint32_t indent) const noexcept override
+    {
+        logger->debug("{0: ^{1}}SET ({2} elements)", "", indent, this->elts.size());
     }
 };
 
@@ -698,10 +865,94 @@ struct DictNode : Node
     }
 };
 
+struct ComprehensionNode : Node
+{
+    Node* target;
+    Node* iter;
+    Vector<Node*> ifs;
+
+    ComprehensionNode(Node* target,
+                      Node* iter,
+                      std::uint32_t line,
+                      std::uint32_t column) : Node(ASTNodeComprehension, line, column),
+                                              target(target),
+                                              iter(iter) {}
+
+
+};
+
+struct ListCompNode : Node
+{
+    Node* elt;
+    Vector<Node*> generators;
+
+    ListCompNode(Node* elt, std::uint32_t line, std::uint32_t column) : Node(ASTNodeListComp, line, column),
+                                                                        elt(elt) {}
+
+    virtual const char* type_str() const noexcept override { return "LISTCOMP"; }
+
+    virtual void debug(std::shared_ptr<spdlog::logger> logger, std::uint32_t indent) const noexcept override
+    {
+        logger->debug("{0: ^{1}}LISTCOMP", "", indent);
+    }
+};
+
+struct SetCompNode : Node
+{
+    Node* elt;
+    Vector<Node*> generators;
+
+    SetCompNode(Node* elt, std::uint32_t line, std::uint32_t column) : Node(ASTNodeSetComp, line, column),
+                                                                       elt(elt) {}
+
+    virtual const char* type_str() const noexcept override { return "SETCOMP"; }
+
+    virtual void debug(std::shared_ptr<spdlog::logger> logger, std::uint32_t indent) const noexcept override
+    {
+        logger->debug("{0: ^{1}}SETCOMP", "", indent);
+    }
+};
+
+struct DictCompNode : Node
+{
+    Node* key;
+    Node* value;
+    Vector<Node*> generators;
+
+    DictCompNode(Node* key, Node* value, std::uint32_t line, std::uint32_t column) : Node(ASTNodeDictComp, line, column),
+                                                                                     key(key),
+                                                                                     value(value) {}
+
+    virtual const char* type_str() const noexcept override { return "DICTCOMP"; }
+
+    virtual void debug(std::shared_ptr<spdlog::logger> logger, std::uint32_t indent) const noexcept override
+    {
+        logger->debug("{0: ^{1}}DICTCOMP", "", indent);
+    }
+};
+
+struct GeneratorExprNode : Node
+{
+    Node* elt;
+    Vector<Node*> generators;
+
+    GeneratorExprNode(Node* elt, std::uint32_t line, std::uint32_t column) : Node(ASTNodeGeneratorExpr, line, column),
+                                                                             elt(elt) {}
+
+    virtual const char* type_str() const noexcept override { return "GENERATOREXPR"; }
+
+    virtual void debug(std::shared_ptr<spdlog::logger> logger, std::uint32_t indent) const noexcept override
+    {
+        logger->debug("{0: ^{1}}GENERATOREXPR", "", indent);
+    }
+};
+
 struct LambdaNode : Node
 {
     Vector<Node*> args;
     Node* body;
+    std::int32_t posonly_index = -1;
+    std::int32_t kwonly_index = -1;
 
     LambdaNode(Node* body, std::uint32_t line, std::uint32_t column) : Node(ASTNodeLambda, line, column),
                                                                        body(body) {}
@@ -714,171 +965,276 @@ struct LambdaNode : Node
     }
 };
 
+struct MatchNode : Node
+{
+    Node* subject;
+    Vector<Node*> cases;
+
+    MatchNode(Node* subject,
+              std::uint32_t line,
+              std::uint32_t column) : Node(ASTNodeMatch, line, column),
+                                      subject(subject) {}
+
+    virtual const char* type_str() const noexcept override { return "MATCH"; }
+
+    virtual void debug(std::shared_ptr<spdlog::logger> logger, std::uint32_t indent) const noexcept override
+    {
+        logger->debug("{0: ^{1}}MATCH", "", indent);
+    }
+};
+
+struct MatchCaseNode : Node
+{
+    Node* pattern;
+    Node* guard; // optional 'if' condition, nullptr if absent
+    Vector<Node*> body;
+
+    MatchCaseNode(Node* pattern,
+                  Node* guard,
+                  std::uint32_t line,
+                  std::uint32_t column) : Node(ASTNodeMatchCase, line, column),
+                                          pattern(pattern),
+                                          guard(guard) {}
+
+    virtual const char* type_str() const noexcept override { return "MATCHCASE"; }
+
+    virtual void debug(std::shared_ptr<spdlog::logger> logger, std::uint32_t indent) const noexcept override
+    {
+        logger->debug("{0: ^{1}}MATCHCASE", "", indent);
+    }
+};
+
+// pattern1 | pattern2 | ...
+struct MatchOrNode : Node
+{
+    Vector<Node*> patterns;
+
+    MatchOrNode(std::uint32_t line,
+                std::uint32_t column) : Node(ASTNodeMatchOr, line, column) {}
+
+    virtual const char* type_str() const noexcept override { return "MATCHOR"; }
+
+    virtual void debug(std::shared_ptr<spdlog::logger> logger, std::uint32_t indent) const noexcept override
+    {
+        logger->debug("{0: ^{1}}MATCHOR", "", indent);
+    }
+};
+
+// pattern as name (also used for wildcard _ and simple capture)
+struct MatchAsNode : Node
+{
+    Node* pattern; // nullptr for wildcard '_' or simple capture
+    StringD name; // empty for wildcard '_'
+
+    MatchAsNode(Node* pattern,
+                StringD name,
+                std::uint32_t line,
+                std::uint32_t column) : Node(ASTNodeMatchAs, line, column),
+                                        pattern(pattern),
+                                        name(std::move(name)) {}
+
+    virtual const char* type_str() const noexcept override { return "MATCHAS"; }
+
+    virtual void debug(std::shared_ptr<spdlog::logger> logger, std::uint32_t indent) const noexcept override
+    {
+        logger->debug("{0: ^{1}}MATCHAS", "", indent);
+    }
+};
+
+// Literal or dotted name: 42, "hello", Color.RED
+struct MatchValueNode : Node
+{
+    Node* value;
+
+    MatchValueNode(Node* value,
+                   std::uint32_t line,
+                   std::uint32_t column) : Node(ASTNodeMatchValue, line, column),
+                                           value(value) {}
+
+    virtual const char* type_str() const noexcept override { return "MATCHVALUE"; }
+
+    virtual void debug(std::shared_ptr<spdlog::logger> logger, std::uint32_t indent) const noexcept override
+    {
+        logger->debug("{0: ^{1}}MATCHVALUE", "", indent);
+    }
+};
+
+// True, False, None
+struct MatchSingletonNode : Node
+{
+    Keyword value;
+
+    MatchSingletonNode(Keyword value,
+                       std::uint32_t line,
+                       std::uint32_t column) : Node(ASTNodeMatchSingleton, line, column),
+                                               value(value) {}
+
+    virtual const char* type_str() const noexcept override { return "MATCHSINGLETON"; }
+
+    virtual void debug(std::shared_ptr<spdlog::logger> logger, std::uint32_t indent) const noexcept override
+    {
+        logger->debug("{0: ^{1}}MATCHSINGLETON", "", indent);
+    }
+};
+
+// [p1, p2, *rest, p3]
+struct MatchSequenceNode : Node
+{
+    Vector<Node*> patterns;
+
+    MatchSequenceNode(std::uint32_t line,
+                      std::uint32_t column) : Node(ASTNodeMatchSequence, line, column) {}
+
+    virtual const char* type_str() const noexcept override { return "MATCHSEQUENCE"; }
+
+    virtual void debug(std::shared_ptr<spdlog::logger> logger, std::uint32_t indent) const noexcept override
+    {
+        logger->debug("{0: ^{1}}MATCHSEQUENCE", "", indent);
+    }
+};
+
+// {"key": pattern, **rest}
+struct MatchMappingNode : Node
+{
+    Vector<Node*> keys;
+    Vector<Node*> patterns;
+    StringD rest; // **rest name, empty if absent
+
+    MatchMappingNode(std::uint32_t line,
+                     std::uint32_t column) : Node(ASTNodeMatchMapping, line, column) {}
+
+    virtual const char* type_str() const noexcept override { return "MATCHMAPPING"; }
+
+    virtual void debug(std::shared_ptr<spdlog::logger> logger, std::uint32_t indent) const noexcept override
+    {
+        logger->debug("{0: ^{1}}MATCHMAPPING", "", indent);
+    }
+};
+
+// ClassName(p1, p2, attr=p3)
+struct MatchClassNode : Node
+{
+    Node* cls;
+    Vector<Node*> patterns;
+    Vector<StringD> kwd_attrs;
+    Vector<Node*> kwd_patterns;
+
+    MatchClassNode(Node* cls,
+                   std::uint32_t line,
+                   std::uint32_t column) : Node(ASTNodeMatchClass, line, column),
+                                           cls(cls) {}
+
+    virtual const char* type_str() const noexcept override { return "MATCHCLASS"; }
+
+    virtual void debug(std::shared_ptr<spdlog::logger> logger, std::uint32_t indent) const noexcept override
+    {
+        logger->debug("{0: ^{1}}MATCHCLASS", "", indent);
+    }
+};
+
+// *name in sequence patterns
+struct MatchStarNode : Node
+{
+    StringD name; // empty for *_ (wildcard star)
+
+    MatchStarNode(StringD name,
+                  std::uint32_t line,
+                  std::uint32_t column) : Node(ASTNodeMatchStar, line, column),
+                                          name(std::move(name)) {}
+
+    virtual const char* type_str() const noexcept override { return "MATCHSTAR"; }
+
+    virtual void debug(std::shared_ptr<spdlog::logger> logger, std::uint32_t indent) const noexcept override
+    {
+        logger->debug("{0: ^{1}}MATCHSTAR", "", indent);
+    }
+};
+
+struct YieldNode : Node
+{
+    Node* value; // nullptr for bare 'yield'
+
+    YieldNode(Node* value,
+              std::uint32_t line,
+              std::uint32_t column) : Node(ASTNodeYield, line, column),
+                                      value(value) {}
+
+    virtual const char* type_str() const noexcept override { return "YIELD"; }
+
+    virtual void debug(std::shared_ptr<spdlog::logger> logger, std::uint32_t indent) const noexcept override
+    {
+        logger->debug("{0: ^{1}}YIELD", "", indent);
+    }
+};
+
+struct YieldFromNode : Node
+{
+    Node* value;
+
+    YieldFromNode(Node* value,
+                  std::uint32_t line,
+                  std::uint32_t column) : Node(ASTNodeYieldFrom, line, column),
+                                          value(value) {}
+
+    virtual const char* type_str() const noexcept override { return "YIELDFROM"; }
+
+    virtual void debug(std::shared_ptr<spdlog::logger> logger, std::uint32_t indent) const noexcept override
+    {
+        logger->debug("{0: ^{1}}YIELDFROM", "", indent);
+    }
+};
+
+struct TypeParamNode : Node
+{
+    StringD name;
+    Node* bound; // T: int -> bound is int, nullptr if absent
+    Node* constraint; // T: (int, str) -> TupleNode of constraints, nullptr if absent
+    bool is_paramspec;  // **P
+    bool is_typevartuple; // *Ts
+
+    TypeParamNode(StringD name,
+                  std::uint32_t line,
+                  std::uint32_t column) : Node(ASTNodeTypeParam, line, column),
+                                          name(std::move(name)),
+                                          bound(nullptr),
+                                          constraint(nullptr),
+                                          is_paramspec(false),
+                                          is_typevartuple(false) {}
+
+    virtual const char* type_str() const noexcept override { return "TYPEPARAM"; }
+
+    virtual void debug(std::shared_ptr<spdlog::logger> logger, std::uint32_t indent) const noexcept override
+    {
+        logger->debug("{0: ^{1}}TYPEPARAM", "", indent);
+    }
+};
+
+struct TypeAliasNode : Node
+{
+    StringD name;
+    Vector<Node*> type_params;
+    Node* value;
+
+    TypeAliasNode(StringD name,
+                  Node* value,
+                  std::uint32_t line,
+                  std::uint32_t column) : Node(ASTNodeTypeAlias, line, column),
+                                          name(std::move(name)),
+                                          value(value) {}
+
+    virtual const char* type_str() const noexcept override { return "TYPEALIAS"; }
+
+    virtual void debug(std::shared_ptr<spdlog::logger> logger, std::uint32_t indent) const noexcept override
+    {
+        logger->debug("{0: ^{1}}TYPEPALIAS", "", indent);
+    }
+};
+
 // Visitor
 
 // Collects the immediate children of a node into a flat vector.
 // Used by the generic visitor to recurse automatically.
-inline void node_children(Node* node, Vector<Node*>& out) noexcept
-{
-    if(node == nullptr)
-        return;
-
-    switch(node->type())
-    {
-        case ASTNodeModule:
-        {
-            auto* n = static_cast<ModuleNode*>(node);
-            for(auto* c : n->body) out.push_back(c);
-            break;
-        }
-        case ASTNodeFunctionDef:
-        {
-            auto* n = static_cast<FunctionDefNode*>(node);
-            for(auto* c : n->args) out.push_back(c);
-            for(auto* c : n->body) out.push_back(c);
-            if(n->return_annotation) out.push_back(n->return_annotation);
-            break;
-        }
-        case ASTNodeClassDef:
-        {
-            auto* n = static_cast<ClassDefNode*>(node);
-            for(auto* c : n->bases) out.push_back(c);
-            for(auto* c : n->body) out.push_back(c);
-            break;
-        }
-        case ASTNodeReturn:
-        {
-            auto* n = static_cast<ReturnNode*>(node);
-            if(n->value) out.push_back(n->value);
-            break;
-        }
-        case ASTNodeAssign:
-        {
-            auto* n = static_cast<AssignNode*>(node);
-            for(auto* c : n->targets) out.push_back(c);
-            if(n->value) out.push_back(n->value);
-            break;
-        }
-        case ASTNodeAugAssign:
-        {
-            auto* n = static_cast<AugAssignNode*>(node);
-            if(n->target) out.push_back(n->target);
-            if(n->value) out.push_back(n->value);
-            break;
-        }
-        case ASTNodeFor:
-        {
-            auto* n = static_cast<ForNode*>(node);
-            if(n->target) out.push_back(n->target);
-            if(n->iter) out.push_back(n->iter);
-            for(auto* c : n->body) out.push_back(c);
-            for(auto* c : n->orelse) out.push_back(c);
-            break;
-        }
-        case ASTNodeWhile:
-        {
-            auto* n = static_cast<WhileNode*>(node);
-            if(n->test) out.push_back(n->test);
-            for(auto* c : n->body) out.push_back(c);
-            for(auto* c : n->orelse) out.push_back(c);
-            break;
-        }
-        case ASTNodeIf:
-        {
-            auto* n = static_cast<IfNode*>(node);
-            if(n->test) out.push_back(n->test);
-            for(auto* c : n->body) out.push_back(c);
-            for(auto* c : n->orelse) out.push_back(c);
-            break;
-        }
-        case ASTNodeExpr:
-        {
-            auto* n = static_cast<ExprNode*>(node);
-            if(n->value) out.push_back(n->value);
-            break;
-        }
-        case ASTNodeRaise:
-        {
-            auto* n = static_cast<RaiseNode*>(node);
-            if(n->exc) out.push_back(n->exc);
-            break;
-        }
-        case ASTNodeBinOp:
-        {
-            auto* n = static_cast<BinOpNode*>(node);
-            if(n->left) out.push_back(n->left);
-            if(n->right) out.push_back(n->right);
-            break;
-        }
-        case ASTNodeUnaryOp:
-        {
-            auto* n = static_cast<UnaryOpNode*>(node);
-            if(n->operand) out.push_back(n->operand);
-            break;
-        }
-        case ASTNodeBoolOp:
-        {
-            auto* n = static_cast<BoolOpNode*>(node);
-            for(auto* c : n->values) out.push_back(c);
-            break;
-        }
-        case ASTNodeCompare:
-        {
-            auto* n = static_cast<CompareNode*>(node);
-            if(n->left) out.push_back(n->left);
-            for(auto* c : n->comparators) out.push_back(c);
-            break;
-        }
-        case ASTNodeCall:
-        {
-            auto* n = static_cast<CallNode*>(node);
-            if(n->func) out.push_back(n->func);
-            for(auto* c : n->args) out.push_back(c);
-            break;
-        }
-        case ASTNodeAttribute:
-        {
-            auto* n = static_cast<AttributeNode*>(node);
-            if(n->value) out.push_back(n->value);
-            break;
-        }
-        case ASTNodeSubscript:
-        {
-            auto* n = static_cast<SubscriptNode*>(node);
-            if(n->value) out.push_back(n->value);
-            if(n->slice) out.push_back(n->slice);
-            break;
-        }
-        case ASTNodeList:
-        {
-            auto* n = static_cast<ListNode*>(node);
-            for(auto* c : n->elts) out.push_back(c);
-            break;
-        }
-        case ASTNodeTuple:
-        {
-            auto* n = static_cast<TupleNode*>(node);
-            for(auto* c : n->elts) out.push_back(c);
-            break;
-        }
-        case ASTNodeDict:
-        {
-            auto* n = static_cast<DictNode*>(node);
-            for(auto* c : n->keys) out.push_back(c);
-            for(auto* c : n->values) out.push_back(c);
-            break;
-        }
-        case ASTNodeLambda:
-        {
-            auto* n = static_cast<LambdaNode*>(node);
-            for(auto* c : n->args) out.push_back(c);
-            if(n->body) out.push_back(n->body);
-            break;
-        }
-        default:
-            break;
-    }
-}
+STDROMANO_API void node_children(Node* node, Vector<Node*>& out) noexcept;
 
 // Visit all nodes depth-first. The visitor callable receives Node* and returns
 // true to recurse into children, false to skip them.
@@ -965,6 +1321,8 @@ struct fmt::formatter<stdromano::Python::Operator>
                 return format_to(ctx.out(), "**");
             case stdromano::Python::FloorDivision:
                 return format_to(ctx.out(), "//");
+            case stdromano::Python::MatMul:
+                return format_to(ctx.out(), "@");
             case stdromano::Python::Assign:
                 return format_to(ctx.out(), "=");
             case stdromano::Python::AdditionAssign:
@@ -979,6 +1337,8 @@ struct fmt::formatter<stdromano::Python::Operator>
                 return format_to(ctx.out(), "%=");
             case stdromano::Python::FloorDivisionAssign:
                 return format_to(ctx.out(), "//=");
+            case stdromano::Python::MatMulAssign:
+                return format_to(ctx.out(), "@=");
             case stdromano::Python::ExponentiationAssign:
                 return format_to(ctx.out(), "**=");
             case stdromano::Python::BitwiseAndAssign:
@@ -1023,8 +1383,6 @@ struct fmt::formatter<stdromano::Python::Operator>
                 return format_to(ctx.out(), "not");
             case stdromano::Python::IdentityIs:
                 return format_to(ctx.out(), "is");
-            case stdromano::Python::IdentityIsNot:
-                return format_to(ctx.out(), "is not");
             case stdromano::Python::MembershipIn:
                 return format_to(ctx.out(), "in");
             case stdromano::Python::MembershipNotIn:

@@ -124,6 +124,9 @@ const HashMap<StringD, Keyword> Lexer::keyword_map = {
     { StringD::make_ref("if"), Keyword::If },
     { StringD::make_ref("or"), Keyword::Or },
     { StringD::make_ref("yield"), Keyword::Yield },
+    { StringD::make_ref("match"), Keyword::Match},
+    { StringD::make_ref("case"), Keyword::Case },
+    // { StringD::make_ref("type"), Keyword::Type }, // soft keyword
 };
 
 const HashMap<StringD, Delimiter> Lexer::delimiter_map = {
@@ -137,7 +140,6 @@ const HashMap<StringD, Delimiter> Lexer::delimiter_map = {
     { StringD::make_ref(":"), Delimiter::Colon },
     { StringD::make_ref("."), Delimiter::Dot },
     { StringD::make_ref(";"), Delimiter::Semicolon },
-    { StringD::make_ref("@"), Delimiter::At },
     { StringD::make_ref("->"), Delimiter::RightArrow },
 };
 
@@ -149,13 +151,16 @@ const HashMap<StringD, Operator> Lexer::operator_map = {
     { StringD::make_ref("%"), Operator::Modulus },
     { StringD::make_ref("**"), Operator::Exponentiation },
     { StringD::make_ref("//"), Operator::FloorDivision },
+    { StringD::make_ref("@"), Operator::MatMul },
     { StringD::make_ref("="), Operator::Assign },
+    { StringD::make_ref(":="), Operator::WalrusAssign },
     { StringD::make_ref("+="), Operator::AdditionAssign },
     { StringD::make_ref("-="), Operator::SubtractionAssign },
     { StringD::make_ref("*="), Operator::MultiplicationAssign },
     { StringD::make_ref("/="), Operator::DivisionAssign },
     { StringD::make_ref("%="), Operator::ModulusAssign },
     { StringD::make_ref("//="), Operator::FloorDivisionAssign },
+    { StringD::make_ref("@="), Operator::MatMulAssign },
     { StringD::make_ref("**="), Operator::ExponentiationAssign },
     { StringD::make_ref("&="), Operator::BitwiseAndAssign },
     { StringD::make_ref("|="), Operator::BitwiseOrAssign },
@@ -176,11 +181,6 @@ const HashMap<StringD, Operator> Lexer::operator_map = {
     { StringD::make_ref("<="), Operator::ComparatorLessEqualsThan },
     { StringD::make_ref("and"), Operator::LogicalAnd },
     { StringD::make_ref("or"), Operator::LogicalOr },
-    { StringD::make_ref("not"), Operator::LogicalNot },
-    { StringD::make_ref("is"), Operator::IdentityIs },
-    { StringD::make_ref("is not"), Operator::IdentityIsNot },
-    { StringD::make_ref("in"), Operator::MembershipIn },
-    { StringD::make_ref("not in"), Operator::MembershipNotIn },
 };
 
 Lexer::Lexer(const char* source,
@@ -609,58 +609,6 @@ bool Lexer::lex_identifier(Vector<Token>& out) noexcept
     std::uint32_t length = static_cast<std::uint32_t>(this->cursor - start);
     StringD word = StringD::make_from_c_str(start, length);
 
-    if(length == 2 && std::strncmp(start, "is", 2) == 0)
-    {
-        char* save_cur = this->cursor;
-        std::uint32_t save_col = this->column;
-
-        if(*this->cursor == ' ')
-        {
-            this->advance();
-
-            if(std::strncmp(this->cursor, "not", 3) == 0 && !this->is_id_continue(static_cast<unsigned int>(this->peek(3))))
-            {
-                this->advance_n(3);
-
-                out.emplace_back(StringD::make_ref(start, 6),
-                                 Token::Kind::Operator,
-                                 static_cast<std::uint32_t>(Operator::IdentityIsNot),
-                                 col_start, line);
-
-                return true;
-            }
-
-            this->cursor = save_cur;
-            this->column = save_col;
-        }
-    }
-
-    if(length == 3 && std::strncmp(start, "not", 3) == 0)
-    {
-        char* save_cur = this->cursor;
-        std::uint32_t save_col = this->column;
-
-        if(*this->cursor == ' ')
-        {
-            this->advance();
-
-            if(std::strncmp(this->cursor, "in", 2) == 0 && !this->is_id_continue(static_cast<unsigned int>(this->peek(2))))
-            {
-                this->advance_n(2);
-
-                out.emplace_back(StringD::make_ref(start, 6),
-                                 Token::Kind::Operator,
-                                 static_cast<std::uint32_t>(Operator::MembershipNotIn),
-                                 col_start, line);
-
-                return true;
-            }
-
-            this->cursor = save_cur;
-            this->column = save_col;
-        }
-    }
-
     auto kw = keyword_map.find(word);
 
     if(kw != keyword_map.end())
@@ -704,6 +652,19 @@ bool Lexer::lex_delimiter(Vector<Token>& out) noexcept
         out.emplace_back(StringD::make_ref(start, 2),
                          Token::Kind::Delimiter,
                          static_cast<std::uint32_t>(Delimiter::RightArrow),
+                         col_start,
+                         line);
+
+        return true;
+    }
+
+    if(*this->cursor == ':' && this->peek(1) == '=')
+    {
+        this->advance_n(2);
+
+        out.emplace_back(StringD::make_ref(start, 2),
+                         Token::Kind::Operator,
+                         static_cast<std::uint32_t>(Operator::WalrusAssign),
                          col_start,
                          line);
 
@@ -978,12 +939,6 @@ bool Lexer::tokenize(Vector<Token>& out) noexcept
             continue;
         }
 
-        if(this->lex_delimiter(out))
-            continue;
-
-        if(this->lex_operator(out))
-            continue;
-
         if(this->is_unicode_id_start(static_cast<unsigned int>(c)))
         {
             if(!this->lex_identifier(out))
@@ -991,6 +946,12 @@ bool Lexer::tokenize(Vector<Token>& out) noexcept
 
             continue;
         }
+
+        if(this->lex_delimiter(out))
+            continue;
+
+        if(this->lex_operator(out))
+            continue;
 
         this->report_error("Unexpected character '{}'", c);
         this->advance();
@@ -1233,6 +1194,207 @@ struct Parser
         return true;
     }
 
+    // Decorators
+    Node* parse_decorated() noexcept
+    {
+        Vector<Node*> decorators;
+
+        // Collect one or more @expr lines
+        while(!this->at_end() && this->match_operator(Operator::MatMul))
+        {
+            this->advance(); // skip '@'
+
+            // parse_expr() allows any expression like @buttons[0].clicked.connect
+            Node* expr = this->parse_expr();
+
+            if(expr == nullptr)
+                return nullptr;
+
+            decorators.push_back(expr);
+
+            if(!this->expect_newline())
+                return nullptr;
+
+            this->skip_newlines();
+        }
+
+        // The decorated target must be def, class, or another decorator (already consumed)
+        Node* target = nullptr;
+
+        if(this->match_keyword(Keyword::Def))
+            target = this->parse_funcdef();
+        else if(this->match_keyword(Keyword::Class))
+            target = this->parse_classdef();
+        else
+        {
+            this->error_at_current("Expected \"def\" or \"class\" after decorator, got \"{}\"",
+                                   this->current().value);
+
+            return nullptr;
+        }
+
+        if(target == nullptr)
+            return nullptr;
+
+        // Wrap outermost decorator first
+        // @a
+        // @b
+        // def f(): ...
+        // becomes: DecoratorNode(a, DecoratorNode(b, f))
+        for(std::int32_t i = static_cast<std::int32_t>(decorators.size()) - 1; i >= 0; i--)
+        {
+            target = this->arena.emplace<DecoratorNode>(decorators[i],
+                                                        target,
+                                                        decorators[i]->line(),
+                                                        decorators[i]->column());
+        }
+
+        return target;
+    }
+
+    // Type params and aliases
+
+    Node* parse_type_alias() noexcept
+    {
+        std::uint32_t line = this->current().line;
+        std::uint32_t column = this->current().column;
+        this->advance(); // skip 'type'
+
+        if(!this->check(Token::Kind::Identifier))
+        {
+            this->error_at_current("Expected type alias name, got \"{}\"",
+                                   this->current().value);
+
+            return nullptr;
+        }
+
+        StringD name = std::move(StringD::make_from_c_str(this->current().value.c_str(),
+                                                          this->current().value.size()));
+        this->advance();
+
+        auto* node = this->arena.emplace<TypeAliasNode>(std::move(name), nullptr, line, column);
+
+        // Optional type parameters: type Name[T, U] = ...
+        if(!this->parse_type_params(node->type_params))
+            return nullptr;
+
+        if(!this->match_operator(Operator::Assign))
+        {
+            this->error_at_current("Expected '=' in type alias, got \"{}\"",
+                                   this->current().value);
+
+            return nullptr;
+        }
+
+        this->advance(); // skip '='
+
+        node->value = this->parse_expr();
+
+        if(node->value == nullptr)
+            return nullptr;
+
+        return node;
+    }
+
+    bool parse_type_params(Vector<Node*>& type_params) noexcept
+    {
+        if(!this->match_delimiter(Delimiter::LBracket))
+            return true; // no type params, not an error
+
+        this->advance(); // skip '['
+
+        while(!this->at_end() && !this->match_delimiter(Delimiter::RBracket))
+        {
+            std::uint32_t param_line = this->current().line;
+            std::uint32_t param_column = this->current().column;
+
+            bool is_paramspec = false;
+            bool is_typevartuple = false;
+
+            // **P (ParamSpec)
+            if(this->match_operator(Operator::Exponentiation))
+            {
+                is_paramspec = true;
+                this->advance();
+            }
+            // *Ts (TypeVarTuple)
+            else if(this->match_operator(Operator::Multiplication))
+            {
+                is_typevartuple = true;
+                this->advance();
+            }
+
+            if(!this->check(Token::Kind::Identifier))
+            {
+                this->error_at_current("Expected type parameter name, got \"{}\"",
+                                       this->current().value);
+
+                return false;
+            }
+
+            StringD name = std::move(StringD::make_from_c_str(this->current().value.c_str(),
+                                                              this->current().value.size()));
+            this->advance();
+
+            auto* param = this->arena.emplace<TypeParamNode>(std::move(name), param_line, param_column);
+            param->is_paramspec = is_paramspec;
+            param->is_typevartuple = is_typevartuple;
+
+            // Bound or constraint: T: int or T: (int, str)
+            if(!is_paramspec && !is_typevartuple && this->match_delimiter(Delimiter::Colon))
+            {
+                this->advance();
+
+                // Constraint tuple: T: (int, str)
+                if(this->match_delimiter(Delimiter::LParen))
+                {
+                    this->advance();
+
+                    auto* tup = this->arena.emplace<TupleNode>(this->current().line,
+                                                               this->current().column);
+
+                    while(!this->at_end() && !this->match_delimiter(Delimiter::RParen))
+                    {
+                        Node* constraint = this->parse_expr();
+
+                        if(constraint == nullptr)
+                            return false;
+
+                        tup->elts.push_back(constraint);
+
+                        if(this->match_delimiter(Delimiter::Comma))
+                            this->advance();
+                    }
+
+                    if(!this->expect_delimiter(Delimiter::RParen))
+                        return false;
+
+                    param->constraint = tup;
+                }
+                else
+                {
+                    // Simple bound: T: int
+                    Node* bound = this->parse_expr();
+
+                    if(bound == nullptr)
+                        return false;
+
+                    param->bound = bound;
+                }
+            }
+
+            type_params.push_back(param);
+
+            if(this->match_delimiter(Delimiter::Comma))
+                this->advance();
+        }
+
+        if(!this->expect_delimiter(Delimiter::RBracket))
+            return false;
+
+        return true;
+    }
+
     // Statements
 
     Node* parse_statement() noexcept
@@ -1241,6 +1403,12 @@ struct Parser
 
         if(this->at_end())
             return nullptr;
+
+        // Decorators: @expr before def/class
+        if(this->match_operator(Operator::MatMul))
+        {
+            return this->parse_decorated();
+        }
 
         if(this->current().kind == Token::Kind::Keyword)
         {
@@ -1258,14 +1426,136 @@ struct Parser
                 case Keyword::Raise: return this->parse_raise();
                 case Keyword::Import: return this->parse_import();
                 case Keyword::From: return this->parse_import_from();
+                case Keyword::Match: return this->parse_match();
                 default: break;
+            }
+        }
+
+        // Soft keyword 'type': type alias statement (PEP 695, Python 3.12+)
+        // type Name = expr
+        // type Name[T] = expr
+        if(this->check(Token::Kind::Identifier) && this->current().value == "type")
+        {
+            // Peek ahead: must be followed by an identifier
+            if(this->pos + 1 < this->tokens.size() &&
+               this->tokens[this->pos + 1].kind == Token::Kind::Identifier)
+            {
+                return this->parse_type_alias();
             }
         }
 
         return this->parse_expr_or_assign();
     }
 
-    Node* parse_funcarg() noexcept
+    bool parse_func_params(Vector<Node*>& args,
+                           std::int32_t& posonly_index,
+                           std::int32_t& kwonly_index,
+                           Delimiter end_delim) noexcept
+    {
+        std::int32_t arg_count = 0;
+
+        while(!this->at_end() && !this->match_delimiter(end_delim))
+        {
+            // Positional-only separator: /
+            if(this->match_operator(Operator::Division))
+            {
+                posonly_index = arg_count;
+                this->advance();
+
+                if(this->match_delimiter(Delimiter::Comma))
+                    this->advance();
+
+                continue;
+            }
+
+            // Keyword-only separator: bare *
+            if(this->match_operator(Operator::Multiplication))
+            {
+                if(this->pos + 1 < this->tokens.size() &&
+                   (this->tokens[this->pos + 1].kind == Token::Kind::Delimiter))
+                {
+                    kwonly_index = arg_count;
+                    this->advance();
+
+                    if(this->match_delimiter(Delimiter::Comma))
+                        this->advance();
+
+                    continue;
+                }
+
+                // *args
+                this->advance();
+
+                if(this->check(Token::Kind::Identifier))
+                {
+                    Node* arg = this->parse_funcarg();
+
+                    if(arg == nullptr)
+                        return false;
+
+                    static_cast<FunctionArgNode*>(arg)->is_vararg = true;
+                    args.push_back(arg);
+                    arg_count++;
+                }
+
+                if(this->match_delimiter(Delimiter::Comma))
+                    this->advance();
+
+                continue;
+            }
+
+            // **kwargs
+            if(this->match_operator(Operator::Exponentiation))
+            {
+                this->advance();
+
+                if(this->check(Token::Kind::Identifier))
+                {
+                    Node* arg = this->parse_funcarg();
+
+                    if(arg == nullptr)
+                        return false;
+
+                    static_cast<FunctionArgNode*>(arg)->is_kwarg = true;
+                    args.push_back(arg);
+                    arg_count++;
+                }
+
+                if(this->match_delimiter(Delimiter::Comma))
+                    this->advance();
+
+                continue;
+            }
+
+            // Regular argument
+            if(this->check(Token::Kind::Identifier))
+            {
+                Node* arg = this->parse_funcarg(end_delim == Delimiter::Colon);
+
+                if(arg == nullptr)
+                    return false;
+
+                args.push_back(arg);
+                arg_count++;
+            }
+
+            if(this->match_delimiter(Delimiter::Comma))
+                this->advance();
+
+            if(this->check(Token::Kind::Newline))
+            {
+                this->advance();
+                this->skip_indents();
+            }
+
+            if(this->check(Token::Kind::Dedent))
+                this->skip_dedents();
+        }
+
+        return true;
+    }
+
+    Node* parse_funcarg(bool skip_annotation = false) noexcept
     {
         if(this->check(Token::Kind::Identifier))
         {
@@ -1280,8 +1570,11 @@ struct Parser
             {
                 if(this->match_delimiter(Delimiter::Colon))
                 {
-                    this->advance();
-                    annotation = this->parse_expr();
+                    if(!skip_annotation)
+                    {
+                        this->advance();
+                        annotation = this->parse_expr();
+                    }
                 }
                 else if(!this->match_delimiter(Delimiter::Comma) && !this->match_delimiter(Delimiter::RParen))
                 {
@@ -1294,13 +1587,20 @@ struct Parser
                     return nullptr;
                 }
             }
-            else
-            {
-                this->error_at_current("Unexpected token \"{}\" ({})",
-                                       this->current().value,
-                                       this->current().kind);
 
-                return nullptr;
+            if(this->match_operator(Operator::Assign))
+            {
+                this->advance();
+
+                Node* default_val = this->parse_expr();
+
+                if(default_val == nullptr)
+                    return nullptr;
+
+                auto* farg = this->arena.emplace<FunctionArgNode>(std::move(name), annotation, name_line, name_column);
+                farg->default_value = default_val;
+
+                return farg;
             }
 
             return this->arena.emplace<FunctionArgNode>(std::move(name), annotation, name_line, name_column);
@@ -1328,27 +1628,18 @@ struct Parser
         StringD name = std::move(StringD::make_from_c_str(this->current().value.c_str(), this->current().value.size()));
         this->advance();
 
+        auto* node = this->arena.emplace<FunctionDefNode>(std::move(name), line, column);
+
+        // Optional type parameters: def func[T, U](...) -> ...
+        if(!this->parse_type_params(node->type_params))
+            return nullptr;
+
         if(!this->expect_delimiter(Delimiter::LParen))
             return nullptr;
 
-        auto* node = this->arena.emplace<FunctionDefNode>(std::move(name), line, column);
-
         // Parse arguments
-        while(!this->at_end() && !this->match_delimiter(Delimiter::RParen))
-        {
-            if(this->check(Token::Kind::Identifier))
-            {
-                Node* arg = this->parse_funcarg();
-
-                if(arg == nullptr)
-                    return nullptr;
-
-                node->args.push_back(arg);
-            }
-
-            if(this->match_delimiter(Delimiter::Comma))
-                this->advance();
-        }
+        if(!this->parse_func_params(node->args, node->posonly_index, node->kwonly_index, Delimiter::RParen))
+            return nullptr;
 
         if(!this->expect_delimiter(Delimiter::RParen))
             return nullptr;
@@ -1366,7 +1657,10 @@ struct Parser
         if(!this->expect_delimiter(Delimiter::Colon))
             return nullptr;
 
-        if(!this->parse_block(node->body))
+        // Inline body
+        if(!this->check(Token::Kind::Newline))
+            node->body.push_back(this->parse_statement());
+        else if(!this->parse_block(node->body))
             return nullptr;
 
         return node;
@@ -1392,6 +1686,10 @@ struct Parser
         this->advance();
 
         auto* node = this->arena.emplace<ClassDefNode>(std::move(name), line, column);
+
+        // Optional type parameters: class Foo[T, U](Base):
+        if(!this->parse_type_params(node->type_params))
+            return nullptr;
 
         // Optional bases
         if(this->match_delimiter(Delimiter::LParen))
@@ -1440,7 +1738,9 @@ struct Parser
 
         auto* node = arena.emplace<IfNode>(test, line, column);
 
-        if(!this->parse_block(node->body))
+        if(!this->check(Token::Kind::Newline))
+            node->body.push_back(this->parse_statement());
+        else if(!this->parse_block(node->body))
             return nullptr;
 
         this->skip_newlines();
@@ -1502,7 +1802,9 @@ struct Parser
 
         auto* node = this->arena.emplace<WhileNode>(test, line, column);
 
-        if(!this->parse_block(node->body))
+        if(!this->check(Token::Kind::Newline))
+            node->body.push_back(this->parse_statement());
+        else if(!this->parse_block(node->body))
             return nullptr;
 
         this->skip_newlines();
@@ -1514,7 +1816,9 @@ struct Parser
             if(!this->expect_delimiter(Delimiter::Colon))
                 return nullptr;
 
-            if(!this->parse_block(node->orelse))
+            if(!this->check(Token::Kind::Newline))
+                node->orelse.push_back(this->parse_statement());
+            else if(!this->parse_block(node->orelse))
                 return nullptr;
         }
 
@@ -1545,7 +1849,9 @@ struct Parser
 
         auto* node = this->arena.emplace<ForNode>(target, iter, line, column);
 
-        if(!this->parse_block(node->body))
+        if(!this->check(Token::Kind::Newline))
+            node->body.push_back(this->parse_statement());
+        else if(!this->parse_block(node->body))
             return nullptr;
 
         this->skip_newlines();
@@ -1763,6 +2069,560 @@ struct Parser
         return node;
     }
 
+    // Match
+
+    Node* parse_match() noexcept
+    {
+        std::uint32_t line = this->current().line;
+        std::uint32_t column = this->current().column;
+        this->advance(); // skip 'match'
+
+        Node* subject = this->parse_expr();
+
+        if(subject == nullptr)
+            return nullptr;
+
+        if(!this->expect_delimiter(Delimiter::Colon))
+            return nullptr;
+
+        auto* node = this->arena.emplace<MatchNode>(subject, line, column);
+
+        this->skip_newlines();
+
+        if(!this->check(Token::Kind::Indent))
+        {
+            this->error_at_current("Expected indented block of case clauses");
+            return nullptr;
+        }
+
+        this->advance(); // skip indent
+
+        while(!this->at_end())
+        {
+            this->skip_newlines();
+
+            if(this->at_end())
+                break;
+
+            if(this->check(Token::Kind::Dedent))
+            {
+                this->advance();
+                break;
+            }
+
+            Node* case_node = this->parse_match_case();
+
+            if(case_node == nullptr)
+                return nullptr;
+
+            node->cases.push_back(case_node);
+        }
+
+        return node;
+    }
+
+    Node* parse_match_case() noexcept
+    {
+        std::uint32_t line = this->current().line;
+        std::uint32_t column = this->current().column;
+
+        if(!this->expect_keyword(Keyword::Case))
+            return nullptr;
+
+        Node* pattern = this->parse_match_pattern();
+
+        if(pattern == nullptr)
+            return nullptr;
+
+        Node* guard = nullptr;
+
+        if(this->match_keyword(Keyword::If))
+        {
+            this->advance();
+
+            guard = this->parse_expr();
+
+            if(guard == nullptr)
+                return nullptr;
+        }
+
+        if(!this->expect_delimiter(Delimiter::Colon))
+            return nullptr;
+
+        auto* node = this->arena.emplace<MatchCaseNode>(pattern, guard, line, column);
+
+        if(!this->parse_block(node->body))
+            return nullptr;
+
+        return node;
+    }
+
+    // Entry point: OR patterns (lowest precedence)
+
+    Node* parse_match_pattern() noexcept
+    {
+        Node* left = this->parse_match_as_pattern();
+
+        if(left == nullptr)
+            return nullptr;
+
+        if(!this->match_operator(Operator::BitwiseOr))
+            return left;
+
+        auto* node = this->arena.emplace<MatchOrNode>(left->line(), left->column());
+        node->patterns.push_back(left);
+
+        while(this->match_operator(Operator::BitwiseOr))
+        {
+            this->advance();
+
+            Node* alt = this->parse_match_as_pattern();
+
+            if(alt == nullptr)
+                return nullptr;
+
+            node->patterns.push_back(alt);
+        }
+
+        return node;
+    }
+
+    // pattern as name
+
+    Node* parse_match_as_pattern() noexcept
+    {
+        Node* pattern = this->parse_match_primary_pattern();
+
+        if(pattern == nullptr)
+            return nullptr;
+
+        if(this->match_keyword(Keyword::As))
+        {
+            this->advance();
+
+            if(!this->check(Token::Kind::Identifier))
+            {
+                this->error_at_current("Expected name after 'as', got \"{}\"",
+                                       this->current().value);
+
+                return nullptr;
+            }
+
+            StringD name = std::move(StringD::make_from_c_str(this->current().value.c_str(),
+                                                              this->current().value.size()));
+            this->advance();
+
+            return this->arena.emplace<MatchAsNode>(pattern, std::move(name),
+                                                    pattern->line(), pattern->column());
+        }
+
+        return pattern;
+    }
+
+    Node* parse_match_primary_pattern() noexcept
+    {
+        if(this->at_end())
+        {
+            this->error_at_current("Expected pattern");
+            return nullptr;
+        }
+
+        std::uint32_t line = this->current().line;
+        std::uint32_t column = this->current().column;
+
+        // Wildcard: _
+        if(this->check(Token::Kind::Identifier) && this->current().value == "_")
+        {
+            this->advance();
+            return this->arena.emplace<MatchAsNode>(nullptr, StringD(), line, column);
+        }
+
+        // Star pattern: *name or *_ (only valid inside sequences, but parse it here)
+        if(this->match_operator(Operator::Multiplication))
+        {
+            this->advance();
+
+            StringD name;
+
+            if(this->check(Token::Kind::Identifier))
+            {
+                if(this->current().value != "_")
+                {
+                    name = std::move(StringD::make_from_c_str(this->current().value.c_str(),
+                                                              this->current().value.size()));
+                }
+
+                this->advance();
+            }
+            else
+            {
+                this->error_at_current("Expected name after '*' in pattern");
+                return nullptr;
+            }
+
+            return this->arena.emplace<MatchStarNode>(std::move(name), line, column);
+        }
+
+        // Singletons: True, False, None
+        if(this->match_keyword(Keyword::True) ||
+           this->match_keyword(Keyword::False) ||
+           this->match_keyword(Keyword::None))
+        {
+            Keyword kw = static_cast<Keyword>(this->current().type);
+            this->advance();
+            return this->arena.emplace<MatchSingletonNode>(kw, line, column);
+        }
+
+        // Numeric literals (including negative: -42, -3.14, complex: 1+2j)
+        if(this->check(Token::Kind::Literal) ||
+           ((this->match_operator(Operator::Subtraction)) && this->pos + 1 < this->tokens.size() &&
+            this->tokens[this->pos + 1].kind == Token::Kind::Literal))
+        {
+            bool negate = false;
+
+            if(this->match_operator(Operator::Subtraction))
+            {
+                negate = true;
+                this->advance();
+            }
+
+            if(this->check(Token::Kind::Literal))
+            {
+                auto* val = this->arena.emplace<ConstantNode>(
+                    std::move(StringD::make_from_c_str(this->current().value.c_str(),
+                                                       this->current().value.size())),
+                    static_cast<Literal>(this->current().type),
+                    this->current().line,
+                    this->current().column);
+
+                this->advance();
+
+                Node* result = val;
+
+                if(negate)
+                {
+                    result = this->arena.emplace<UnaryOpNode>(Operator::Subtraction, val,
+                                                              line, column);
+                }
+
+                // Complex literal pattern: 1+2j, 1-2j, -1+2j, -1-2j
+                if(!this->at_end() &&
+                   (this->match_operator(Operator::Addition) || this->match_operator(Operator::Subtraction)))
+                {
+                    Operator complex_op = static_cast<Operator>(this->current().type);
+                    this->advance();
+
+                    if(!this->check(Token::Kind::Literal))
+                    {
+                        this->error_at_current("Expected imaginary literal in complex pattern");
+                        return nullptr;
+                    }
+
+                    auto* imag = this->arena.emplace<ConstantNode>(
+                        std::move(StringD::make_from_c_str(this->current().value.c_str(),
+                                                           this->current().value.size())),
+                        static_cast<Literal>(this->current().type),
+                        this->current().line,
+                        this->current().column);
+
+                    this->advance();
+
+                    Node* imag_node = imag;
+
+                    if(complex_op == Operator::Subtraction)
+                    {
+                        imag_node = this->arena.emplace<UnaryOpNode>(Operator::Subtraction, imag,
+                                                                     imag->line(), imag->column());
+                    }
+
+                    result = this->arena.emplace<BinOpNode>(result, Operator::Addition, imag_node,
+                                                            line, column);
+                }
+
+                return this->arena.emplace<MatchValueNode>(result, line, column);
+            }
+        }
+
+        // Sequence pattern: [p1, p2, *rest, p3]
+        if(this->match_delimiter(Delimiter::LBracket))
+        {
+            this->advance();
+
+            auto* node = this->arena.emplace<MatchSequenceNode>(line, column);
+
+            while(!this->at_end() && !this->match_delimiter(Delimiter::RBracket))
+            {
+                Node* pat = this->parse_match_pattern();
+
+                if(pat == nullptr)
+                    return nullptr;
+
+                node->patterns.push_back(pat);
+
+                if(this->match_delimiter(Delimiter::Comma))
+                    this->advance();
+            }
+
+            if(!this->expect_delimiter(Delimiter::RBracket))
+                return nullptr;
+
+            return node;
+        }
+
+        // Mapping pattern: {key: pattern, **rest}
+        if(this->match_delimiter(Delimiter::LBrace))
+        {
+            this->advance();
+
+            auto* node = this->arena.emplace<MatchMappingNode>(line, column);
+
+            while(!this->at_end() && !this->match_delimiter(Delimiter::RBrace))
+            {
+                // **rest capture
+                if(this->match_operator(Operator::Exponentiation))
+                {
+                    this->advance();
+
+                    if(!this->check(Token::Kind::Identifier))
+                    {
+                        this->error_at_current("Expected name after '**' in mapping pattern");
+                        return nullptr;
+                    }
+
+                    node->rest = std::move(StringD::make_from_c_str(this->current().value.c_str(),
+                                                                    this->current().value.size()));
+                    this->advance();
+
+                    if(this->match_delimiter(Delimiter::Comma))
+                        this->advance();
+
+                    continue;
+                }
+
+                Node* key = this->parse_match_primary_pattern();
+
+                if(key == nullptr)
+                    return nullptr;
+
+                if(!this->expect_delimiter(Delimiter::Colon))
+                    return nullptr;
+
+                Node* pat = this->parse_match_pattern();
+
+                if(pat == nullptr)
+                    return nullptr;
+
+                node->keys.push_back(key);
+                node->patterns.push_back(pat);
+
+                if(this->match_delimiter(Delimiter::Comma))
+                    this->advance();
+            }
+
+            if(!this->expect_delimiter(Delimiter::RBrace))
+                return nullptr;
+
+            return node;
+        }
+
+        // Group pattern or sequence pattern: (pattern) or (p1, p2, ...)
+        if(this->match_delimiter(Delimiter::LParen))
+        {
+            this->advance();
+
+            if(this->match_delimiter(Delimiter::RParen))
+            {
+                this->advance();
+                return this->arena.emplace<MatchSequenceNode>(line, column);
+            }
+
+            Node* first = this->parse_match_pattern();
+
+            if(first == nullptr)
+                return nullptr;
+
+            // Sequence: (p1, p2, ...)
+            if(this->match_delimiter(Delimiter::Comma))
+            {
+                auto* seq = this->arena.emplace<MatchSequenceNode>(line, column);
+                seq->patterns.push_back(first);
+
+                while(this->match_delimiter(Delimiter::Comma))
+                {
+                    this->advance();
+
+                    if(this->match_delimiter(Delimiter::RParen))
+                        break;
+
+                    Node* pat = this->parse_match_pattern();
+
+                    if(pat == nullptr)
+                        return nullptr;
+
+                    seq->patterns.push_back(pat);
+                }
+
+                if(!this->expect_delimiter(Delimiter::RParen))
+                    return nullptr;
+
+                return seq;
+            }
+
+            // Group: (pattern)
+            if(!this->expect_delimiter(Delimiter::RParen))
+                return nullptr;
+
+            return first;
+        }
+
+        // Identifier: capture pattern, value pattern (dotted), or class pattern
+        if(this->check(Token::Kind::Identifier))
+        {
+            StringD name = std::move(StringD::make_from_c_str(this->current().value.c_str(),
+                                                              this->current().value.size()));
+            this->advance();
+
+            // Dotted name: Color.RED, module.Class.CONST
+            if(this->match_delimiter(Delimiter::Dot))
+            {
+                auto* attr_node = this->arena.emplace<NameNode>(std::move(name), line, column);
+                Node* dotted = attr_node;
+
+                while(this->match_delimiter(Delimiter::Dot))
+                {
+                    this->advance();
+
+                    if(!this->check(Token::Kind::Identifier))
+                    {
+                        this->error_at_current("Expected attribute name after '.'");
+                        return nullptr;
+                    }
+
+                    StringD attr = std::move(StringD::make_from_c_str(this->current().value.c_str(),
+                                                                      this->current().value.size()));
+                    this->advance();
+
+                    dotted = this->arena.emplace<AttributeNode>(dotted, std::move(attr),
+                                                                dotted->line(), dotted->column());
+                }
+
+                // Class pattern with dotted name: module.ClassName(p1, attr=p2)
+                if(this->match_delimiter(Delimiter::LParen))
+                    return this->parse_match_class_pattern(dotted, line, column);
+
+                return this->arena.emplace<MatchValueNode>(dotted, line, column);
+            }
+
+            // Class pattern: ClassName(p1, p2, attr=p3)
+            if(this->match_delimiter(Delimiter::LParen))
+            {
+                auto* name_node = this->arena.emplace<NameNode>(std::move(name), line, column);
+                return this->parse_match_class_pattern(name_node, line, column);
+            }
+
+            // Simple capture pattern: name
+            return this->arena.emplace<MatchAsNode>(nullptr, std::move(name), line, column);
+        }
+
+        this->error_at_current("Unexpected token \"{}\" ({}) in pattern",
+                               this->current().value,
+                               this->current().kind);
+
+        return nullptr;
+    }
+
+    Node* parse_match_class_pattern(Node* cls, std::uint32_t line, std::uint32_t column) noexcept
+    {
+        this->advance(); // skip '('
+
+        auto* node = this->arena.emplace<MatchClassNode>(cls, line, column);
+
+        while(!this->at_end() && !this->match_delimiter(Delimiter::RParen))
+        {
+            // Check for keyword pattern: attr=pattern
+            if(this->check(Token::Kind::Identifier) &&
+               this->pos + 1 < this->tokens.size() &&
+               this->tokens[this->pos + 1].kind == Token::Kind::Operator &&
+               static_cast<Operator>(this->tokens[this->pos + 1].type) == Operator::Assign)
+            {
+                StringD attr = std::move(StringD::make_from_c_str(this->current().value.c_str(),
+                                                                  this->current().value.size()));
+                this->advance(2); // skip name and '='
+
+                Node* pat = this->parse_match_pattern();
+
+                if(pat == nullptr)
+                    return nullptr;
+
+                node->kwd_attrs.push_back(std::move(attr));
+                node->kwd_patterns.push_back(pat);
+            }
+            else
+            {
+                // Positional pattern
+                Node* pat = this->parse_match_pattern();
+
+                if(pat == nullptr)
+                    return nullptr;
+
+                node->patterns.push_back(pat);
+            }
+
+            if(this->match_delimiter(Delimiter::Comma))
+                this->advance();
+        }
+
+        if(!this->expect_delimiter(Delimiter::RParen))
+            return nullptr;
+
+        return node;
+    }
+
+    // List Comprehension
+
+    bool parse_comp_clauses(Vector<Node*>& generators) noexcept
+    {
+        while(!this->at_end() && this->match_keyword(Keyword::For))
+        {
+            std::uint32_t comp_line = this->current().line;
+            std::uint32_t comp_column = this->current().column;
+            this->advance(); // skip 'for'
+
+            Node* target = this->parse_primary();
+
+            if(target == nullptr)
+                return false;
+
+            if(!this->expect_keyword(Keyword::In))
+                return false;
+
+            // Use parse_or_expr() to avoid consuming 'if' or 'for' keywords
+            Node* iter = this->parse_or_expr();
+
+            if(iter == nullptr)
+                return false;
+
+            auto* comp = this->arena.emplace<ComprehensionNode>(target, iter, comp_line, comp_column);
+
+            // Zero or more 'if' filters
+            while(!this->at_end() && this->match_keyword(Keyword::If))
+            {
+                this->advance();
+
+                Node* test = this->parse_or_expr();
+
+                if(test == nullptr)
+                    return false;
+
+                comp->ifs.push_back(test);
+            }
+
+            generators.push_back(comp);
+        }
+
+        return !generators.empty();
+    }
+
     // Expression or assignment
 
     Node* parse_expr_or_assign() noexcept
@@ -1826,6 +2686,68 @@ struct Parser
             return node;
         }
 
+        // Multiple assignment: x, y, z = 1, 2, 3
+        // Also handles: first, *rest = [1, 2, 3, 4]
+        if(this->match_delimiter(Delimiter::Comma))
+        {
+            // Parse remaining targets
+            while(this->match_delimiter(Delimiter::Comma))
+            {
+                this->advance(); // skip ','
+
+                if(this->match_operator(Operator::Assign))
+                    break;
+
+                Node* target = this->parse_expr();
+
+                if(target == nullptr)
+                    return nullptr;
+
+                targets.push_back(target);
+            }
+
+            // We must be at '=' now
+            if(!this->match_operator(Operator::Assign))
+            {
+                this->error_at_current("Expected '=' in multi-assignment, got \"{}\"",
+                                       this->current().value);
+
+                return nullptr;
+            }
+
+            this->advance(); // skip '='
+
+            // Parse values
+            Vector<Node*> values;
+
+            while(!this->at_end() && !this->check(Token::Kind::Newline))
+            {
+                Node* value = this->parse_expr();
+
+                if(value == nullptr)
+                    return nullptr;
+
+                values.push_back(value);
+
+                if(!this->match_delimiter(Delimiter::Comma))
+                    break;
+
+                this->advance(); // skip ','
+            }
+
+            if(values.empty())
+            {
+                this->error_at_current("Expected values in multi-assignment");
+                return nullptr;
+            }
+
+            auto* assign = this->arena.emplace<MultiAssignNode>(line, column);
+            assign->targets = std::move(targets);
+            assign->values = std::move(values);
+
+            return assign;
+        }
+
         // Augmented assignment: target += value, etc.
         if(!this->at_end() && this->current().kind == Token::Kind::Operator)
         {
@@ -1855,8 +2777,60 @@ struct Parser
         if(!this->at_end() && this->match_keyword(Keyword::Lambda))
             return this->parse_lambda();
 
-        return this->parse_or_expr();
+        if(!this->at_end() && this->match_keyword(Keyword::Yield))
+              return this->parse_yield();
+
+        Node* left = this->parse_or_expr();
+
+        if(left == nullptr)
+            return nullptr;
+
+        // Ternary: body if test else orelse
+        if(!this->at_end() && this->match_keyword(Keyword::If))
+        {
+            this->advance();
+
+            // Condition is or_expr to avoid consuming a nested 'else'
+            Node* test = this->parse_or_expr();
+
+            if(test == nullptr)
+                return nullptr;
+
+            if(!this->expect_keyword(Keyword::Else))
+                return nullptr;
+
+            // Else branch is full parse_expr() to allow right-nesting:
+            // a if b else c if d else e  →  a if b else (c if d else e)
+            Node* orelse = this->parse_expr();
+
+            if(orelse == nullptr)
+                return nullptr;
+
+            left = this->arena.emplace<TernaryOpNode>(left, test, orelse, left->line(), left->column());
+        }
+
+        // Walrus operator (:=)
+        if(!this->at_end() && this->current().kind == Token::Kind::Operator)
+        {
+            Operator op = static_cast<Operator>(this->current().type);
+
+            if(op == Operator::WalrusAssign)
+            {
+                this->advance();
+
+                Node* value = this->parse_expr();
+
+                if(value == nullptr)
+                    return nullptr;
+
+                return this->arena.emplace<WalrusAssignNode>(left, value, left->line(), left->column());
+            }
+        }
+
+        return left;
     }
+
+    // Lambda
 
     Node* parse_lambda() noexcept
     {
@@ -1866,21 +2840,11 @@ struct Parser
 
         auto* node = this->arena.emplace<LambdaNode>(nullptr, line, column);
 
-        // Parse parameter names
-        while(!this->at_end() && !this->match_delimiter(Delimiter::Colon))
+        // No-argument lambda: lambda: expr
+        if(!this->match_delimiter(Delimiter::Colon))
         {
-            if(this->check(Token::Kind::Identifier))
-            {
-                auto* param = this->arena.emplace<NameNode>(
-                    std::move(StringD::make_from_c_str(this->current().value.c_str(), this->current().value.size())),
-                    this->current().line,
-                    this->current().column);
-                node->args.push_back(param);
-                this->advance();
-            }
-
-            if(this->match_delimiter(Delimiter::Comma))
-                this->advance();
+            if(!this->parse_func_params(node->args, node->posonly_index, node->kwonly_index, Delimiter::Colon))
+                return nullptr;
         }
 
         if(!this->expect_delimiter(Delimiter::Colon))
@@ -1892,6 +2856,46 @@ struct Parser
             return nullptr;
 
         return node;
+    }
+
+    // Yield
+
+    Node* parse_yield() noexcept
+    {
+        std::uint32_t line = this->current().line;
+        std::uint32_t column = this->current().column;
+        this->advance(); // skip 'yield'
+
+        // yield from expr
+        if(!this->at_end() && this->match_keyword(Keyword::From))
+        {
+            this->advance();
+
+            Node* value = this->parse_expr();
+
+            if(value == nullptr)
+                return nullptr;
+
+            return this->arena.emplace<YieldFromNode>(value, line, column);
+        }
+
+        // Bare yield (no value)
+        if(this->at_end() ||
+           this->check(Token::Kind::Newline) ||
+           this->match_delimiter(Delimiter::RParen) ||
+           this->match_delimiter(Delimiter::RBracket) ||
+           this->match_delimiter(Delimiter::RBrace))
+        {
+            return this->arena.emplace<YieldNode>(nullptr, line, column);
+        }
+
+        // yield expr
+        Node* value = this->parse_expr();
+
+        if(value == nullptr)
+            return nullptr;
+
+        return this->arena.emplace<YieldNode>(value, line, column);
     }
 
     Node* parse_or_expr() noexcept
@@ -1946,7 +2950,7 @@ struct Parser
 
     Node* parse_not_expr() noexcept
     {
-        if(!this->at_end() && this->match_operator(Operator::LogicalNot))
+        if(!this->at_end() && this->match_keyword(Keyword::Not))
         {
             std::uint32_t line = this->current().line;
             std::uint32_t column = this->current().column;
@@ -1970,30 +2974,97 @@ struct Parser
         if(left == nullptr)
             return nullptr;
 
-        if(this->at_end() || this->current().kind != Token::Kind::Operator)
-            return left;
+        // Helper lambda: check if current position is a comparison op,
+        // return the Operator enum and how many tokens to consume
+        auto match_cmp_op = [this](Operator& out_op, std::uint32_t& out_advance) -> bool
+        {
+            if(this->at_end())
+                return false;
 
-        Operator op = static_cast<Operator>(this->current().type);
+            // Operator-based comparators: ==, !=, <, >, <=, >=
+            if(this->current().kind == Token::Kind::Operator)
+            {
+                Operator op = static_cast<Operator>(this->current().type);
 
-        bool is_cmp = (op >= Operator::ComparatorEquals && op <= Operator::ComparatorLessEqualsThan) ||
-                      (op >= Operator::IdentityIs && op <= Operator::MembershipNotIn);
+                if(op >= Operator::ComparatorEquals && op <= Operator::ComparatorLessEqualsThan)
+                {
+                    out_op = op;
+                    out_advance = 1;
+                    return true;
+                }
+            }
 
-        if(!is_cmp)
+            // Keyword-based: is, is not, in, not in
+            if(this->match_keyword(Keyword::Is))
+            {
+                // 'is not'
+                if(this->pos + 1 < this->tokens.size() &&
+                   this->tokens[this->pos + 1].kind == Token::Kind::Keyword &&
+                   static_cast<Keyword>(this->tokens[this->pos + 1].type) == Keyword::Not)
+                {
+                    out_op = Operator::IdentityIsNot;
+                    out_advance = 2;
+                    return true;
+                }
+
+                out_op = Operator::IdentityIs;
+                out_advance = 1;
+                return true;
+            }
+
+            if(this->match_keyword(Keyword::In))
+            {
+                out_op = Operator::MembershipIn;
+                out_advance = 1;
+                return true;
+            }
+
+            if(this->match_keyword(Keyword::Not))
+            {
+                // 'not in'
+                if(this->pos + 1 < this->tokens.size() &&
+                   this->tokens[this->pos + 1].kind == Token::Kind::Keyword &&
+                   static_cast<Keyword>(this->tokens[this->pos + 1].type) == Keyword::In)
+                {
+                    out_op = Operator::MembershipNotIn;
+                    out_advance = 2;
+                    return true;
+                }
+
+                out_op = Operator::LogicalNot;
+                out_advance = 1;
+                return true;
+            }
+
+            if(this->match_keyword(Keyword::And))
+            {
+                out_op = Operator::LogicalAnd;
+                out_advance = 1;
+                return true;
+            }
+
+            if(this->match_keyword(Keyword::Or))
+            {
+                out_op = Operator::LogicalOr;
+                out_advance = 1;
+                return true;
+            }
+
+            return false;
+        };
+
+        Operator op;
+        std::uint32_t skip;
+
+        if(!match_cmp_op(op, skip))
             return left;
 
         auto* node = arena.emplace<CompareNode>(left, left->line(), left->column());
 
-        while(!this->at_end() && this->current().kind == Token::Kind::Operator)
+        while(match_cmp_op(op, skip))
         {
-            op = static_cast<Operator>(this->current().type);
-            is_cmp = (op >= Operator::ComparatorEquals && op <= Operator::ComparatorLessEqualsThan) ||
-                     (op >= Operator::IdentityIs && op <= Operator::MembershipNotIn);
-
-            if(!is_cmp)
-                break;
-
             node->ops.push_back(op);
-            this->advance();
+            this->advance(skip);
 
             Node* right = this->parse_bitor();
 
@@ -2126,7 +3197,8 @@ struct Parser
               (this->match_operator(Operator::Multiplication) ||
                this->match_operator(Operator::Division) ||
                this->match_operator(Operator::Modulus) ||
-               this->match_operator(Operator::FloorDivision)))
+               this->match_operator(Operator::FloorDivision) ||
+               this->match_operator(Operator::MatMul)))
         {
             Operator op = static_cast<Operator>(this->current().type);
             this->advance();
@@ -2207,12 +3279,57 @@ struct Parser
 
                 while(!this->at_end() && !this->match_delimiter(Delimiter::RParen))
                 {
-                    Node* arg = this->parse_expr();
+                    // **expr unpacking in call
+                    if(this->match_operator(Operator::Exponentiation))
+                    {
+                        std::uint32_t kw_line = this->current().line;
+                        std::uint32_t kw_column = this->current().column;
+                        this->advance();
 
-                    if(arg == nullptr)
-                        return nullptr;
+                        Node* value = this->parse_expr();
 
-                    call->args.push_back(arg);
+                        if(value == nullptr)
+                            return nullptr;
+
+                        auto* kwarg = this->arena.emplace<KeywordArgNode>(StringD(), value, kw_line, kw_column);
+                        call->args.push_back(kwarg);
+                    }
+                    else
+                    {
+                        Node* arg = this->parse_expr();
+
+                        if(arg == nullptr)
+                            return nullptr;
+
+                        // keyword argument: name=value
+                        if(arg->type() == ASTNodeName && this->match_operator(Operator::Assign))
+                        {
+                            std::uint32_t kw_line = arg->line();
+                            std::uint32_t kw_column = arg->column();
+                            StringD kw_name = std::move(static_cast<NameNode*>(arg)->id);
+                            this->advance();
+
+                            Node* value = this->parse_expr();
+
+                            if(value == nullptr)
+                                return nullptr;
+
+                            arg = this->arena.emplace<KeywordArgNode>(std::move(kw_name), value, kw_line, kw_column);
+                        }
+
+                        // Generator expression as call argument
+                        if(this->match_keyword(Keyword::For))
+                        {
+                            auto* genexpr = this->arena.emplace<GeneratorExprNode>(arg, arg->line(), arg->column());
+
+                            if(!this->parse_comp_clauses(genexpr->generators))
+                                return nullptr;
+
+                            arg = genexpr;
+                        }
+
+                        call->args.push_back(arg);
+                    }
 
                     if(this->match_delimiter(Delimiter::Comma))
                         this->advance();
@@ -2227,15 +3344,44 @@ struct Parser
             {
                 this->advance();
 
-                Node* slice = this->parse_expr();
+                Node* first = this->parse_expr();
 
-                if(slice == nullptr)
+                if(first == nullptr)
                     return nullptr;
 
-                if(!this->expect_delimiter(Delimiter::RBracket))
-                    return nullptr;
+                // Multiple subscript items: dict[str, int], tuple[int, ...]
+                if(this->match_delimiter(Delimiter::Comma))
+                {
+                    auto* tup = this->arena.emplace<TupleNode>(first->line(), first->column());
+                    tup->elts.push_back(first);
 
-                node = this->arena.emplace<SubscriptNode>(node, slice, node->line(), node->column());
+                    while(this->match_delimiter(Delimiter::Comma))
+                    {
+                        this->advance();
+
+                        if(this->match_delimiter(Delimiter::RBracket))
+                            break;
+
+                        Node* elt = this->parse_expr();
+
+                        if(elt == nullptr)
+                            return nullptr;
+
+                        tup->elts.push_back(elt);
+                    }
+
+                    if(!this->expect_delimiter(Delimiter::RBracket))
+                        return nullptr;
+
+                    node = this->arena.emplace<SubscriptNode>(node, tup, node->line(), node->column());
+                }
+                else
+                {
+                    if(!this->expect_delimiter(Delimiter::RBracket))
+                        return nullptr;
+
+                    node = this->arena.emplace<SubscriptNode>(node, first, node->line(), node->column());
+                }
             }
             else if(this->match_delimiter(Delimiter::Dot))
             {
@@ -2283,6 +3429,21 @@ struct Parser
 
         this->skip_dedents();
 
+        // Star expression: *expr (unpacking in assignments, literals)
+        if(this->match_operator(Operator::Multiplication))
+        {
+            std::uint32_t star_line = this->current().line;
+            std::uint32_t star_column = this->current().column;
+            this->advance();
+
+            Node* value = this->parse_expr();
+
+            if(value == nullptr)
+                return nullptr;
+
+            return this->arena.emplace<StarredNode>(value, star_line, star_column);
+        }
+
         // Identifier / Name
         if(this->check(Token::Kind::Identifier))
         {
@@ -2293,7 +3454,8 @@ struct Parser
 
             this->advance();
 
-            if(this->match_delimiter(Delimiter::Colon))
+            // Type annotation
+            if(this->match_delimiter(Delimiter::Colon) && !(this->peek().kind == Token::Kind::Newline))
             {
                 this->advance();
                 node->type = this->parse_expr();
@@ -2356,6 +3518,20 @@ struct Parser
 
             if(first == nullptr)
                 return nullptr;
+
+            // Generator expression: (expr for target in iter ...)
+            if(this->match_keyword(Keyword::For))
+            {
+                auto* node = this->arena.emplace<GeneratorExprNode>(first, first->line(), first->column());
+
+                if(!this->parse_comp_clauses(node->generators))
+                    return nullptr;
+
+                if(!this->expect_delimiter(Delimiter::RParen))
+                    return nullptr;
+
+                return node;
+            }
 
             // Tuple with comma
             if(this->match_delimiter(Delimiter::Comma))
@@ -2436,26 +3612,57 @@ struct Parser
             return first;
         }
 
-        // List literal
+        // List literal or list comprehension
         if(this->match_delimiter(Delimiter::LBracket))
         {
             std::uint32_t line = this->current().line;
             std::uint32_t column = this->current().column;
             this->advance();
 
-            auto* node = this->arena.emplace<ListNode>(line, column);
-
-            while(!this->at_end() && !this->match_delimiter(Delimiter::RBracket))
+            // Empty list
+            if(this->match_delimiter(Delimiter::RBracket))
             {
+                auto* node = this->arena.emplace<ListNode>(line, column);
+                this->advance();
+                return node;
+            }
+
+            Node* first = this->parse_expr();
+
+            if(first == nullptr)
+                return nullptr;
+
+            // List comprehension: [expr for target in iter ...]
+            if(this->match_keyword(Keyword::For))
+            {
+                auto* node = this->arena.emplace<ListCompNode>(first, line, column);
+
+                if(!this->parse_comp_clauses(node->generators))
+                    return nullptr;
+
+                if(!this->expect_delimiter(Delimiter::RBracket))
+                    return nullptr;
+
+                return node;
+            }
+
+            // Regular list literal
+            auto* node = this->arena.emplace<ListNode>(line, column);
+            node->elts.push_back(first);
+
+            while(this->match_delimiter(Delimiter::Comma))
+            {
+                this->advance();
+
+                if(this->match_delimiter(Delimiter::RBracket))
+                    break;
+
                 Node* elt = this->parse_expr();
 
                 if(elt == nullptr)
                     return nullptr;
 
                 node->elts.push_back(elt);
-
-                if(this->match_delimiter(Delimiter::Comma))
-                    this->advance();
             }
 
             if(!this->expect_delimiter(Delimiter::RBracket))
@@ -2464,35 +3671,189 @@ struct Parser
             return node;
         }
 
-        // Dict literal
+        // Dict/set literal or dict/set comprehension
         if(this->match_delimiter(Delimiter::LBrace))
         {
             std::uint32_t line = this->current().line;
             std::uint32_t column = this->current().column;
             this->advance();
 
-            auto* node = this->arena.emplace<DictNode>(line, column);
-
-            while(!this->at_end() && !this->match_delimiter(Delimiter::RBrace))
+            // Empty dict: {}
+            if(this->match_delimiter(Delimiter::RBrace))
             {
-                Node* key = this->parse_expr();
+                auto* node = this->arena.emplace<DictNode>(line, column);
+                this->advance();
+                return node;
+            }
 
-                if(key == nullptr)
+            // Dict starting with **expr unpacking
+            if(this->match_operator(Operator::Exponentiation))
+            {
+                this->advance();
+
+                Node* val = this->parse_expr();
+
+                if(val == nullptr)
                     return nullptr;
 
-                if(!this->expect_delimiter(Delimiter::Colon))
+                auto* node = this->arena.emplace<DictNode>(line, column);
+                node->keys.push_back(nullptr);
+                node->values.push_back(val);
+
+                while(this->match_delimiter(Delimiter::Comma))
+                {
+                    this->advance();
+
+                    if(this->match_delimiter(Delimiter::RBrace))
+                        break;
+
+                    if(this->match_operator(Operator::Exponentiation))
+                    {
+                        this->advance();
+
+                        Node* v = this->parse_expr();
+
+                        if(v == nullptr)
+                            return nullptr;
+
+                        node->keys.push_back(nullptr);
+                        node->values.push_back(v);
+                        continue;
+                    }
+
+                    Node* key = this->parse_expr();
+
+                    if(key == nullptr)
+                        return nullptr;
+
+                    if(!this->expect_delimiter(Delimiter::Colon))
+                        return nullptr;
+
+                    Node* value = this->parse_expr();
+
+                    if(value == nullptr)
+                        return nullptr;
+
+                    node->keys.push_back(key);
+                    node->values.push_back(value);
+                }
+
+                if(!this->expect_delimiter(Delimiter::RBrace))
                     return nullptr;
+
+                return node;
+            }
+
+            Node* first = this->parse_expr();
+
+            if(first == nullptr)
+                return nullptr;
+
+            // Set comprehension: {expr for target in iter ...}
+            if(this->match_keyword(Keyword::For))
+            {
+                auto* node = this->arena.emplace<SetCompNode>(first, line, column);
+
+                if(!this->parse_comp_clauses(node->generators))
+                    return nullptr;
+
+                if(!this->expect_delimiter(Delimiter::RBrace))
+                    return nullptr;
+
+                return node;
+            }
+
+            // Dict path: first expression followed by ':'
+            if(this->match_delimiter(Delimiter::Colon))
+            {
+                this->advance();
 
                 Node* value = this->parse_expr();
 
                 if(value == nullptr)
                     return nullptr;
 
-                node->keys.push_back(key);
+                // Dict comprehension: {key: value for target in iter ...}
+                if(this->match_keyword(Keyword::For))
+                {
+                    auto* node = this->arena.emplace<DictCompNode>(first, value, line, column);
+
+                    if(!this->parse_comp_clauses(node->generators))
+                        return nullptr;
+
+                    if(!this->expect_delimiter(Delimiter::RBrace))
+                        return nullptr;
+
+                    return node;
+                }
+
+                // Regular dict literal
+                auto* node = this->arena.emplace<DictNode>(line, column);
+                node->keys.push_back(first);
                 node->values.push_back(value);
 
-                if(this->match_delimiter(Delimiter::Comma))
+                while(this->match_delimiter(Delimiter::Comma))
+                {
                     this->advance();
+
+                    if(this->match_delimiter(Delimiter::RBrace))
+                        break;
+
+                    // Dict unpacking: **expr
+                    if(this->match_operator(Operator::Exponentiation))
+                    {
+                        this->advance();
+
+                        Node* val = this->parse_expr();
+
+                        if(val == nullptr)
+                            return nullptr;
+
+                        node->keys.push_back(nullptr);
+                        node->values.push_back(val);
+                        continue;
+                    }
+
+                    Node* key = this->parse_expr();
+
+                    if(key == nullptr)
+                        return nullptr;
+
+                    if(!this->expect_delimiter(Delimiter::Colon))
+                        return nullptr;
+
+                    Node* val = this->parse_expr();
+
+                    if(val == nullptr)
+                        return nullptr;
+
+                    node->keys.push_back(key);
+                    node->values.push_back(val);
+                }
+
+                if(!this->expect_delimiter(Delimiter::RBrace))
+                    return nullptr;
+
+                return node;
+            }
+
+            // Set literal: {expr, expr, ...}
+            auto* node = this->arena.emplace<SetNode>(line, column);
+            node->elts.push_back(first);
+
+            while(this->match_delimiter(Delimiter::Comma))
+            {
+                this->advance();
+
+                if(this->match_delimiter(Delimiter::RBrace))
+                    break;
+
+                Node* elt = this->parse_expr();
+
+                if(elt == nullptr)
+                    return nullptr;
+
+                node->elts.push_back(elt);
             }
 
             if(!this->expect_delimiter(Delimiter::RBrace))
@@ -2599,6 +3960,350 @@ bool AST::from_text(const StringD& source_code, const bool debug) noexcept
     }
 
     return true;
+}
+
+void node_children(Node* node, Vector<Node*>& out) noexcept
+{
+    if(node == nullptr)
+        return;
+
+    switch(node->type())
+    {
+        case ASTNodeModule:
+        {
+            auto* n = static_cast<ModuleNode*>(node);
+            for(auto* c : n->body) out.push_back(c);
+            break;
+        }
+        case ASTNodeDecorator:
+        {
+            auto* n = static_cast<DecoratorNode*>(node);
+            if(n->expr) out.push_back(n->expr);
+            if(n->target) out.push_back(n->target);
+            break;
+        }
+        case ASTNodeFunctionArg:
+        {
+            auto* n = static_cast<FunctionArgNode*>(node);
+            if(n->annotation != nullptr) out.push_back(n->annotation);
+            if(n->default_value != nullptr) out.push_back(n->default_value);
+            break;
+        }
+        case ASTNodeFunctionDef:
+        {
+            auto* n = static_cast<FunctionDefNode*>(node);
+            for(auto* c : n->args) out.push_back(c);
+            for(auto* c : n->body) out.push_back(c);
+            if(n->return_annotation) out.push_back(n->return_annotation);
+            for(auto* c : n->type_params) out.push_back(c);
+            break;
+        }
+        case ASTNodeClassDef:
+        {
+            auto* n = static_cast<ClassDefNode*>(node);
+            for(auto* c : n->bases) out.push_back(c);
+            for(auto* c : n->body) out.push_back(c);
+            for(auto* c : n->type_params) out.push_back(c);
+            break;
+        }
+        case ASTNodeReturn:
+        {
+            auto* n = static_cast<ReturnNode*>(node);
+            if(n->value) out.push_back(n->value);
+            break;
+        }
+        case ASTNodeAssign:
+        {
+            auto* n = static_cast<AssignNode*>(node);
+            for(auto* c : n->targets) out.push_back(c);
+            if(n->value) out.push_back(n->value);
+            break;
+        }
+        case ASTNodeMultiAssign:
+        {
+            auto* n = static_cast<MultiAssignNode*>(node);
+            for(auto* t : n->targets) out.push_back(t);
+            for(auto* v : n->values) out.push_back(v);
+            break;
+        }
+        case ASTNodeAugAssign:
+        {
+            auto* n = static_cast<AugAssignNode*>(node);
+            if(n->target) out.push_back(n->target);
+            if(n->value) out.push_back(n->value);
+            break;
+        }
+        case ASTNodeWalrusAssign:
+        {
+            auto* n = static_cast<WalrusAssignNode*>(node);
+            if(n->target) out.push_back(n->target);
+            if(n->value) out.push_back(n->value);
+        }
+        case ASTNodeFor:
+        {
+            auto* n = static_cast<ForNode*>(node);
+            if(n->target) out.push_back(n->target);
+            if(n->iter) out.push_back(n->iter);
+            for(auto* c : n->body) out.push_back(c);
+            for(auto* c : n->orelse) out.push_back(c);
+            break;
+        }
+        case ASTNodeWhile:
+        {
+            auto* n = static_cast<WhileNode*>(node);
+            if(n->test) out.push_back(n->test);
+            for(auto* c : n->body) out.push_back(c);
+            for(auto* c : n->orelse) out.push_back(c);
+            break;
+        }
+        case ASTNodeIf:
+        {
+            auto* n = static_cast<IfNode*>(node);
+            if(n->test) out.push_back(n->test);
+            for(auto* c : n->body) out.push_back(c);
+            for(auto* c : n->orelse) out.push_back(c);
+            break;
+        }
+        case ASTNodeExpr:
+        {
+            auto* n = static_cast<ExprNode*>(node);
+            if(n->value) out.push_back(n->value);
+            break;
+        }
+        case ASTNodeRaise:
+        {
+            auto* n = static_cast<RaiseNode*>(node);
+            if(n->exc) out.push_back(n->exc);
+            break;
+        }
+        case ASTNodeBinOp:
+        {
+            auto* n = static_cast<BinOpNode*>(node);
+            if(n->left) out.push_back(n->left);
+            if(n->right) out.push_back(n->right);
+            break;
+        }
+        case ASTNodeUnaryOp:
+        {
+            auto* n = static_cast<UnaryOpNode*>(node);
+            if(n->operand) out.push_back(n->operand);
+            break;
+        }
+        case ASTNodeTernaryOp:
+        {
+            auto* n = static_cast<TernaryOpNode*>(node);
+            if(n->body) out.push_back(n->body);
+            if(n->test) out.push_back(n->test);
+            if(n->orelse) out.push_back(n->orelse);
+            break;
+        }
+        case ASTNodeBoolOp:
+        {
+            auto* n = static_cast<BoolOpNode*>(node);
+            for(auto* c : n->values) out.push_back(c);
+            break;
+        }
+        case ASTNodeCompare:
+        {
+            auto* n = static_cast<CompareNode*>(node);
+            if(n->left) out.push_back(n->left);
+            for(auto* c : n->comparators) out.push_back(c);
+            break;
+        }
+        case ASTNodeKeywordArg:
+        {
+            auto* n = static_cast<KeywordArgNode*>(node);
+            if(n->value) out.push_back(n->value);
+            break;
+        }
+        case ASTNodeCall:
+        {
+            auto* n = static_cast<CallNode*>(node);
+            if(n->func) out.push_back(n->func);
+            for(auto* c : n->args) out.push_back(c);
+            break;
+        }
+        case ASTNodeAttribute:
+        {
+            auto* n = static_cast<AttributeNode*>(node);
+            if(n->value) out.push_back(n->value);
+            break;
+        }
+        case ASTNodeSubscript:
+        {
+            auto* n = static_cast<SubscriptNode*>(node);
+            if(n->value) out.push_back(n->value);
+            if(n->slice) out.push_back(n->slice);
+            break;
+        }
+        case ASTNodeStarred:
+        {
+            auto* n = static_cast<StarredNode*>(node);
+            if(n->value) out.push_back(n->value);
+            break;
+        }
+        case ASTNodeList:
+        {
+            auto* n = static_cast<ListNode*>(node);
+            for(auto* c : n->elts) out.push_back(c);
+            break;
+        }
+        case ASTNodeSet:
+        {
+            auto* n = static_cast<SetNode*>(node);
+            for(auto* c : n->elts) out.push_back(c);
+            break;
+        }
+        case ASTNodeTuple:
+        {
+            auto* n = static_cast<TupleNode*>(node);
+            for(auto* c : n->elts) out.push_back(c);
+            break;
+        }
+        case ASTNodeDict:
+        {
+            auto* n = static_cast<DictNode*>(node);
+            for(auto* c : n->keys) out.push_back(c);
+            for(auto* c : n->values) out.push_back(c);
+            break;
+        }
+        case ASTNodeComprehension:
+        {
+            auto* n = static_cast<ComprehensionNode*>(node);
+            if(n->target) out.push_back(n->target);
+            if(n->iter) out.push_back(n->iter);
+            for(auto* c : n->ifs) out.push_back(c);
+            break;
+        }
+        case ASTNodeListComp:
+        {
+            auto* n = static_cast<ListCompNode*>(node);
+            if(n->elt) out.push_back(n->elt);
+            for(auto* c : n->generators) out.push_back(c);
+            break;
+        }
+        case ASTNodeSetComp:
+        {
+            auto* n = static_cast<SetCompNode*>(node);
+            if(n->elt) out.push_back(n->elt);
+            for(auto* c : n->generators) out.push_back(c);
+            break;
+        }
+        case ASTNodeDictComp:
+        {
+            auto* n = static_cast<DictCompNode*>(node);
+            if(n->key) out.push_back(n->key);
+            if(n->value) out.push_back(n->value);
+            for(auto* c : n->generators) out.push_back(c);
+            break;
+        }
+        case ASTNodeGeneratorExpr:
+        {
+            auto* n = static_cast<GeneratorExprNode*>(node);
+            if(n->elt) out.push_back(n->elt);
+            for(auto* c : n->generators) out.push_back(c);
+            break;
+        }
+        case ASTNodeLambda:
+        {
+            auto* n = static_cast<LambdaNode*>(node);
+            for(auto* c : n->args) out.push_back(c);
+            if(n->body) out.push_back(n->body);
+            break;
+        }
+        case ASTNodeMatch:
+        {
+            auto* n = static_cast<MatchNode*>(node);
+            if(n->subject) out.push_back(n->subject);
+            for(auto* c : n->cases) out.push_back(c);
+            break;
+        }
+        case ASTNodeMatchCase:
+        {
+            auto* n = static_cast<MatchCaseNode*>(node);
+            if(n->pattern) out.push_back(n->pattern);
+            if(n->guard) out.push_back(n->guard);
+            for(auto* c : n->body) out.push_back(c);
+            break;
+        }
+        case ASTNodeMatchOr:
+        {
+            auto* n = static_cast<MatchOrNode*>(node);
+            for(auto* c : n->patterns) out.push_back(c);
+            break;
+        }
+        case ASTNodeMatchAs:
+        {
+            auto* n = static_cast<MatchAsNode*>(node);
+            if(n->pattern) out.push_back(n->pattern);
+            break;
+        }
+        case ASTNodeMatchValue:
+        {
+            auto* n = static_cast<MatchValueNode*>(node);
+            if(n->value) out.push_back(n->value);
+            break;
+        }
+        case ASTNodeMatchSingleton:
+        {
+            auto* n = static_cast<MatchSingletonNode*>(node);
+            STDROMANO_UNUSED(n);
+            break;
+        }
+        case ASTNodeMatchSequence:
+        {
+            auto* n = static_cast<MatchSequenceNode*>(node);
+            for(auto* c : n->patterns) out.push_back(c);
+            break;
+        }
+        case ASTNodeMatchMapping:
+        {
+            auto* n = static_cast<MatchMappingNode*>(node);
+            for(auto* c : n->keys) out.push_back(c);
+            for(auto* c : n->patterns) out.push_back(c);
+        }
+        case ASTNodeMatchClass:
+        {
+            auto* n = static_cast<MatchClassNode*>(node);
+            for(auto* c : n->patterns) out.push_back(c);
+            for(auto* c : n->kwd_patterns) out.push_back(c);
+            break;
+        }
+        case ASTNodeMatchStar:
+        {
+            auto* n = static_cast<MatchStarNode*>(node);
+            STDROMANO_UNUSED(n);
+            break;
+        }
+        case ASTNodeYield:
+        {
+            auto* n = static_cast<YieldNode*>(node);
+            if(n->value) out.push_back(n->value);
+            break;
+        }
+        case ASTNodeYieldFrom:
+        {
+            auto* n = static_cast<YieldFromNode*>(node);
+            if(n->value) out.push_back(n->value);
+            break;
+        }
+        case ASTNodeTypeParam:
+        {
+            auto* n = static_cast<TypeParamNode*>(node);
+            if(n->bound) out.push_back(n->bound);
+            if(n->constraint) out.push_back(n->constraint);
+            break;
+        }
+        case ASTNodeTypeAlias:
+        {
+            auto* n = static_cast<TypeAliasNode*>(node);
+            for(auto* c : n->type_params) out.push_back(c);
+            if(n->value) out.push_back(n->value);
+            break;
+        }
+        default:
+            break;
+    }
 }
 
 PYTHON_NAMESPACE_END
