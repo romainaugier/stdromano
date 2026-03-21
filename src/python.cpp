@@ -1195,6 +1195,7 @@ struct Parser
     }
 
     // Decorators
+
     Node* parse_decorated() noexcept
     {
         Vector<Node*> decorators;
@@ -1395,6 +1396,44 @@ struct Parser
         return true;
     }
 
+    // Name Qualifier
+
+    Node* parse_name_list_stmt(ASTNodeType node_type) noexcept
+    {
+        std::uint32_t line = this->current().line;
+        std::uint32_t column = this->current().column;
+        this->advance(); // skip 'global' / 'nonlocal'
+
+        Node* node = nullptr;
+
+        if(node_type == ASTNodeGlobal)
+            node = this->arena.emplace<GlobalNode>(line, column);
+        else
+            node = this->arena.emplace<NonLocalNode>(line, column);
+
+        auto& names = (node_type == ASTNodeGlobal)
+            ? static_cast<GlobalNode*>(node)->names
+            : static_cast<NonLocalNode*>(node)->names;
+
+        do
+        {
+            if(!this->check(Token::Kind::Identifier))
+            {
+                this->error_at_current("Expected identifier, got \"{}\"",
+                                       this->current().value);
+
+                return nullptr;
+            }
+
+            names.push_back(std::move(StringD::make_from_c_str(this->current().value.c_str(),
+                                                               this->current().value.size())));
+            this->advance();
+
+        } while(this->match_delimiter(Delimiter::Comma) && (this->advance(), true));
+
+        return node;
+    }
+
     // Statements
 
     Node* parse_statement() noexcept
@@ -1427,6 +1466,8 @@ struct Parser
                 case Keyword::Import: return this->parse_import();
                 case Keyword::From: return this->parse_import_from();
                 case Keyword::Match: return this->parse_match();
+                case Keyword::Global:   return this->parse_name_list_stmt(ASTNodeGlobal);
+                case Keyword::Nonlocal: return this->parse_name_list_stmt(ASTNodeNonLocal);
                 default: break;
             }
         }
@@ -1733,7 +1774,9 @@ struct Parser
         if(!this->expect_delimiter(Delimiter::Colon))
             return nullptr;
 
-        if(!this->parse_block(node->body))
+        if(!this->check(Token::Kind::Newline))
+            node->body.push_back(this->parse_statement());
+        else if(!this->parse_block(node->body))
             return nullptr;
 
         return node;
@@ -4300,6 +4343,18 @@ void node_children(Node* node, Vector<Node*>& out) noexcept
             auto* n = static_cast<TypeAliasNode*>(node);
             for(auto* c : n->type_params) out.push_back(c);
             if(n->value) out.push_back(n->value);
+            break;
+        }
+        case ASTNodeGlobal:
+        {
+            auto* n = static_cast<GlobalNode*>(node);
+            STDROMANO_UNUSED(n);
+            break;
+        }
+        case ASTNodeNonLocal:
+        {
+            auto* n = static_cast<NonLocalNode*>(node);
+            STDROMANO_UNUSED(n);
             break;
         }
         default:

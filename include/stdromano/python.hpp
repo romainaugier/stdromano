@@ -238,6 +238,8 @@ enum ASTNodeType : std::uint32_t
     ASTNodeYieldFrom,
     ASTNodeTypeParam,
     ASTNodeTypeAlias,
+    ASTNodeGlobal,
+    ASTNodeNonLocal,
     ASTNodeCount,
 };
 
@@ -1227,6 +1229,36 @@ struct TypeAliasNode : Node
     virtual void debug(std::shared_ptr<spdlog::logger> logger, std::uint32_t indent) const noexcept override
     {
         logger->debug("{0: ^{1}}TYPEPALIAS", "", indent);
+    }
+};
+
+// Name Qualifier
+
+struct GlobalNode : Node
+{
+    Vector<StringD> names;
+
+    GlobalNode(std::uint32_t line, std::uint32_t column) : Node(ASTNodeGlobal, line, column) {}
+
+    virtual const char* type_str() const noexcept override { return "GLOBAL"; }
+
+    virtual void debug(std::shared_ptr<spdlog::logger> logger, std::uint32_t indent) const noexcept override
+    {
+        logger->debug("{0: ^{1}}GLOBAL", "", indent);
+    }
+};
+
+struct NonLocalNode : Node
+{
+    Vector<StringD> names;
+
+    NonLocalNode(std::uint32_t line, std::uint32_t column) : Node(ASTNodeNonLocal, line, column) {}
+
+    virtual const char* type_str() const noexcept override { return "NONLOCAL"; }
+
+    virtual void debug(std::shared_ptr<spdlog::logger> logger, std::uint32_t indent) const noexcept override
+    {
+        logger->debug("{0: ^{1}}NONLOCAL", "", indent);
     }
 };
 
