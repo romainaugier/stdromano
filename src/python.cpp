@@ -1402,18 +1402,42 @@ struct Parser
     {
         std::uint32_t line = this->current().line;
         std::uint32_t column = this->current().column;
-        this->advance(); // skip 'global' / 'nonlocal'
+        this->advance(); // skip 'global' / 'nonlocal' / 'del'
 
         Node* node = nullptr;
 
-        if(node_type == ASTNodeGlobal)
-            node = this->arena.emplace<GlobalNode>(line, column);
-        else
-            node = this->arena.emplace<NonLocalNode>(line, column);
+        std::function<void(StringD)> add_name = [&](StringD name) {};
 
-        auto& names = (node_type == ASTNodeGlobal)
-            ? static_cast<GlobalNode*>(node)->names
-            : static_cast<NonLocalNode*>(node)->names;
+        switch(node_type)
+        {
+            case ASTNodeGlobal:
+            {
+                auto* global_node = this->arena.emplace<GlobalNode>(line, column);
+                add_name = [&](StringD name) { global_node->names.emplace_back(std::move(name)); };
+                node = global_node;
+                break;
+            }
+            case ASTNodeNonLocal:
+            {
+                auto* non_local_node = this->arena.emplace<NonLocalNode>(line, column);
+                add_name = [&](StringD name) { non_local_node->names.emplace_back(std::move(name)); };
+                node = non_local_node;
+                break;
+            }
+            case ASTNodeDel:
+            {
+                auto* del_node = this->arena.emplace<DelNode>(line, column);
+                add_name = [&](StringD name) { del_node->names.emplace_back(std::move(name)); };
+                node = del_node;
+                break;
+            }
+            default:
+            {
+                this->error_at_current("Node type \"{}\" not handled in parse_name_list_stmt",
+                                       static_cast<std::uint32_t>(node_type));
+                return nullptr;
+            }
+        }
 
         do
         {
@@ -1425,8 +1449,7 @@ struct Parser
                 return nullptr;
             }
 
-            names.push_back(std::move(StringD::make_from_c_str(this->current().value.c_str(),
-                                                               this->current().value.size())));
+            add_name(StringD::make_from_c_str(this->current().value.c_str(), this->current().value.size()));
             this->advance();
 
         } while(this->match_delimiter(Delimiter::Comma) && (this->advance(), true));
@@ -1466,8 +1489,9 @@ struct Parser
                 case Keyword::Import: return this->parse_import();
                 case Keyword::From: return this->parse_import_from();
                 case Keyword::Match: return this->parse_match();
-                case Keyword::Global:   return this->parse_name_list_stmt(ASTNodeGlobal);
+                case Keyword::Global: return this->parse_name_list_stmt(ASTNodeGlobal);
                 case Keyword::Nonlocal: return this->parse_name_list_stmt(ASTNodeNonLocal);
+                case Keyword::Del: return this->parse_name_list_stmt(ASTNodeDel);
                 default: break;
             }
         }
@@ -1756,12 +1780,45 @@ struct Parser
 
             while(!this->at_end() && !this->match_delimiter(Delimiter::RParen))
             {
-                Node* base = this->parse_expr();
+                // **expr unpacking
+                if(this->match_operator(Operator::Exponentiation))
+                {
+                    std::uint32_t kw_line = this->current().line;
+                    std::uint32_t kw_column = this->current().column;
+                    this->advance();
 
-                if(base == nullptr)
-                    return nullptr;
+                    Node* value = this->parse_expr();
 
-                node->bases.push_back(base);
+                    if(value == nullptr)
+                        return nullptr;
+
+                    node->bases.push_back(this->arena.emplace<KeywordArgNode>(StringD(), value, kw_line, kw_column));
+                }
+                else
+                {
+                    Node* base = this->parse_expr();
+
+                    if(base == nullptr)
+                        return nullptr;
+
+                    // Keyword argument: metaclass=Meta, extra_kw=True
+                    if(base->type() == ASTNodeName && this->match_operator(Operator::Assign))
+                    {
+                        std::uint32_t kw_line = base->line();
+                        std::uint32_t kw_column = base->column();
+                        StringD kw_name = std::move(static_cast<NameNode*>(base)->id);
+                        this->advance();
+
+                        Node* value = this->parse_expr();
+
+                        if(value == nullptr)
+                            return nullptr;
+
+                        base = this->arena.emplace<KeywordArgNode>(std::move(kw_name), value, kw_line, kw_column);
+                    }
+
+                    node->bases.push_back(base);
+                }
 
                 if(this->match_delimiter(Delimiter::Comma))
                     this->advance();

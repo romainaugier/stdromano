@@ -240,6 +240,7 @@ enum ASTNodeType : std::uint32_t
     ASTNodeTypeAlias,
     ASTNodeGlobal,
     ASTNodeNonLocal,
+    ASTNodeDel,
     ASTNodeCount,
 };
 
@@ -1259,6 +1260,22 @@ struct NonLocalNode : Node
     virtual void debug(std::shared_ptr<spdlog::logger> logger, std::uint32_t indent) const noexcept override
     {
         logger->debug("{0: ^{1}}NONLOCAL", "", indent);
+    }
+};
+
+// Del
+
+struct DelNode : Node
+{
+    Vector<StringD> names;
+
+    DelNode(std::uint32_t line, std::uint32_t column) : Node(ASTNodeDel, line, column) {}
+
+    virtual const char* type_str() const noexcept override { return "DEL"; }
+
+    virtual void debug(std::shared_ptr<spdlog::logger> logger, std::uint32_t indent) const noexcept override
+    {
+        logger->debug("{0: ^{1}}DEL", "", indent);
     }
 };
 
