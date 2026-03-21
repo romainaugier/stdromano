@@ -1488,7 +1488,7 @@ struct Parser
 
                 if(this->check(Token::Kind::Identifier))
                 {
-                    Node* arg = this->parse_funcarg();
+                    Node* arg = this->parse_funcarg(end_delim == Delimiter::Colon);
 
                     if(arg == nullptr)
                         return false;
@@ -1511,7 +1511,7 @@ struct Parser
 
                 if(this->check(Token::Kind::Identifier))
                 {
-                    Node* arg = this->parse_funcarg();
+                    Node* arg = this->parse_funcarg(end_delim == Delimiter::Colon);
 
                     if(arg == nullptr)
                         return false;
@@ -1550,6 +1550,23 @@ struct Parser
 
             if(this->check(Token::Kind::Dedent))
                 this->skip_dedents();
+
+            // Safety: if current token isn't anything we can handle, bail
+            if(!this->match_delimiter(end_delim) &&
+               !this->match_operator(Operator::Division) &&
+               !this->match_operator(Operator::Multiplication) &&
+               !this->match_operator(Operator::Exponentiation) &&
+               !this->check(Token::Kind::Identifier) &&
+               !this->match_delimiter(Delimiter::Comma) &&
+               !this->check(Token::Kind::Newline) &&
+               !this->check(Token::Kind::Dedent))
+            {
+                this->error_at_current("Unexpected token \"{}\" ({}) in parameter list",
+                                       this->current().value,
+                                       this->current().kind);
+
+                return false;
+            }
         }
 
         return true;
@@ -2905,7 +2922,7 @@ struct Parser
         if(left == nullptr)
             return nullptr;
 
-        while(!this->at_end() && this->match_operator(Operator::LogicalOr))
+        while(!this->at_end() && this->match_keyword(Keyword::Or))
         {
             this->advance();
 
@@ -2930,7 +2947,7 @@ struct Parser
         if(left == nullptr)
             return nullptr;
 
-        while(!this->at_end() && this->match_operator(Operator::LogicalAnd))
+        while(!this->at_end() && this->match_keyword(Keyword::And))
         {
             this->advance();
 
@@ -3031,23 +3048,7 @@ struct Parser
                     return true;
                 }
 
-                out_op = Operator::LogicalNot;
-                out_advance = 1;
-                return true;
-            }
-
-            if(this->match_keyword(Keyword::And))
-            {
-                out_op = Operator::LogicalAnd;
-                out_advance = 1;
-                return true;
-            }
-
-            if(this->match_keyword(Keyword::Or))
-            {
-                out_op = Operator::LogicalOr;
-                out_advance = 1;
-                return true;
+                return false;
             }
 
             return false;
