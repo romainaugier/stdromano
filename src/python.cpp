@@ -1384,6 +1384,19 @@ struct Parser
                 }
             }
 
+            // Default value: T = int (PEP 696)
+            if(this->match_operator(Operator::Assign))
+            {
+                this->advance();
+
+                Node* default_value = this->parse_expr();
+
+                if(default_value == nullptr)
+                    return false;
+
+                param->default_value = default_value;
+            }
+
             type_params.push_back(param);
 
             if(this->match_delimiter(Delimiter::Comma))
@@ -1406,28 +1419,28 @@ struct Parser
 
         Node* node = nullptr;
 
-        std::function<void(StringD)> add_name = [&](StringD name) {};
+        std::function<void(Node*)> add_name = [&](Node*) {};
 
         switch(node_type)
         {
             case ASTNodeGlobal:
             {
                 auto* global_node = this->arena.emplace<GlobalNode>(line, column);
-                add_name = [&](StringD name) { global_node->names.emplace_back(std::move(name)); };
+                add_name = [&](Node* name) { global_node->names.emplace_back(std::move(name)); };
                 node = global_node;
                 break;
             }
             case ASTNodeNonLocal:
             {
                 auto* non_local_node = this->arena.emplace<NonLocalNode>(line, column);
-                add_name = [&](StringD name) { non_local_node->names.emplace_back(std::move(name)); };
+                add_name = [&](Node* name) { non_local_node->names.emplace_back(std::move(name)); };
                 node = non_local_node;
                 break;
             }
             case ASTNodeDel:
             {
                 auto* del_node = this->arena.emplace<DelNode>(line, column);
-                add_name = [&](StringD name) { del_node->names.emplace_back(std::move(name)); };
+                add_name = [&](Node* name) { del_node->names.emplace_back(std::move(name)); };
                 node = del_node;
                 break;
             }
@@ -1441,15 +1454,12 @@ struct Parser
 
         do
         {
-            if(!this->check(Token::Kind::Identifier))
-            {
-                this->error_at_current("Expected identifier, got \"{}\"",
-                                       this->current().value);
+            Node* name = this->parse_expr();
 
+            if(name == nullptr)
                 return nullptr;
-            }
 
-            add_name(StringD::make_from_c_str(this->current().value.c_str(), this->current().value.size()));
+            add_name(name);
             this->advance();
 
         } while(this->match_delimiter(Delimiter::Comma) && (this->advance(), true));
@@ -1468,9 +1478,7 @@ struct Parser
 
         // Decorators: @expr before def/class
         if(this->match_operator(Operator::MatMul))
-        {
             return this->parse_decorated();
-        }
 
         if(this->current().kind == Token::Kind::Keyword)
         {
@@ -1504,9 +1512,7 @@ struct Parser
             // Peek ahead: must be followed by an identifier
             if(this->pos + 1 < this->tokens.size() &&
                this->tokens[this->pos + 1].kind == Token::Kind::Identifier)
-            {
                 return this->parse_type_alias();
-            }
         }
 
         return this->parse_expr_or_assign();
@@ -2268,7 +2274,9 @@ struct Parser
 
         auto* node = this->arena.emplace<MatchCaseNode>(pattern, guard, line, column);
 
-        if(!this->parse_block(node->body))
+        if(!this->check(Token::Kind::Newline))
+            node->body.push_back(this->parse_statement());
+        else if(!this->parse_block(node->body))
             return nullptr;
 
         return node;
@@ -2751,6 +2759,31 @@ struct Parser
 
         if(left == nullptr)
             return nullptr;
+
+        // Type annotation
+        if(this->match_delimiter(Delimiter::Colon) && !(this->peek().kind == Token::Kind::Newline))
+        {
+            this->advance();
+
+            Node* annotation = this->parse_expr();
+
+            if(annotation == nullptr)
+                return nullptr;
+
+            Node* value = nullptr;
+
+            if(this->match_operator(Operator::Assign))
+            {
+                this->advance();
+
+                value = this->parse_expr();
+
+                if(value == nullptr)
+                        return nullptr;
+            }
+
+            return  this->arena.emplace<AnnAssignNode>(left, value, annotation, line, column);
+        }
 
         Vector<Node*> targets;
         targets.push_back(left);
@@ -3555,13 +3588,6 @@ struct Parser
 
             this->advance();
 
-            // Type annotation
-            if(this->match_delimiter(Delimiter::Colon) && !(this->peek().kind == Token::Kind::Newline))
-            {
-                this->advance();
-                node->type = this->parse_expr();
-            }
-
             return node;
         }
 
@@ -4118,6 +4144,14 @@ void node_children(Node* node, Vector<Node*>& out) noexcept
             auto* n = static_cast<AssignNode*>(node);
             for(auto* c : n->targets) out.push_back(c);
             if(n->value) out.push_back(n->value);
+            break;
+        }
+        case ASTNodeAnnAssign:
+        {
+            auto* n = static_cast<AnnAssignNode*>(node);
+            if(n->target) out.push_back(n->target);
+            if(n->value) out.push_back(n->value);
+            if(n->ann) out.push_back(n->ann);
             break;
         }
         case ASTNodeMultiAssign:

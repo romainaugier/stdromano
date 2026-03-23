@@ -189,6 +189,7 @@ enum ASTNodeType : std::uint32_t
     ASTNodeClassDef,
     ASTNodeReturn,
     ASTNodeAssign,
+    ASTNodeAnnAssign,
     ASTNodeMultiAssign,
     ASTNodeAugAssign,
     ASTNodeWalrusAssign,
@@ -391,6 +392,25 @@ struct AssignNode : Node
     virtual void debug(std::shared_ptr<spdlog::logger> logger, std::uint32_t indent) const noexcept override
     {
         logger->debug("{0: ^{1}}ASSIGN", "", indent);
+    }
+};
+
+struct AnnAssignNode : Node
+{
+    Node* target;
+    Node* value;
+    Node* ann;
+
+    AnnAssignNode(Node* target, Node* value, Node* ann, std::uint32_t line, std::uint32_t column) : Node(ASTNodeAnnAssign, line, column),
+                                                                                                    target(target),
+                                                                                                    value(value),
+                                                                                                    ann(ann) {}
+
+    virtual const char* type_str() const noexcept override { return "ANNASSIGN"; }
+
+    virtual void debug(std::shared_ptr<spdlog::logger> logger, std::uint32_t indent) const noexcept override
+    {
+        logger->debug("{0: ^{1}}ANNASSIGN", "", indent);
     }
 };
 
@@ -765,6 +785,7 @@ struct ConstantNode : Node
 struct AttributeNode : Node
 {
     Node* value;
+    Node* type_annotation = nullptr;
     StringD attr;
 
     AttributeNode(Node* value, StringD attr, std::uint32_t line, std::uint32_t column) : Node(ASTNodeAttribute, line, column),
@@ -1190,19 +1211,16 @@ struct YieldFromNode : Node
 struct TypeParamNode : Node
 {
     StringD name;
-    Node* bound; // T: int -> bound is int, nullptr if absent
-    Node* constraint; // T: (int, str) -> TupleNode of constraints, nullptr if absent
-    bool is_paramspec;  // **P
-    bool is_typevartuple; // *Ts
+    Node* bound = nullptr; // T: int -> bound is int, nullptr if absent
+    Node* constraint = nullptr; // T: (int, str) -> TupleNode of constraints, nullptr if absent
+    Node* default_value = nullptr;
+    bool is_paramspec = false;  // **P
+    bool is_typevartuple = false; // *Ts
 
     TypeParamNode(StringD name,
                   std::uint32_t line,
                   std::uint32_t column) : Node(ASTNodeTypeParam, line, column),
-                                          name(std::move(name)),
-                                          bound(nullptr),
-                                          constraint(nullptr),
-                                          is_paramspec(false),
-                                          is_typevartuple(false) {}
+                                          name(std::move(name)) {}
 
     virtual const char* type_str() const noexcept override { return "TYPEPARAM"; }
 
@@ -1237,7 +1255,7 @@ struct TypeAliasNode : Node
 
 struct GlobalNode : Node
 {
-    Vector<StringD> names;
+    Vector<Node*> names;
 
     GlobalNode(std::uint32_t line, std::uint32_t column) : Node(ASTNodeGlobal, line, column) {}
 
@@ -1251,7 +1269,7 @@ struct GlobalNode : Node
 
 struct NonLocalNode : Node
 {
-    Vector<StringD> names;
+    Vector<Node*> names;
 
     NonLocalNode(std::uint32_t line, std::uint32_t column) : Node(ASTNodeNonLocal, line, column) {}
 
@@ -1267,7 +1285,7 @@ struct NonLocalNode : Node
 
 struct DelNode : Node
 {
-    Vector<StringD> names;
+    Vector<Node*> names;
 
     DelNode(std::uint32_t line, std::uint32_t column) : Node(ASTNodeDel, line, column) {}
 
