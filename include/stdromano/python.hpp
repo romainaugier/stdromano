@@ -205,6 +205,8 @@ enum ASTNodeType : std::uint32_t
     ASTNodeBreak,
     ASTNodeContinue,
     ASTNodeRaise,
+    ASTNodeTry,
+    ASTNodeExcept,
     ASTNodeBinOp,
     ASTNodeUnaryOp,
     ASTNodeTernaryOp,
@@ -650,15 +652,54 @@ struct ContinueNode : Node
 struct RaiseNode : Node
 {
     Node* exc;
+    Node* cause;
 
-    RaiseNode(Node* exc, std::uint32_t line, std::uint32_t column) : Node(ASTNodeRaise, line, column),
-                                                                     exc(exc) {}
+    RaiseNode(Node* exc, Node* cause, std::uint32_t line, std::uint32_t column) : Node(ASTNodeRaise, line, column),
+                                                                                  exc(exc),
+                                                                                  cause(cause) {}
 
     virtual const char* type_str() const noexcept override { return "RAISE"; }
 
     virtual void debug(std::shared_ptr<spdlog::logger> logger, std::uint32_t indent) const noexcept override
     {
         logger->debug("{0: ^{1}}RAISE", "", indent);
+    }
+};
+
+struct TryNode : Node
+{
+    Vector<Node*> body;
+    Vector<Node*> excepts;
+    Vector<Node*> orelse; // else block
+    Vector<Node*> finalbody; // finally block
+
+    TryNode(std::uint32_t line, std::uint32_t column) : Node(ASTNodeTry, line, column) {}
+
+    virtual const char* type_str() const noexcept override { return "TRY"; }
+
+    virtual void debug(std::shared_ptr<spdlog::logger> logger, std::uint32_t indent) const noexcept override
+    {
+        logger->debug("{0: ^{1}}TRY", "", indent);
+    }
+};
+
+struct ExceptNode : Node
+{
+    Node* type; // exception type, nullptr for 'except:'
+    StringD name;
+    Vector<Node*> body;
+    bool is_star; // except* for exception groups
+
+    ExceptNode(Node* type, StringD name, bool is_star, std::uint32_t line, std::uint32_t column) : Node(ASTNodeExcept, line, column),
+                                                                                                   type(type),
+                                                                                                   name(std::move(name)),
+                                                                                                   is_star(is_star) {}
+
+    virtual const char* type_str() const noexcept override { return "EXCEPT"; }
+
+    virtual void debug(std::shared_ptr<spdlog::logger> logger, std::uint32_t indent) const noexcept override
+    {
+        logger->debug("{0: ^{1}}EXCEPT", "", indent);
     }
 };
 
