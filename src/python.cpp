@@ -2641,27 +2641,48 @@ struct Parser
         std::uint32_t column = this->current().column;
         this->advance(); // skip 'from'
 
-        if(!this->check(Token::Kind::Identifier))
+        if(!this->check(Token::Kind::Identifier) && !this->match_delimiter(Delimiter::Dot))
         {
             this->error(this->current().line,
                         this->current().column,
                         static_cast<std::uint32_t>(this->current().value.size()),
-                        "Expected module name");
+                        "Expected module name or dotted import");
 
             return nullptr;
         }
 
-        StringD module = std::move(StringD::make_from_c_str(this->current().value.c_str(), this->current().value.size()));
+        // concatenate import name, i.e from . | from .module | from os.path | from ...
+
+        const char* start = this->current().value.c_str();
+        std::size_t count = this->current().value.size();
+
         this->advance();
+
+        while(!this->at_end() && (this->check(Token::Kind::Identifier) || this->match_delimiter(Delimiter::Dot)))
+        {
+            count += this->current().value.size();
+            this->advance();
+        }
+
+        StringD module = std::move(StringD::make_from_c_str(start, count));
 
         if(!this->expect_keyword(Keyword::Import))
             return nullptr;
 
         auto* node = this->arena.emplace<ImportFromNode>(std::move(module), line, column);
 
+        if(this->match_delimiter(Delimiter::LParen))
+            this->advance();
+
         do
         {
-            if(!this->check(Token::Kind::Identifier))
+            this->skip_whitespace_in_bracket();
+
+            if(this->match_delimiter(Delimiter::RParen))
+                break;
+
+            // Identifier or *
+            if(!this->check(Token::Kind::Identifier) && !this->match_operator(Operator::Multiplication))
             {
                 this->error(this->current().line,
                             this->current().column,
@@ -2698,6 +2719,11 @@ struct Parser
             node->aliases.push_back(std::move(alias));
 
         } while(this->match_delimiter(Delimiter::Comma) && (this->advance(), true));
+
+        this->skip_whitespace_in_bracket();
+
+        if(this->match_delimiter(Delimiter::RParen))
+            this->advance();
 
         return node;
     }
