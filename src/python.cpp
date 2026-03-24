@@ -1007,6 +1007,8 @@ struct Parser
 
     void advance(const std::uint32_t n = 1) noexcept { this->pos += n; }
 
+    void rewind(const std::uint32_t n = 1) noexcept { this->pos -= n; }
+
     template<typename... Args>
     void error(std::uint32_t line,
                std::uint32_t column,
@@ -1476,6 +1478,39 @@ struct Parser
         return node;
     }
 
+    // Async statements
+
+    Node* parse_async_statement() noexcept
+    {
+        this->advance(); // skip 'async'
+
+        if(this->match_keyword(Keyword::Def))
+        {
+            this->rewind();
+
+            return this->parse_async_funcdef();
+        }
+
+        if(this->match_keyword(Keyword::For))
+        {
+            this->rewind();
+
+            return this->parse_async_for();
+        }
+
+        if(this->match_keyword(Keyword::With))
+        {
+            this->rewind();
+
+            return this->parse_async_with();
+        }
+
+        this->error_at_current("Expected 'def', 'for', or 'with' after 'async', got \"{}\"",
+            this->current().value);
+
+        return nullptr;
+    }
+
     // Statements
 
     Node* parse_statement() noexcept
@@ -1495,7 +1530,7 @@ struct Parser
             switch(static_cast<Keyword>(this->current().type))
             {
                 case Keyword::Def: return this->parse_funcdef();
-                case Keyword::Async: return this->parse_async_funcdef();
+                case Keyword::Async: return this->parse_async_statement();
                 case Keyword::Class: return this->parse_classdef();
                 case Keyword::If: return this->parse_if();
                 case Keyword::While: return this->parse_while();
@@ -1512,6 +1547,7 @@ struct Parser
                 case Keyword::Global: return this->parse_name_list_stmt(ASTNodeGlobal);
                 case Keyword::Nonlocal: return this->parse_name_list_stmt(ASTNodeNonLocal);
                 case Keyword::Del: return this->parse_name_list_stmt(ASTNodeDel);
+                case Keyword::With: return this->parse_with();
                 default: break;
             }
         }
@@ -2120,6 +2156,175 @@ struct Parser
 
         return node;
     }
+
+    // Context Manager
+
+    Node* parse_with_item() noexcept
+    {
+        std::uint32_t line = this->current().line;
+        std::uint32_t column = this->current().column;
+
+        Node* context_expr = this->parse_expr();
+
+        if(context_expr == nullptr)
+            return nullptr;
+
+        Node* optional_vars = nullptr;
+
+        if(this->match_keyword(Keyword::As))
+        {
+            this->advance();
+
+            optional_vars = this->parse_primary();
+
+            if(optional_vars == nullptr)
+                return nullptr;
+
+            // Tuple target: with open(f) as (a, b):
+            if(this->match_delimiter(Delimiter::Comma))
+            {
+                // Only build tuple if NOT followed by another with-item context expr
+                // Peek: if next comma-separated thing has 'as' or ':', it's another item
+                // Simple heuristic: if we're inside parens and next token after comma
+                // could be a with_item, don't tuple-ify
+            }
+        }
+
+        return this->arena.emplace<WithItemNode>(context_expr, optional_vars, line, column);
+    }
+
+    Node* parse_with() noexcept
+    {
+        std::uint32_t line = this->current().line;
+        std::uint32_t column = this->current().column;
+        this->advance(); // skip 'with'
+
+        auto* node = this->arena.emplace<WithNode>(line, column);
+
+        // Parenthesized items (Python 3.10+): with (A() as a, B() as b):
+        bool parenthesized = false;
+
+        if(this->match_delimiter(Delimiter::LParen))
+        {
+            parenthesized = true;
+            this->advance();
+            this->skip_whitespace_in_bracket();
+        }
+
+        // Parse first item
+        Node* item = this->parse_with_item();
+
+        if(item == nullptr)
+            return nullptr;
+
+        node->items.push_back(item);
+
+        // Parse remaining items
+        while(this->match_delimiter(Delimiter::Comma))
+        {
+            this->advance();
+
+            if(parenthesized)
+                this->skip_whitespace_in_bracket();
+
+            if(parenthesized && this->match_delimiter(Delimiter::RParen))
+                break;
+
+            item = this->parse_with_item();
+
+            if(item == nullptr)
+                return nullptr;
+
+            node->items.push_back(item);
+        }
+
+        if(parenthesized)
+        {
+            this->skip_whitespace_in_bracket();
+
+            if(!this->expect_delimiter(Delimiter::RParen))
+                return nullptr;
+        }
+
+        if(!this->expect_delimiter(Delimiter::Colon))
+            return nullptr;
+
+        if(!this->check(Token::Kind::Newline))
+            node->body.push_back(this->parse_statement());
+        else if(!this->parse_block(node->body))
+            return nullptr;
+
+        return node;
+    }
+
+    Node* parse_async_with() noexcept
+    {
+        std::uint32_t line = this->current().line;
+        std::uint32_t column = this->current().column;
+        this->advance(); // skip 'async'
+
+        if(!this->expect_keyword(Keyword::With))
+            return nullptr;
+
+        auto* node = this->arena.emplace<AsyncWithNode>(line, column);
+
+        // Parenthesized items (Python 3.10+): with (A() as a, B() as b):
+        bool parenthesized = false;
+
+        if(this->match_delimiter(Delimiter::LParen))
+        {
+            parenthesized = true;
+            this->advance();
+            this->skip_whitespace_in_bracket();
+        }
+
+        // Parse first item
+        Node* item = this->parse_with_item();
+
+        if(item == nullptr)
+            return nullptr;
+
+        node->items.push_back(item);
+
+        // Parse remaining items
+        while(this->match_delimiter(Delimiter::Comma))
+        {
+            this->advance();
+
+            if(parenthesized)
+                this->skip_whitespace_in_bracket();
+
+            if(parenthesized && this->match_delimiter(Delimiter::RParen))
+                break;
+
+            item = this->parse_with_item();
+
+            if(item == nullptr)
+                return nullptr;
+
+            node->items.push_back(item);
+        }
+
+        if(parenthesized)
+        {
+            this->skip_whitespace_in_bracket();
+
+            if(!this->expect_delimiter(Delimiter::RParen))
+                return nullptr;
+        }
+
+        if(!this->expect_delimiter(Delimiter::Colon))
+            return nullptr;
+
+        if(!this->check(Token::Kind::Newline))
+            node->body.push_back(this->parse_statement());
+        else if(!this->parse_block(node->body))
+            return nullptr;
+
+        return node;
+    }
+
+    // Return
 
     Node* parse_return() noexcept
     {
@@ -4889,6 +5094,27 @@ void node_children(Node* node, Vector<Node*>& out) noexcept
         {
             auto* n = static_cast<AwaitNode*>(node);
             if(n->expr != nullptr) out.push_back(n->expr);
+            break;
+        }
+        case ASTNodeWithItem:
+        {
+            auto* n = static_cast<WithItemNode*>(node);
+            if(n->context_expr) out.push_back(n->context_expr);
+            if(n->optional_vars) out.push_back(n->optional_vars);
+            break;
+        }
+        case ASTNodeWith:
+        {
+            auto* n = static_cast<WithNode*>(node);
+            for(auto* c : n->items) out.push_back(c);
+            for(auto* c : n->body) out.push_back(c);
+            break;
+        }
+        case ASTNodeAsyncWith:
+        {
+            auto* n = static_cast<AsyncWithNode*>(node);
+            for(auto* c : n->items) out.push_back(c);
+            for(auto* c : n->body) out.push_back(c);
             break;
         }
         default:

@@ -248,6 +248,9 @@ enum ASTNodeType : std::uint32_t
     ASTNodeNonLocal,
     ASTNodeDel,
     ASTNodeAwait,
+    ASTNodeWithItem,
+    ASTNodeWith,
+    ASTNodeAsyncWith,
     ASTNodeCount,
 };
 
@@ -1285,6 +1288,8 @@ struct MatchStarNode : Node
     }
 };
 
+// Yield
+
 struct YieldNode : Node
 {
     Node* value; // nullptr for bare 'yield'
@@ -1318,6 +1323,8 @@ struct YieldFromNode : Node
         logger->debug("{0: ^{1}}YIELDFROM", "", indent);
     }
 };
+
+// Types
 
 struct TypeParamNode : Node
 {
@@ -1422,6 +1429,55 @@ struct AwaitNode : Node
     virtual void debug(std::shared_ptr<spdlog::logger> logger, std::uint32_t indent) const noexcept override
     {
         logger->debug("{0: ^{1}}AWAIT", "", indent);
+    }
+};
+
+// Context managers
+
+struct WithItemNode : Node
+{
+    Node* context_expr;
+    Node* optional_vars; // 'as name'
+
+    WithItemNode(Node* context_expr, Node* optional_vars, std::uint32_t line, std::uint32_t column) : Node(ASTNodeWithItem, line, column),
+                                                                                                      context_expr(context_expr),
+                                                                                                      optional_vars(optional_vars) {}
+
+    virtual const char* type_str() const noexcept override { return "WITH_ITEM"; }
+
+    virtual void debug(std::shared_ptr<spdlog::logger> logger, std::uint32_t indent) const noexcept override
+    {
+        logger->debug("{0: ^{1}}WITH_ITEM", "", indent);
+    }
+};
+
+struct WithNode : Node
+{
+    Vector<Node*> items;
+    Vector<Node*> body;
+
+    WithNode(std::uint32_t line, std::uint32_t column) : Node(ASTNodeWith, line, column) {}
+
+    virtual const char* type_str() const noexcept override { return "WITH"; }
+
+    virtual void debug(std::shared_ptr<spdlog::logger> logger, std::uint32_t indent) const noexcept override
+    {
+        logger->debug("{0: ^{1}}WITH", "", indent);
+    }
+};
+
+struct AsyncWithNode : Node
+{
+    Vector<Node*> items;
+    Vector<Node*> body;
+
+    AsyncWithNode(std::uint32_t line, std::uint32_t column) : Node(ASTNodeAsyncWith, line, column) {}
+
+    virtual const char* type_str() const noexcept override { return "ASYNC_WITH"; }
+
+    virtual void debug(std::shared_ptr<spdlog::logger> logger, std::uint32_t indent) const noexcept override
+    {
+        logger->debug("{0: ^{1}}ASYNC_WITH", "", indent);
     }
 };
 
