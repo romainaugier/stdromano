@@ -186,6 +186,7 @@ enum ASTNodeType : std::uint32_t
     ASTNodeDecorator,
     ASTNodeFunctionArg,
     ASTNodeFunctionDef,
+    ASTNodeAsyncFunctionDef,
     ASTNodeClassDef,
     ASTNodeReturn,
     ASTNodeAssign,
@@ -194,6 +195,7 @@ enum ASTNodeType : std::uint32_t
     ASTNodeAugAssign,
     ASTNodeWalrusAssign,
     ASTNodeFor,
+    ASTNodeAsyncFor,
     ASTNodeWhile,
     ASTNodeIf,
     ASTNodeImport,
@@ -220,6 +222,7 @@ enum ASTNodeType : std::uint32_t
     ASTNodeTuple,
     ASTNodeDict,
     ASTNodeComprehension,
+    ASTNodeAsyncComprehension,
     ASTNodeListComp,
     ASTNodeSetComp,
     ASTNodeDictComp,
@@ -242,6 +245,7 @@ enum ASTNodeType : std::uint32_t
     ASTNodeGlobal,
     ASTNodeNonLocal,
     ASTNodeDel,
+    ASTNodeAwait,
     ASTNodeCount,
 };
 
@@ -259,7 +263,7 @@ struct Node
     std::uint32_t line() const noexcept { return _line; }
     std::uint32_t column() const noexcept { return _column; }
 
-    virtual const char* type_str() const noexcept { return "Node"; }
+    virtual const char* type_str() const noexcept { return "NODE"; }
 
     virtual void debug(std::shared_ptr<spdlog::logger> logger, std::uint32_t indent) const noexcept
     {
@@ -316,7 +320,7 @@ struct FunctionArgNode : Node
                                                                                                 is_vararg(false),
                                                                                                 is_kwarg(false) {}
 
-    virtual const char* type_str() const noexcept override { return "FUNCARG"; }
+    virtual const char* type_str() const noexcept override { return "FUNC_ARG"; }
 
     virtual void debug(std::shared_ptr<spdlog::logger> logger, std::uint32_t indent) const noexcept override
     {
@@ -329,7 +333,7 @@ struct FunctionDefNode : Node
     StringD name;
     Vector<Node*> args;
     Vector<Node*> body;
-    Node* return_annotation;
+    Node* return_annotation = nullptr;
     Vector<Node*> type_params;
     std::int32_t posonly_index = -1; // index of '/' separator, -1 if absent
     std::int32_t kwonly_index = -1; // index of bare '*' separator, -1 if absent
@@ -338,11 +342,32 @@ struct FunctionDefNode : Node
                                                                               name(std::move(name)),
                                                                               return_annotation(nullptr) {}
 
-    virtual const char* type_str() const noexcept override { return "FUNCDEF"; }
+    virtual const char* type_str() const noexcept override { return "FUNC_DEF"; }
 
     virtual void debug(std::shared_ptr<spdlog::logger> logger, std::uint32_t indent) const noexcept override
     {
         logger->debug("{0: ^{1}}FUNCDEF ({2})", "", indent, this->name);
+    }
+};
+
+struct AsyncFunctionDefNode : Node
+{
+    StringD name;
+    Vector<Node*> args;
+    Vector<Node*> body;
+    Node* return_annotation = nullptr;
+    Vector<Node*> type_params;
+    std::int32_t posonly_index = -1; // index of '/' separator, -1 if absent
+    std::int32_t kwonly_index = -1; // index of bare '*' separator, -1 if absent
+
+    AsyncFunctionDefNode(StringD name, std::uint32_t line, std::uint32_t column) : Node(ASTNodeAsyncFunctionDef, line, column),
+                                                                                   name(std::move(name)) {}
+
+    virtual const char* type_str() const noexcept override { return "ASYNC_FUNC_DEF"; }
+
+    virtual void debug(std::shared_ptr<spdlog::logger> logger, std::uint32_t indent) const noexcept override
+    {
+        logger->debug("{0: ^{1}}ASYNC_FUNC_DEF ({2})", "", indent, this->name);
     }
 };
 
@@ -356,7 +381,7 @@ struct ClassDefNode : Node
     ClassDefNode(StringD name, std::uint32_t line, std::uint32_t column) : Node(ASTNodeClassDef, line, column),
                                                                            name(std::move(name)) {}
 
-    virtual const char* type_str() const noexcept override { return "CLASSDEF"; }
+    virtual const char* type_str() const noexcept override { return "CLASS_DEF"; }
 
     virtual void debug(std::shared_ptr<spdlog::logger> logger, std::uint32_t indent) const noexcept override
     {
@@ -406,7 +431,7 @@ struct AnnAssignNode : Node
                                                                                                     value(value),
                                                                                                     ann(ann) {}
 
-    virtual const char* type_str() const noexcept override { return "ANNASSIGN"; }
+    virtual const char* type_str() const noexcept override { return "ANN_ASSIGN"; }
 
     virtual void debug(std::shared_ptr<spdlog::logger> logger, std::uint32_t indent) const noexcept override
     {
@@ -421,7 +446,7 @@ struct MultiAssignNode : Node
 
     MultiAssignNode(std::uint32_t line, std::uint32_t column) : Node(ASTNodeMultiAssign, line, column) {}
 
-    virtual const char* type_str() const noexcept override { return "MULTIASSIGN"; };
+    virtual const char* type_str() const noexcept override { return "MULTI_ASSIGN"; };
 
     virtual void debug(std::shared_ptr<spdlog::logger> logger, std::uint32_t indent) const noexcept override
     {
@@ -440,7 +465,7 @@ struct AugAssignNode : Node
                                                                                                       op(op),
                                                                                                       value(value) {}
 
-    virtual const char* type_str() const noexcept override { return "AUGASSIGN"; }
+    virtual const char* type_str() const noexcept override { return "AUG_ASSIGN"; }
 
     virtual void debug(std::shared_ptr<spdlog::logger> logger, std::uint32_t indent) const noexcept override
     {
@@ -457,7 +482,7 @@ struct WalrusAssignNode : Node
                                                                                             target(target),
                                                                                             value(value) {}
 
-    virtual const char* type_str() const noexcept override { return "WALRUSASSIGN"; }
+    virtual const char* type_str() const noexcept override { return "WALRUS_ASSIGN"; }
 
     virtual void debug(std::shared_ptr<spdlog::logger> logger, std::uint32_t indent) const noexcept override
     {
@@ -481,6 +506,25 @@ struct ForNode : Node
     virtual void debug(std::shared_ptr<spdlog::logger> logger, std::uint32_t indent) const noexcept override
     {
         logger->debug("{0: ^{1}}FOR", "", indent);
+    }
+};
+
+struct AsyncForNode : Node
+{
+    Node* target;
+    Node* iter;
+    Vector<Node*> body;
+    Vector<Node*> orelse;
+
+    AsyncForNode(Node* target, Node* iter, std::uint32_t line, std::uint32_t column) : Node(ASTNodeAsyncFor, line, column),
+                                                                                       target(target),
+                                                                                       iter(iter) {}
+
+    virtual const char* type_str() const noexcept override { return "ASYNC_FOR"; }
+
+    virtual void debug(std::shared_ptr<spdlog::logger> logger, std::uint32_t indent) const noexcept override
+    {
+        logger->debug("{0: ^{1}}ASYNC_FOR", "", indent);
     }
 };
 
@@ -544,7 +588,7 @@ struct ImportFromNode : Node
     ImportFromNode(StringD module, std::uint32_t line, std::uint32_t column) : Node(ASTNodeImportFrom, line, column),
                                                                                module(std::move(module)) {}
 
-    virtual const char* type_str() const noexcept override { return "IMPORT FROM"; }
+    virtual const char* type_str() const noexcept override { return "IMPORT_FROM"; }
 
     virtual void debug(std::shared_ptr<spdlog::logger> logger, std::uint32_t indent) const noexcept override
     {
@@ -629,7 +673,7 @@ struct BinOpNode : Node
                                                                                                 op(op),
                                                                                                 right(right) {}
 
-    virtual const char* type_str() const noexcept override { return "BINOP"; }
+    virtual const char* type_str() const noexcept override { return "BINARY_OP"; }
 
     virtual void debug(std::shared_ptr<spdlog::logger> logger, std::uint32_t indent) const noexcept override
     {
@@ -646,7 +690,7 @@ struct UnaryOpNode : Node
                                                                                         op(op),
                                                                                         operand(operand) {}
 
-    virtual const char* type_str() const noexcept override { return "UNOP"; }
+    virtual const char* type_str() const noexcept override { return "UNARY_OP"; }
 
     virtual void debug(std::shared_ptr<spdlog::logger> logger, std::uint32_t indent) const noexcept override
     {
@@ -669,7 +713,7 @@ struct TernaryOpNode : Node
                                           test(test),
                                           orelse(orelse) {}
 
-    virtual const char* type_str() const noexcept override { return "TERNARYOP"; }
+    virtual const char* type_str() const noexcept override { return "TERNARY_OP"; }
 
     virtual void debug(std::shared_ptr<spdlog::logger> logger, std::uint32_t indent) const noexcept override
     {
@@ -685,7 +729,7 @@ struct BoolOpNode : Node
     BoolOpNode(Operator op, std::uint32_t line, std::uint32_t column) : Node(ASTNodeBoolOp, line, column),
                                                                         op(op) {}
 
-    virtual const char* type_str() const noexcept override { return "BOOLOP"; }
+    virtual const char* type_str() const noexcept override { return "BOOL_OP"; }
 
     virtual void debug(std::shared_ptr<spdlog::logger> logger, std::uint32_t indent) const noexcept override
     {
@@ -724,7 +768,7 @@ struct KeywordArgNode : Node
                                            name(std::move(name)),
                                            value(value) {}
 
-    virtual const char* type_str() const noexcept override { return "KEYWORDARG"; }
+    virtual const char* type_str() const noexcept override { return "KEYWORD_ARG"; }
 
     virtual void debug(std::shared_ptr<spdlog::logger> logger, std::uint32_t indent) const noexcept override
     {
@@ -902,7 +946,33 @@ struct ComprehensionNode : Node
                                               target(target),
                                               iter(iter) {}
 
+    virtual const char* type_str() const noexcept override { return "COMP"; }
 
+    virtual void debug(std::shared_ptr<spdlog::logger> logger, std::uint32_t indent) const noexcept override
+    {
+        logger->debug("{0: ^{1}}COMP", "", indent);
+    }
+};
+
+struct AsyncComprehensionNode : Node
+{
+    Node* target;
+    Node* iter;
+    Vector<Node*> ifs;
+
+    AsyncComprehensionNode(Node* target,
+                           Node* iter,
+                           std::uint32_t line,
+                           std::uint32_t column) : Node(ASTNodeAsyncComprehension, line, column),
+                                                   target(target),
+                                                   iter(iter) {}
+
+    virtual const char* type_str() const noexcept override { return "ASYNC_COMP"; }
+
+    virtual void debug(std::shared_ptr<spdlog::logger> logger, std::uint32_t indent) const noexcept override
+    {
+        logger->debug("{0: ^{1}}ASYNC_COMP", "", indent);
+    }
 };
 
 struct ListCompNode : Node
@@ -913,7 +983,7 @@ struct ListCompNode : Node
     ListCompNode(Node* elt, std::uint32_t line, std::uint32_t column) : Node(ASTNodeListComp, line, column),
                                                                         elt(elt) {}
 
-    virtual const char* type_str() const noexcept override { return "LISTCOMP"; }
+    virtual const char* type_str() const noexcept override { return "LIST_COMP"; }
 
     virtual void debug(std::shared_ptr<spdlog::logger> logger, std::uint32_t indent) const noexcept override
     {
@@ -929,7 +999,7 @@ struct SetCompNode : Node
     SetCompNode(Node* elt, std::uint32_t line, std::uint32_t column) : Node(ASTNodeSetComp, line, column),
                                                                        elt(elt) {}
 
-    virtual const char* type_str() const noexcept override { return "SETCOMP"; }
+    virtual const char* type_str() const noexcept override { return "SET_COMP"; }
 
     virtual void debug(std::shared_ptr<spdlog::logger> logger, std::uint32_t indent) const noexcept override
     {
@@ -947,7 +1017,7 @@ struct DictCompNode : Node
                                                                                      key(key),
                                                                                      value(value) {}
 
-    virtual const char* type_str() const noexcept override { return "DICTCOMP"; }
+    virtual const char* type_str() const noexcept override { return "DICT_COMP"; }
 
     virtual void debug(std::shared_ptr<spdlog::logger> logger, std::uint32_t indent) const noexcept override
     {
@@ -963,7 +1033,7 @@ struct GeneratorExprNode : Node
     GeneratorExprNode(Node* elt, std::uint32_t line, std::uint32_t column) : Node(ASTNodeGeneratorExpr, line, column),
                                                                              elt(elt) {}
 
-    virtual const char* type_str() const noexcept override { return "GENERATOREXPR"; }
+    virtual const char* type_str() const noexcept override { return "GENERATOR_EXPR"; }
 
     virtual void debug(std::shared_ptr<spdlog::logger> logger, std::uint32_t indent) const noexcept override
     {
@@ -1020,7 +1090,7 @@ struct MatchCaseNode : Node
                                           pattern(pattern),
                                           guard(guard) {}
 
-    virtual const char* type_str() const noexcept override { return "MATCHCASE"; }
+    virtual const char* type_str() const noexcept override { return "MATCH_CASE"; }
 
     virtual void debug(std::shared_ptr<spdlog::logger> logger, std::uint32_t indent) const noexcept override
     {
@@ -1036,7 +1106,7 @@ struct MatchOrNode : Node
     MatchOrNode(std::uint32_t line,
                 std::uint32_t column) : Node(ASTNodeMatchOr, line, column) {}
 
-    virtual const char* type_str() const noexcept override { return "MATCHOR"; }
+    virtual const char* type_str() const noexcept override { return "MATCH_OR"; }
 
     virtual void debug(std::shared_ptr<spdlog::logger> logger, std::uint32_t indent) const noexcept override
     {
@@ -1057,7 +1127,7 @@ struct MatchAsNode : Node
                                         pattern(pattern),
                                         name(std::move(name)) {}
 
-    virtual const char* type_str() const noexcept override { return "MATCHAS"; }
+    virtual const char* type_str() const noexcept override { return "MATCH_AS"; }
 
     virtual void debug(std::shared_ptr<spdlog::logger> logger, std::uint32_t indent) const noexcept override
     {
@@ -1075,7 +1145,7 @@ struct MatchValueNode : Node
                    std::uint32_t column) : Node(ASTNodeMatchValue, line, column),
                                            value(value) {}
 
-    virtual const char* type_str() const noexcept override { return "MATCHVALUE"; }
+    virtual const char* type_str() const noexcept override { return "MATCH_VALUE"; }
 
     virtual void debug(std::shared_ptr<spdlog::logger> logger, std::uint32_t indent) const noexcept override
     {
@@ -1093,7 +1163,7 @@ struct MatchSingletonNode : Node
                        std::uint32_t column) : Node(ASTNodeMatchSingleton, line, column),
                                                value(value) {}
 
-    virtual const char* type_str() const noexcept override { return "MATCHSINGLETON"; }
+    virtual const char* type_str() const noexcept override { return "MATCH_SINGLETON"; }
 
     virtual void debug(std::shared_ptr<spdlog::logger> logger, std::uint32_t indent) const noexcept override
     {
@@ -1109,7 +1179,7 @@ struct MatchSequenceNode : Node
     MatchSequenceNode(std::uint32_t line,
                       std::uint32_t column) : Node(ASTNodeMatchSequence, line, column) {}
 
-    virtual const char* type_str() const noexcept override { return "MATCHSEQUENCE"; }
+    virtual const char* type_str() const noexcept override { return "MATCH_SEQUENCE"; }
 
     virtual void debug(std::shared_ptr<spdlog::logger> logger, std::uint32_t indent) const noexcept override
     {
@@ -1127,7 +1197,7 @@ struct MatchMappingNode : Node
     MatchMappingNode(std::uint32_t line,
                      std::uint32_t column) : Node(ASTNodeMatchMapping, line, column) {}
 
-    virtual const char* type_str() const noexcept override { return "MATCHMAPPING"; }
+    virtual const char* type_str() const noexcept override { return "MATCH_MAPPING"; }
 
     virtual void debug(std::shared_ptr<spdlog::logger> logger, std::uint32_t indent) const noexcept override
     {
@@ -1148,7 +1218,7 @@ struct MatchClassNode : Node
                    std::uint32_t column) : Node(ASTNodeMatchClass, line, column),
                                            cls(cls) {}
 
-    virtual const char* type_str() const noexcept override { return "MATCHCLASS"; }
+    virtual const char* type_str() const noexcept override { return "MATCH_CLASS"; }
 
     virtual void debug(std::shared_ptr<spdlog::logger> logger, std::uint32_t indent) const noexcept override
     {
@@ -1166,7 +1236,7 @@ struct MatchStarNode : Node
                   std::uint32_t column) : Node(ASTNodeMatchStar, line, column),
                                           name(std::move(name)) {}
 
-    virtual const char* type_str() const noexcept override { return "MATCHSTAR"; }
+    virtual const char* type_str() const noexcept override { return "MATCH_STAR"; }
 
     virtual void debug(std::shared_ptr<spdlog::logger> logger, std::uint32_t indent) const noexcept override
     {
@@ -1200,7 +1270,7 @@ struct YieldFromNode : Node
                   std::uint32_t column) : Node(ASTNodeYieldFrom, line, column),
                                           value(value) {}
 
-    virtual const char* type_str() const noexcept override { return "YIELDFROM"; }
+    virtual const char* type_str() const noexcept override { return "YIELD_FROM"; }
 
     virtual void debug(std::shared_ptr<spdlog::logger> logger, std::uint32_t indent) const noexcept override
     {
@@ -1222,7 +1292,7 @@ struct TypeParamNode : Node
                   std::uint32_t column) : Node(ASTNodeTypeParam, line, column),
                                           name(std::move(name)) {}
 
-    virtual const char* type_str() const noexcept override { return "TYPEPARAM"; }
+    virtual const char* type_str() const noexcept override { return "TYPE_PARAM"; }
 
     virtual void debug(std::shared_ptr<spdlog::logger> logger, std::uint32_t indent) const noexcept override
     {
@@ -1243,7 +1313,7 @@ struct TypeAliasNode : Node
                                           name(std::move(name)),
                                           value(value) {}
 
-    virtual const char* type_str() const noexcept override { return "TYPEALIAS"; }
+    virtual const char* type_str() const noexcept override { return "TYPE_ALIAS"; }
 
     virtual void debug(std::shared_ptr<spdlog::logger> logger, std::uint32_t indent) const noexcept override
     {
@@ -1294,6 +1364,23 @@ struct DelNode : Node
     virtual void debug(std::shared_ptr<spdlog::logger> logger, std::uint32_t indent) const noexcept override
     {
         logger->debug("{0: ^{1}}DEL", "", indent);
+    }
+};
+
+// Await Expression/Statement
+
+struct AwaitNode : Node
+{
+    Node* expr = nullptr;
+
+    AwaitNode(Node* expr, std::uint32_t line, std::uint32_t column) : Node(ASTNodeAwait, line, column),
+                                                                      expr(expr) {}
+
+    virtual const char* type_str() const noexcept override { return "AWAIT"; }
+
+    virtual void debug(std::shared_ptr<spdlog::logger> logger, std::uint32_t indent) const noexcept override
+    {
+        logger->debug("{0: ^{1}}AWAIT", "", indent);
     }
 };
 

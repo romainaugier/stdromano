@@ -1485,6 +1485,7 @@ struct Parser
             switch(static_cast<Keyword>(this->current().type))
             {
                 case Keyword::Def: return this->parse_funcdef();
+                case Keyword::Async: return this->parse_async_funcdef();
                 case Keyword::Class: return this->parse_classdef();
                 case Keyword::If: return this->parse_if();
                 case Keyword::While: return this->parse_while();
@@ -1754,6 +1755,66 @@ struct Parser
         return node;
     }
 
+    Node* parse_async_funcdef() noexcept
+    {
+        std::uint32_t line = this->current().line;
+        std::uint32_t column = this->current().column;
+        this->advance(); // skip 'async'
+
+        if(!this->expect_keyword(Keyword::Def))
+            return nullptr;
+
+        if(!this->check(Token::Kind::Identifier))
+        {
+            this->error(this->current().line,
+                        this->current().column,
+                        static_cast<std::uint32_t>(this->current().value.size()),
+                        "Expected function name");
+
+            return nullptr;
+        }
+
+        StringD name = std::move(StringD::make_from_c_str(this->current().value.c_str(), this->current().value.size()));
+        this->advance();
+
+        auto* node = this->arena.emplace<AsyncFunctionDefNode>(std::move(name), line, column);
+
+        // Optional type parameters: def func[T, U](...) -> ...
+        if(!this->parse_type_params(node->type_params))
+            return nullptr;
+
+        if(!this->expect_delimiter(Delimiter::LParen))
+            return nullptr;
+
+        // Parse arguments
+        if(!this->parse_func_params(node->args, node->posonly_index, node->kwonly_index, Delimiter::RParen))
+            return nullptr;
+
+        if(!this->expect_delimiter(Delimiter::RParen))
+            return nullptr;
+
+        // Optional return annotation
+        if(this->match_delimiter(Delimiter::RightArrow))
+        {
+            this->advance();
+            node->return_annotation = this->parse_expr();
+
+            if(node->return_annotation == nullptr)
+                return nullptr;
+        }
+
+        if(!this->expect_delimiter(Delimiter::Colon))
+            return nullptr;
+
+        // Inline body
+        if(!this->check(Token::Kind::Newline))
+            node->body.push_back(this->parse_statement());
+        else if(!this->parse_block(node->body))
+            return nullptr;
+
+        return node;
+    }
+
     Node* parse_classdef() noexcept
     {
         std::uint32_t line = this->current().line;
@@ -1843,6 +1904,20 @@ struct Parser
             return nullptr;
 
         return node;
+    }
+
+    Node* parse_await_stmt() noexcept
+    {
+        std::uint32_t line = this->current().line;
+        std::uint32_t column = this->current().column;
+        this->advance(); // skip 'await'
+
+        Node* stmt = this->parse_statement();
+
+        if(stmt == nullptr)
+            return nullptr;
+
+        return this->arena.emplace<AwaitNode>(stmt, line, column);
     }
 
     Node* parse_if() noexcept
@@ -1971,6 +2046,55 @@ struct Parser
             return nullptr;
 
         auto* node = this->arena.emplace<ForNode>(target, iter, line, column);
+
+        if(!this->check(Token::Kind::Newline))
+            node->body.push_back(this->parse_statement());
+        else if(!this->parse_block(node->body))
+            return nullptr;
+
+        this->skip_newlines();
+
+        if(!this->at_end() && this->match_keyword(Keyword::Else))
+        {
+            this->advance();
+
+            if(!this->expect_delimiter(Delimiter::Colon))
+                return nullptr;
+
+            if(!this->parse_block(node->orelse))
+                return nullptr;
+        }
+
+        return node;
+    }
+
+    Node* parse_async_for() noexcept
+    {
+        std::uint32_t line = this->current().line;
+        std::uint32_t column = this->current().column;
+
+        this->advance(); // skip 'async'
+
+        if(!this->expect_keyword(Keyword::For))
+            return nullptr;
+
+        Node* target = this->parse_primary();
+
+        if(target == nullptr)
+            return nullptr;
+
+        if(!this->expect_keyword(Keyword::In))
+            return nullptr;
+
+        Node* iter = this->parse_expr();
+
+        if(iter == nullptr)
+            return nullptr;
+
+        if(!this->expect_delimiter(Delimiter::Colon))
+            return nullptr;
+
+        auto* node = this->arena.emplace<AsyncForNode>(target, iter, line, column);
 
         if(!this->check(Token::Kind::Newline))
             node->body.push_back(this->parse_statement());
@@ -2703,20 +2827,58 @@ struct Parser
         return node;
     }
 
-    // List Comprehension
+    // Comprehension clauses
 
     bool parse_comp_clauses(Vector<Node*>& generators) noexcept
     {
-        while(!this->at_end() && this->match_keyword(Keyword::For))
+        while(!this->at_end() && (this->match_keyword(Keyword::For) || this->match_keyword(Keyword::Async)))
         {
             std::uint32_t comp_line = this->current().line;
             std::uint32_t comp_column = this->current().column;
-            this->advance(); // skip 'for'
+
+            bool is_async = false;
+
+            if(this->match_keyword(Keyword::Async))
+            {
+                this->advance(); // skip 'async' and expect 'for'
+
+                if(!this->expect_keyword(Keyword::For))
+                    return false;
+
+                is_async = true;
+            }
+            else
+            {
+                this->advance(); // skip 'for'
+            }
 
             Node* target = this->parse_primary();
 
             if(target == nullptr)
                 return false;
+
+            if(this->match_delimiter(Delimiter::Comma))
+            {
+                auto* tup = this->arena.emplace<TupleNode>(target->line(), target->column());
+                tup->elts.push_back(target);
+
+                while(this->match_delimiter(Delimiter::Comma))
+                {
+                    this->advance();
+
+                    if(this->match_keyword(Keyword::In))
+                        break;
+
+                    Node* elt = this->parse_primary();
+
+                    if(elt == nullptr)
+                        return false;
+
+                    tup->elts.push_back(elt);
+                }
+
+                target = tup;
+            }
 
             if(!this->expect_keyword(Keyword::In))
                 return false;
@@ -2727,7 +2889,7 @@ struct Parser
             if(iter == nullptr)
                 return false;
 
-            auto* comp = this->arena.emplace<ComprehensionNode>(target, iter, comp_line, comp_column);
+            Vector<Node*> ifs;
 
             // Zero or more 'if' filters
             while(!this->at_end() && this->match_keyword(Keyword::If))
@@ -2739,10 +2901,22 @@ struct Parser
                 if(test == nullptr)
                     return false;
 
-                comp->ifs.push_back(test);
+                ifs.push_back(test);
             }
 
-            generators.push_back(comp);
+            if(is_async)
+            {
+                auto* comp = this->arena.emplace<AsyncComprehensionNode>(target, iter, comp_line, comp_column);
+                comp->ifs = std::move(ifs);
+                generators.push_back(comp);
+            }
+            else
+            {
+                auto* comp = this->arena.emplace<ComprehensionNode>(target, iter, comp_line, comp_column);
+                comp->ifs = std::move(ifs);
+                generators.push_back(comp);
+            }
+
         }
 
         return !generators.empty();
@@ -3373,7 +3547,7 @@ struct Parser
 
     Node* parse_power() noexcept
     {
-        Node* left = this->parse_postfix();
+        Node* left = this->parse_await();
 
         if(left == nullptr)
             return nullptr;
@@ -3392,6 +3566,28 @@ struct Parser
         }
 
         return left;
+    }
+
+    // Await
+
+    Node* parse_await() noexcept
+    {
+        if(this->match_keyword(Keyword::Await))
+        {
+            std::uint32_t line = this->current().line;
+            std::uint32_t column = this->current().column;
+
+            this->advance(); // skip 'await'
+
+            // Recursive call as python allows await await <expr>
+            Node* expr = this->parse_await();
+
+            return this->arena.emplace<AwaitNode>(expr, line, column);
+        }
+        else
+        {
+            return this->parse_postfix();
+        }
     }
 
     // Postfix: calls, subscripts, attribute access
@@ -3452,7 +3648,7 @@ struct Parser
                         }
 
                         // Generator expression as call argument
-                        if(this->match_keyword(Keyword::For))
+                        if(this->match_keyword(Keyword::For) || this->match_keyword(Keyword::For))
                         {
                             auto* genexpr = this->arena.emplace<GeneratorExprNode>(arg, arg->line(), arg->column());
 
@@ -3647,7 +3843,7 @@ struct Parser
                 return nullptr;
 
             // Generator expression: (expr for target in iter ...)
-            if(this->match_keyword(Keyword::For))
+            if(this->match_keyword(Keyword::For) || this->match_keyword(Keyword::Async))
             {
                 auto* node = this->arena.emplace<GeneratorExprNode>(first, first->line(), first->column());
 
@@ -3760,7 +3956,7 @@ struct Parser
                 return nullptr;
 
             // List comprehension: [expr for target in iter ...]
-            if(this->match_keyword(Keyword::For))
+            if(this->match_keyword(Keyword::For) || this->match_keyword(Keyword::Async))
             {
                 auto* node = this->arena.emplace<ListCompNode>(first, line, column);
 
@@ -3877,7 +4073,7 @@ struct Parser
                 return nullptr;
 
             // Set comprehension: {expr for target in iter ...}
-            if(this->match_keyword(Keyword::For))
+            if(this->match_keyword(Keyword::For) || this->match_keyword(Keyword::Async))
             {
                 auto* node = this->arena.emplace<SetCompNode>(first, line, column);
 
@@ -3901,7 +4097,7 @@ struct Parser
                     return nullptr;
 
                 // Dict comprehension: {key: value for target in iter ...}
-                if(this->match_keyword(Keyword::For))
+                if(this->match_keyword(Keyword::For) || this->match_keyword(Keyword::Async))
                 {
                     auto* node = this->arena.emplace<DictCompNode>(first, value, line, column);
 
@@ -4125,6 +4321,15 @@ void node_children(Node* node, Vector<Node*>& out) noexcept
             for(auto* c : n->type_params) out.push_back(c);
             break;
         }
+        case ASTNodeAsyncFunctionDef:
+        {
+            auto* n = static_cast<AsyncFunctionDefNode*>(node);
+            for(auto* c : n->args) out.push_back(c);
+            for(auto* c : n->body) out.push_back(c);
+            if(n->return_annotation) out.push_back(n->return_annotation);
+            for(auto* c : n->type_params) out.push_back(c);
+            break;
+        }
         case ASTNodeClassDef:
         {
             auto* n = static_cast<ClassDefNode*>(node);
@@ -4177,6 +4382,15 @@ void node_children(Node* node, Vector<Node*>& out) noexcept
         case ASTNodeFor:
         {
             auto* n = static_cast<ForNode*>(node);
+            if(n->target) out.push_back(n->target);
+            if(n->iter) out.push_back(n->iter);
+            for(auto* c : n->body) out.push_back(c);
+            for(auto* c : n->orelse) out.push_back(c);
+            break;
+        }
+        case ASTNodeAsyncFor:
+        {
+            auto* n = static_cast<AsyncForNode*>(node);
             if(n->target) out.push_back(n->target);
             if(n->iter) out.push_back(n->iter);
             for(auto* c : n->body) out.push_back(c);
@@ -4305,6 +4519,14 @@ void node_children(Node* node, Vector<Node*>& out) noexcept
         case ASTNodeComprehension:
         {
             auto* n = static_cast<ComprehensionNode*>(node);
+            if(n->target) out.push_back(n->target);
+            if(n->iter) out.push_back(n->iter);
+            for(auto* c : n->ifs) out.push_back(c);
+            break;
+        }
+        case ASTNodeAsyncComprehension:
+        {
+            auto* n = static_cast<AsyncComprehensionNode*>(node);
             if(n->target) out.push_back(n->target);
             if(n->iter) out.push_back(n->iter);
             for(auto* c : n->ifs) out.push_back(c);
@@ -4439,13 +4661,25 @@ void node_children(Node* node, Vector<Node*>& out) noexcept
         case ASTNodeGlobal:
         {
             auto* n = static_cast<GlobalNode*>(node);
-            STDROMANO_UNUSED(n);
+            for(auto* c : n->names) out.push_back(c);
             break;
         }
         case ASTNodeNonLocal:
         {
             auto* n = static_cast<NonLocalNode*>(node);
-            STDROMANO_UNUSED(n);
+            for(auto* c : n->names) out.push_back(c);
+            break;
+        }
+        case ASTNodeDel:
+        {
+            auto* n = static_cast<DelNode*>(node);
+            for(auto* c : n->names) out.push_back(c);
+            break;
+        }
+        case ASTNodeAwait:
+        {
+            auto* n = static_cast<AwaitNode*>(node);
+            if(n->expr != nullptr) out.push_back(n->expr);
             break;
         }
         default:
