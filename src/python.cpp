@@ -3779,7 +3779,7 @@ struct Parser
         if(!match_cmp_op(op, skip))
             return left;
 
-        auto* node = arena.emplace<CompareNode>(left, left->line(), left->column());
+        auto* node = arena.emplace<CompareOp>(left, left->line(), left->column());
 
         while(match_cmp_op(op, skip))
         {
@@ -4892,9 +4892,9 @@ void node_children(Node* node, Vector<Node*>& out) noexcept
             for(auto* c : n->values) out.push_back(c);
             break;
         }
-        case ASTNodeCompare:
+        case ASTNodeCompareOp:
         {
-            auto* n = static_cast<CompareNode*>(node);
+            auto* n = static_cast<CompareOp*>(node);
             if(n->left) out.push_back(n->left);
             for(auto* c : n->comparators) out.push_back(c);
             break;

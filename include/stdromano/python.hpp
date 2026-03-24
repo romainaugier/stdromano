@@ -183,53 +183,70 @@ enum Literal : std::uint32_t
 enum ASTNodeType : std::uint32_t
 {
     ASTNodeModule = 0,
+
     ASTNodeDecorator,
+
     ASTNodeFunctionArg,
     ASTNodeFunctionDef,
     ASTNodeAsyncFunctionDef,
     ASTNodeClassDef,
+
     ASTNodeReturn,
+
     ASTNodeAssign,
     ASTNodeAnnAssign,
     ASTNodeMultiAssign,
     ASTNodeAugAssign,
     ASTNodeWalrusAssign,
+
     ASTNodeFor,
     ASTNodeAsyncFor,
     ASTNodeWhile,
     ASTNodeIf,
-    ASTNodeImport,
-    ASTNodeImportFrom,
-    ASTNodeExpr,
     ASTNodePass,
     ASTNodeBreak,
     ASTNodeContinue,
+
+    ASTNodeImport,
+    ASTNodeImportFrom,
+
+    ASTNodeExpr,
+
     ASTNodeRaise,
     ASTNodeTry,
     ASTNodeExcept,
+
     ASTNodeBinOp,
     ASTNodeUnaryOp,
     ASTNodeTernaryOp,
     ASTNodeBoolOp,
-    ASTNodeCompare,
+    ASTNodeCompareOp,
+
     ASTNodeKeywordArg,
     ASTNodeCall,
+
     ASTNodeName,
     ASTNodeConstant,
+
     ASTNodeAttribute,
     ASTNodeSubscript,
+
     ASTNodeStarred,
+
     ASTNodeList,
     ASTNodeSet,
     ASTNodeTuple,
     ASTNodeDict,
+
     ASTNodeComprehension,
     ASTNodeAsyncComprehension,
     ASTNodeListComp,
     ASTNodeSetComp,
     ASTNodeDictComp,
     ASTNodeGeneratorExpr,
+
     ASTNodeLambda,
+
     ASTNodeMatch,
     ASTNodeMatchCase,
     ASTNodeMatchOr,
@@ -240,17 +257,24 @@ enum ASTNodeType : std::uint32_t
     ASTNodeMatchMapping,
     ASTNodeMatchClass,
     ASTNodeMatchStar,
+
     ASTNodeYield,
     ASTNodeYieldFrom,
+
     ASTNodeTypeParam,
     ASTNodeTypeAlias,
+
     ASTNodeGlobal,
     ASTNodeNonLocal,
+
     ASTNodeDel,
+
     ASTNodeAwait,
+
     ASTNodeWithItem,
     ASTNodeWith,
     ASTNodeAsyncWith,
+
     ASTNodeCount,
 };
 
@@ -276,6 +300,8 @@ struct Node
     }
 };
 
+// Module (top-level node for files)
+
 struct ModuleNode : Node
 {
     Vector<Node*> body;
@@ -289,6 +315,8 @@ struct ModuleNode : Node
         logger->debug("{0: ^{1}}MODULE", "", indent);
     }
 };
+
+// Function/Class Decorator
 
 struct DecoratorNode : Node
 {
@@ -309,6 +337,8 @@ struct DecoratorNode : Node
             logger->debug("{0: ^{1}}DECORATOR", "", indent);
         }
 };
+
+// Function definition
 
 struct FunctionArgNode : Node
 {
@@ -376,6 +406,8 @@ struct AsyncFunctionDefNode : Node
     }
 };
 
+// Class Definition
+
 struct ClassDefNode : Node
 {
     StringD name;
@@ -394,6 +426,8 @@ struct ClassDefNode : Node
     }
 };
 
+// Return
+
 struct ReturnNode : Node
 {
     Node* value;
@@ -408,6 +442,8 @@ struct ReturnNode : Node
         logger->debug("{0: ^{1}}RETURN", "", indent);
     }
 };
+
+// Assignment
 
 struct AssignNode : Node
 {
@@ -495,6 +531,8 @@ struct WalrusAssignNode : Node
     }
 };
 
+// Control Flow
+
 struct ForNode : Node
 {
     Node* target;
@@ -567,55 +605,6 @@ struct IfNode : Node
     }
 };
 
-struct ImportNode : Node
-{
-    Vector<StringD> names;
-    Vector<StringD> aliases;
-
-    ImportNode(std::uint32_t line, std::uint32_t column) : Node(ASTNodeImport, line, column) {}
-
-    virtual const char* type_str() const noexcept override { return "IMPORT"; }
-
-    virtual void debug(std::shared_ptr<spdlog::logger> logger, std::uint32_t indent) const noexcept override
-    {
-        const StringD import_names = join(this->names, [](StringD name) { return name; }, ", ");
-
-        logger->debug("{0: ^{1}}IMPORT ({2})", "", indent, import_names);
-    }
-};
-
-struct ImportFromNode : Node
-{
-    StringD module;
-    Vector<StringD> names;
-    Vector<StringD> aliases;
-
-    ImportFromNode(StringD module, std::uint32_t line, std::uint32_t column) : Node(ASTNodeImportFrom, line, column),
-                                                                               module(std::move(module)) {}
-
-    virtual const char* type_str() const noexcept override { return "IMPORT_FROM"; }
-
-    virtual void debug(std::shared_ptr<spdlog::logger> logger, std::uint32_t indent) const noexcept override
-    {
-        logger->debug("{0: ^{1}}IMPORT FROM ({2})", "", indent, this->module);
-    }
-};
-
-struct ExprNode : Node
-{
-    Node* value;
-
-    ExprNode(Node* value, std::uint32_t line, std::uint32_t column) : Node(ASTNodeExpr, line, column),
-                                                                      value(value) {}
-
-    virtual const char* type_str() const noexcept override { return "EXPR"; }
-
-    virtual void debug(std::shared_ptr<spdlog::logger> logger, std::uint32_t indent) const noexcept override
-    {
-        logger->debug("{0: ^{1}}EXPR", "", indent);
-    }
-};
-
 struct PassNode : Node
 {
     PassNode(std::uint32_t line, std::uint32_t column) : Node(ASTNodePass, line, column) {}
@@ -651,6 +640,61 @@ struct ContinueNode : Node
         logger->debug("{0: ^{1}}CONTINUE", "", indent);
     }
 };
+
+// Imports
+
+struct ImportNode : Node
+{
+    Vector<StringD> names;
+    Vector<StringD> aliases;
+
+    ImportNode(std::uint32_t line, std::uint32_t column) : Node(ASTNodeImport, line, column) {}
+
+    virtual const char* type_str() const noexcept override { return "IMPORT"; }
+
+    virtual void debug(std::shared_ptr<spdlog::logger> logger, std::uint32_t indent) const noexcept override
+    {
+        const StringD import_names = join(this->names, [](StringD name) { return name; }, ", ");
+
+        logger->debug("{0: ^{1}}IMPORT ({2})", "", indent, import_names);
+    }
+};
+
+struct ImportFromNode : Node
+{
+    StringD module;
+    Vector<StringD> names;
+    Vector<StringD> aliases;
+
+    ImportFromNode(StringD module, std::uint32_t line, std::uint32_t column) : Node(ASTNodeImportFrom, line, column),
+                                                                               module(std::move(module)) {}
+
+    virtual const char* type_str() const noexcept override { return "IMPORT_FROM"; }
+
+    virtual void debug(std::shared_ptr<spdlog::logger> logger, std::uint32_t indent) const noexcept override
+    {
+        logger->debug("{0: ^{1}}IMPORT FROM ({2})", "", indent, this->module);
+    }
+};
+
+// Standalone expression
+
+struct ExprNode : Node
+{
+    Node* value;
+
+    ExprNode(Node* value, std::uint32_t line, std::uint32_t column) : Node(ASTNodeExpr, line, column),
+                                                                      value(value) {}
+
+    virtual const char* type_str() const noexcept override { return "EXPR"; }
+
+    virtual void debug(std::shared_ptr<spdlog::logger> logger, std::uint32_t indent) const noexcept override
+    {
+        logger->debug("{0: ^{1}}EXPR", "", indent);
+    }
+};
+
+// Raise, try, except (Exceptions)
 
 struct RaiseNode : Node
 {
@@ -706,6 +750,25 @@ struct ExceptNode : Node
     }
 };
 
+// Ops
+
+struct UnaryOpNode : Node
+{
+    Operator op;
+    Node* operand;
+
+    UnaryOpNode(Operator op, Node* operand, std::uint32_t line, std::uint32_t column) : Node(ASTNodeUnaryOp, line, column),
+                                                                                        op(op),
+                                                                                        operand(operand) {}
+
+    virtual const char* type_str() const noexcept override { return "UNARY_OP"; }
+
+    virtual void debug(std::shared_ptr<spdlog::logger> logger, std::uint32_t indent) const noexcept override
+    {
+        logger->debug("{0: ^{1}}UNOP ({2})", "", indent, this->op);
+    }
+};
+
 struct BinOpNode : Node
 {
     Node* left;
@@ -722,23 +785,6 @@ struct BinOpNode : Node
     virtual void debug(std::shared_ptr<spdlog::logger> logger, std::uint32_t indent) const noexcept override
     {
         logger->debug("{0: ^{1}}BINOP ({2})", "", indent, this->op);
-    }
-};
-
-struct UnaryOpNode : Node
-{
-    Operator op;
-    Node* operand;
-
-    UnaryOpNode(Operator op, Node* operand, std::uint32_t line, std::uint32_t column) : Node(ASTNodeUnaryOp, line, column),
-                                                                                        op(op),
-                                                                                        operand(operand) {}
-
-    virtual const char* type_str() const noexcept override { return "UNARY_OP"; }
-
-    virtual void debug(std::shared_ptr<spdlog::logger> logger, std::uint32_t indent) const noexcept override
-    {
-        logger->debug("{0: ^{1}}UNOP ({2})", "", indent, this->op);
     }
 };
 
@@ -781,13 +827,13 @@ struct BoolOpNode : Node
     }
 };
 
-struct CompareNode : Node
+struct CompareOp : Node
 {
     Node* left;
     Vector<Operator> ops;
     Vector<Node*> comparators;
 
-    CompareNode(Node* left, std::uint32_t line, std::uint32_t column) : Node(ASTNodeCompare, line, column),
+    CompareOp(Node* left, std::uint32_t line, std::uint32_t column) : Node(ASTNodeCompareOp, line, column),
                                                                         left(left) {}
 
     virtual const char* type_str() const noexcept override { return "COMPARE"; }
@@ -836,6 +882,8 @@ struct CallNode : Node
     }
 };
 
+// Values
+
 struct NameNode : Node
 {
     StringD id;
@@ -869,6 +917,8 @@ struct ConstantNode : Node
         logger->debug("{0: ^{1}}CONSTANT ({2}: {3})", "", indent, this->literal_type, this->raw);
     }
 };
+
+// Postfix
 
 struct AttributeNode : Node
 {
@@ -905,6 +955,8 @@ struct SubscriptNode : Node
     }
 };
 
+// Star
+
 struct StarredNode : Node
 {
     Node* value;
@@ -919,6 +971,8 @@ struct StarredNode : Node
         logger->debug("{0: ^{1}}STARRED", "", indent);
     }
 };
+
+// Builtin data structures
 
 struct ListNode : Node
 {
@@ -976,6 +1030,8 @@ struct DictNode : Node
         logger->debug("{0: ^{1}}DICT ({2} elements)", "", indent, this->keys.size());
     }
 };
+
+// Comprehension and Data Structures comprehensions
 
 struct ComprehensionNode : Node
 {
@@ -1085,6 +1141,8 @@ struct GeneratorExprNode : Node
     }
 };
 
+// Lambda
+
 struct LambdaNode : Node
 {
     Vector<Node*> args;
@@ -1102,6 +1160,8 @@ struct LambdaNode : Node
         logger->debug("{0: ^{1}}LAMBDA ({2} args)", "", indent, this->args.size());
     }
 };
+
+// Match/Case
 
 struct MatchNode : Node
 {
