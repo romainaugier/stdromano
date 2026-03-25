@@ -277,6 +277,8 @@ enum ASTNodeType : std::uint32_t
 
     ASTNodeAssertion,
 
+    ASTNodeSlice,
+
     ASTNodeCount,
 };
 
@@ -1560,6 +1562,27 @@ struct AssertionNode : Node
     }
 };
 
+// Slicing
+
+struct SliceNode : Node
+{
+    Node* lower;
+    Node* upper;
+    Node* step;
+
+    SliceNode(Node* lower, Node* upper, Node* step, std::uint32_t line, std::uint32_t column) : Node(ASTNodeSlice, line, column),
+                                                                                                lower(lower),
+                                                                                                upper(upper),
+                                                                                                step(step) {}
+
+    virtual const char* type_str() const noexcept override { return "SLICE"; }
+
+    virtual void debug(std::shared_ptr<spdlog::logger> logger, std::uint32_t indent) const noexcept override
+    {
+        logger->debug("{0: ^{1}}SLICE", "", indent);
+    }
+};
+
 // Visitor
 
 // Collects the immediate children of a node into a flat vector.
@@ -1595,7 +1618,7 @@ class STDROMANO_API AST
 
     bool lex(const char* buffer, Vector<Token>& tokens) noexcept;
 
-    bool parse(const StringD& source_code, const Vector<Token>& tokens) noexcept;
+    bool parse(const StringD& source_code, const Vector<Token>& tokens, bool debug = false) noexcept;
 
 public:
     AST(std::shared_ptr<spdlog::logger> logger = nullptr) : _root(nullptr),
