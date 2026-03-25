@@ -1548,6 +1548,7 @@ struct Parser
                 case Keyword::Nonlocal: return this->parse_name_list_stmt(ASTNodeNonLocal);
                 case Keyword::Del: return this->parse_name_list_stmt(ASTNodeDel);
                 case Keyword::With: return this->parse_with();
+                case Keyword::Assert: return this->parse_assertion();
                 default: break;
             }
         }
@@ -2322,6 +2323,32 @@ struct Parser
             return nullptr;
 
         return node;
+    }
+
+    // Assertion
+
+    Node* parse_assertion() noexcept
+    {
+        std::uint32_t line = this->current().line;
+        std::uint32_t column = this->current().column;
+        this->advance(); // skip 'assert'
+
+        Node* expr = this->parse_expr();
+
+        if(expr == nullptr)
+            return nullptr;
+
+        if(this->match_delimiter(Delimiter::Comma))
+            this->advance();
+        else
+            return this->arena.emplace<AssertionNode>(expr, nullptr, line, column);
+
+        Node* message = this->parse_expr();
+
+        if(message == nullptr)
+            return nullptr;
+
+        return this->arena.emplace<AssertionNode>(expr, message, line, column);
     }
 
     // Return
@@ -5141,6 +5168,13 @@ void node_children(Node* node, Vector<Node*>& out) noexcept
             auto* n = static_cast<AsyncWithNode*>(node);
             for(auto* c : n->items) out.push_back(c);
             for(auto* c : n->body) out.push_back(c);
+            break;
+        }
+        case ASTNodeAssertion:
+        {
+            auto* n = static_cast<AssertionNode*>(node);
+            if(n->expr) out.push_back(n->expr);
+            if(n->message) out.push_back(n->message);
             break;
         }
         default:

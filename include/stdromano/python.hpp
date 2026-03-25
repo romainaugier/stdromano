@@ -275,6 +275,8 @@ enum ASTNodeType : std::uint32_t
     ASTNodeWith,
     ASTNodeAsyncWith,
 
+    ASTNodeAssertion,
+
     ASTNodeCount,
 };
 
@@ -1538,6 +1540,23 @@ struct AsyncWithNode : Node
     virtual void debug(std::shared_ptr<spdlog::logger> logger, std::uint32_t indent) const noexcept override
     {
         logger->debug("{0: ^{1}}ASYNC_WITH", "", indent);
+    }
+};
+
+// Assertion
+
+struct AssertionNode : Node
+{
+    Node* expr;
+    Node* message;
+
+    AssertionNode(Node* expr, Node* message, std::uint32_t line, std::uint32_t column) : Node(ASTNodeAssertion, line, column) {}
+
+    virtual const char* type_str() const noexcept override { return "ASSERTION"; }
+
+    virtual void debug(std::shared_ptr<spdlog::logger> logger, std::uint32_t indent) const noexcept override
+    {
+        logger->debug("{0: ^{1}}ASSERTION", "", indent);
     }
 };
 
