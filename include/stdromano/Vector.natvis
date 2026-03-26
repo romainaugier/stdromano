@@ -1,0 +1,9 @@
+<Type Name="Vector&lt;*&gt;">
+  <DisplayString>size = {_size}</DisplayString>
+  <Expand>
+    <ArrayItems>
+      <Size>m_size</Size>
+      <ValuePointer>_data</ValuePointer>
+    </ArrayItems>
+  </Expand>
+</Type>

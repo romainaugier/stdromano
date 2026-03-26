@@ -33,6 +33,7 @@ struct Lexer
     char* cursor;
     std::uint32_t line;
     std::uint32_t column;
+    std::uint32_t bracket_depth;
 
     std::uint32_t indent_size;
     StackVector<std::uint32_t, 256> indent_stack;
@@ -75,6 +76,7 @@ private:
     bool lex_operator(Vector<Token>& out) noexcept;
     bool lex_newline_indent(Vector<Token>& out) noexcept;
     void skip_comment() noexcept;
+    void skip_newline() noexcept;
 
     std::uint32_t consume_digits(bool (*pred)(unsigned int)) noexcept;
     std::uint32_t consume_exponent() noexcept;
@@ -188,6 +190,7 @@ Lexer::Lexer(const char* source,
                                                                  cursor(const_cast<char*>(source)),
                                                                  line(1),
                                                                  column(1),
+                                                                 bracket_depth(0),
                                                                  indent_size(INDENT_UNDEFINED),
                                                                  logger(logger)
 {
@@ -679,6 +682,24 @@ bool Lexer::lex_delimiter(Vector<Token>& out) noexcept
     {
         this->advance();
 
+        // Track bracket depth
+        switch(it->second)
+        {
+            case Delimiter::LParen:
+            case Delimiter::LBracket:
+            case Delimiter::LBrace:
+                this->bracket_depth++;
+                break;
+            case Delimiter::RParen:
+            case Delimiter::RBracket:
+            case Delimiter::RBrace:
+                if(this->bracket_depth > 0)
+                    this->bracket_depth--;
+                break;
+            default:
+                break;
+        }
+
         out.emplace_back(std::move(d),
                          Token::Kind::Delimiter,
                          static_cast<std::uint32_t>(it->second),
@@ -786,6 +807,59 @@ bool Lexer::emit_indentation(std::uint32_t spaces, Vector<Token>& out) noexcept
 
 bool Lexer::lex_newline_indent(Vector<Token>& out) noexcept
 {
+    // Inside brackets: consume newlines but don't emit NEWLINE/INDENT/DEDENT
+    if(this->bracket_depth > 0)
+    {
+        if(*this->cursor == '\r')
+        {
+            this->cursor++;
+
+            if(*this->cursor == '\n')
+                this->cursor++;
+        }
+        else
+        {
+            this->cursor++;
+        }
+
+        this->line++;
+        this->column = 1;
+
+        // Skip blank lines and leading whitespace
+        while(!this->at_end())
+        {
+            if(*this->cursor == ' ' || *this->cursor == '\t')
+            {
+                this->cursor++;
+                this->column++;
+            }
+            else if(this->is_newline(static_cast<unsigned int>(*this->cursor)))
+            {
+                if(*this->cursor == '\r')
+                {
+                    this->cursor++;
+
+                    if(*this->cursor == '\n')
+                        this->cursor++;
+                }
+                else
+                {
+                    this->cursor++;
+                }
+
+                this->line++;
+                this->column = 1;
+            }
+            else
+            {
+                break;
+            }
+        }
+
+        return true;
+    }
+
+    // Outside brackets: normal newline/indent handling
     out.emplace_back(StringD(), Token::Kind::Newline, 0, this->column, this->line);
 
     if(*this->cursor == '\r')
@@ -847,6 +921,15 @@ void Lexer::skip_comment() noexcept
         this->advance();
 }
 
+void Lexer::skip_newline() noexcept
+{
+    if(*this->cursor == '\r')
+        this->advance();
+
+    if(*this->cursor == '\n')
+        this->advance();
+}
+
 bool Lexer::tokenize(Vector<Token>& out) noexcept
 {
     this->logger->trace("Lexing source code");
@@ -865,8 +948,24 @@ bool Lexer::tokenize(Vector<Token>& out) noexcept
         {
             this->advance();
 
-            while(!this->at_end() && (this->is_newline(static_cast<unsigned int>(*this->cursor)) || *this->cursor == ' '))
-                this->advance();
+            while(!this->at_end())
+            {
+                if(this->is_newline(static_cast<unsigned int>(*this->cursor)))
+                {
+                    this->skip_newline();
+                    this->line++;
+                    this->column = 1;
+                }
+                else if(*this->cursor == ' ')
+                {
+                    this->advance();
+                    this->column++;
+                }
+                else
+                {
+                    break;
+                }
+            }
 
             continue;
         }
@@ -1531,7 +1630,6 @@ struct Parser
     Node* parse_statement() noexcept
     {
         this->skip_newlines();
-        this->skip_dedents();
 
         if(this->at_end())
             return nullptr;
@@ -2116,9 +2214,22 @@ struct Parser
         std::uint32_t column = this->current().column;
         this->advance();
 
-        Node* target = this->parse_primary();
+        Vector<Node*> targets;
 
-        if(target == nullptr)
+        while(!this->at_end() && !this->match_keyword(Keyword::In))
+        {
+            Node* target = this->parse_primary();
+
+            if(target == nullptr)
+                return nullptr;
+
+            targets.push_back(target);
+
+            if(this->match_delimiter(Delimiter::Comma))
+                this->advance();
+        }
+
+        if(targets.size() == 0)
             return nullptr;
 
         if(!this->expect_keyword(Keyword::In))
@@ -2132,7 +2243,9 @@ struct Parser
         if(!this->expect_delimiter(Delimiter::Colon))
             return nullptr;
 
-        auto* node = this->arena.emplace<ForNode>(target, iter, line, column);
+        auto* node = this->arena.emplace<ForNode>(iter, line, column);
+
+        node->targets = std::move(targets);
 
         if(!this->check(Token::Kind::Newline))
             node->body.push_back(this->parse_statement());
@@ -2165,9 +2278,22 @@ struct Parser
         if(!this->expect_keyword(Keyword::For))
             return nullptr;
 
-        Node* target = this->parse_primary();
+        Vector<Node*> targets;
 
-        if(target == nullptr)
+        while(!this->at_end() && !this->match_keyword(Keyword::In))
+        {
+            Node* target = this->parse_primary();
+
+            if(target == nullptr)
+                return nullptr;
+
+            targets.push_back(target);
+
+            if(this->match_delimiter(Delimiter::Comma))
+                this->advance();
+        }
+
+        if(targets.size() == 0)
             return nullptr;
 
         if(!this->expect_keyword(Keyword::In))
@@ -2181,7 +2307,9 @@ struct Parser
         if(!this->expect_delimiter(Delimiter::Colon))
             return nullptr;
 
-        auto* node = this->arena.emplace<AsyncForNode>(target, iter, line, column);
+        auto* node = this->arena.emplace<AsyncForNode>(iter, line, column);
+
+        node->targets = std::move(targets);
 
         if(!this->check(Token::Kind::Newline))
             node->body.push_back(this->parse_statement());
@@ -2513,41 +2641,55 @@ struct Parser
             this->advance();
         }
 
-        Node* type = nullptr;
-        StringD name;
+        Vector<StringD> names;
+        Vector<Node*> types;
 
         // Bare 'except:' (no type) — only valid without star
         if(!this->match_delimiter(Delimiter::Colon))
         {
-            // Exception type expression
-            type = this->parse_expr();
-
-            if(type == nullptr)
-                return nullptr;
-
-            // 'as name'
-            if(this->match_keyword(Keyword::As))
+            while(!this->at_end() && !this->match_delimiter(Delimiter::Colon))
             {
-                this->advance();
+                // Exception type expression
+                Node* type = this->parse_expr();
 
-                if(!this->check(Token::Kind::Identifier))
-                {
-                    this->error_at_current("Expected name after 'as', got \"{}\"",
-                                           this->current().value);
-
+                if(type == nullptr)
                     return nullptr;
+
+                types.push_back(type);
+
+                // 'as name'
+                if(this->match_keyword(Keyword::As))
+                {
+                    this->advance();
+
+                    if(!this->check(Token::Kind::Identifier))
+                    {
+                        this->error_at_current("Expected name after 'as', got \"{}\"",
+                                            this->current().value);
+
+                        return nullptr;
+                    }
+
+                    names.emplace_back(StringD::make_from_c_str(this->current().value.c_str(),
+                                                                this->current().value.size()));
+
+                    this->advance();
+                } else {
+                    // emplace empty name
+                    names.emplace_back(StringD());
                 }
 
-                name = std::move(StringD::make_from_c_str(this->current().value.c_str(),
-                                                          this->current().value.size()));
-                this->advance();
+                if(this->match_delimiter(Delimiter::Comma))
+                    this->advance();
             }
         }
 
         if(!this->expect_delimiter(Delimiter::Colon))
             return nullptr;
 
-        auto* handler = this->arena.emplace<ExceptNode>(type, std::move(name), is_star, line, column);
+        auto* handler = this->arena.emplace<ExceptNode>(is_star, line, column);
+        handler->types = std::move(types);
+        handler->names = std::move(names);
 
         if(!this->check(Token::Kind::Newline))
         {
@@ -2752,8 +2894,6 @@ struct Parser
             return nullptr;
         }
 
-        // concatenate import name, i.e from . | from .module | from os.path | from ...
-
         const char* start = this->current().value.c_str();
         std::size_t count = this->current().value.size();
 
@@ -2772,17 +2912,22 @@ struct Parser
 
         auto* node = this->arena.emplace<ImportFromNode>(std::move(module), line, column);
 
+        bool parenthesized = false;
+
         if(this->match_delimiter(Delimiter::LParen))
+        {
+            parenthesized = true;
             this->advance();
+        }
 
         do
         {
-            this->skip_whitespace_in_bracket();
+            if(parenthesized)
+                this->skip_whitespace_in_bracket();
 
-            if(this->match_delimiter(Delimiter::RParen))
+            if(parenthesized && this->match_delimiter(Delimiter::RParen))
                 break;
 
-            // Identifier or *
             if(!this->check(Token::Kind::Identifier) && !this->match_operator(Operator::Multiplication))
             {
                 this->error(this->current().line,
@@ -2821,10 +2966,13 @@ struct Parser
 
         } while(this->match_delimiter(Delimiter::Comma) && (this->advance(), true));
 
-        this->skip_whitespace_in_bracket();
+        if(parenthesized)
+        {
+            this->skip_whitespace_in_bracket();
 
-        if(this->match_delimiter(Delimiter::RParen))
-            this->advance();
+            if(!this->expect_delimiter(Delimiter::RParen))
+                return nullptr;
+        }
 
         return node;
     }
@@ -3596,6 +3744,13 @@ struct Parser
                     return nullptr;
 
                 targets.push_back(target);
+            }
+
+            if(this->at_end() || this->check(Token::Kind::Newline))
+            {
+                TupleNode* tup = this->arena.emplace<TupleNode>(line, column);
+                tup->elts = std::move(targets);
+                return tup;
             }
 
             // We must be at '=' now
@@ -4936,7 +5091,7 @@ struct Parser
             std::uint32_t star_column = this->current().column;
             this->advance();
 
-            Node* value = this->parse_expr();
+            Node* value = this->parse_postfix();
 
             if(value == nullptr)
                 return nullptr;
@@ -5040,6 +5195,43 @@ bool AST::parse(const StringD& source_code, const Vector<Token>& tokens, bool de
 
     this->_root = parser.arena.emplace<ModuleNode>();
 
+    // Helper to extract a source line by line number
+    auto get_source_line = [&](std::uint32_t line_num) -> StringD
+    {
+        const char* p = source_code.data();
+        std::uint32_t current_line = 1;
+
+        while(*p != '\0' && current_line < line_num)
+        {
+            if(*p == '\n')
+                current_line++;
+
+            p++;
+        }
+
+        const char* line_start = p;
+        const char* line_end = p;
+
+        while(*line_end != '\0' && *line_end != '\n')
+            line_end++;
+
+        return StringD::make_from_c_str(line_start, static_cast<std::uint32_t>(line_end - line_start));
+    };
+
+    // Find the last line number covered by a statement
+    auto get_end_line = [](Node* stmt) -> std::uint32_t
+    {
+        std::uint32_t end_line = stmt->line();
+
+        visit(stmt, [&](Node* node, std::uint32_t) -> bool {
+            end_line = std::max(end_line, node->line());
+
+            return true;
+        });
+
+        return end_line;
+    };
+
     while(!parser.at_end())
     {
         parser.skip_newlines();
@@ -5054,6 +5246,19 @@ bool AST::parse(const StringD& source_code, const Vector<Token>& tokens, bool de
 
         if(debug)
         {
+            std::uint32_t start_line = stmt->line();
+            std::uint32_t end_line = get_end_line(stmt);
+
+            this->_logger->debug("{0:─^{1}}", "", 60);
+
+            for(std::uint32_t l = start_line; l <= end_line; l++)
+            {
+                StringD src = get_source_line(l);
+                this->_logger->debug("{:>4} │ {}", l, src);
+            }
+
+            this->_logger->debug("{0: ^{1}}", "", 60);
+
             visit(stmt, [&](Node* node, std::uint32_t depth) -> bool {
                 node->debug(this->_logger, depth * 2);
                 return true;
@@ -5207,12 +5412,13 @@ void node_children(Node* node, Vector<Node*>& out) noexcept
             auto* n = static_cast<WalrusAssignNode*>(node);
             if(n->target) out.push_back(n->target);
             if(n->value) out.push_back(n->value);
+            break;
         }
         case ASTNodeFor:
         {
             auto* n = static_cast<ForNode*>(node);
-            if(n->target) out.push_back(n->target);
             if(n->iter) out.push_back(n->iter);
+            for(auto* c : n->targets) out.push_back(c);
             for(auto* c : n->body) out.push_back(c);
             for(auto* c : n->orelse) out.push_back(c);
             break;
@@ -5220,8 +5426,8 @@ void node_children(Node* node, Vector<Node*>& out) noexcept
         case ASTNodeAsyncFor:
         {
             auto* n = static_cast<AsyncForNode*>(node);
-            if(n->target) out.push_back(n->target);
             if(n->iter) out.push_back(n->iter);
+            for(auto* c : n->targets) out.push_back(c);
             for(auto* c : n->body) out.push_back(c);
             for(auto* c : n->orelse) out.push_back(c);
             break;
@@ -5267,7 +5473,7 @@ void node_children(Node* node, Vector<Node*>& out) noexcept
         case ASTNodeExcept:
         {
             auto* n = static_cast<ExceptNode*>(node);
-            if(n->type) out.push_back(n->type);
+            for(auto* c : n->types) out.push_back(c);
             for(auto* c : n->body) out.push_back(c);
             break;
         }
@@ -5464,10 +5670,12 @@ void node_children(Node* node, Vector<Node*>& out) noexcept
             auto* n = static_cast<MatchMappingNode*>(node);
             for(auto* c : n->keys) out.push_back(c);
             for(auto* c : n->patterns) out.push_back(c);
+            break;
         }
         case ASTNodeMatchClass:
         {
             auto* n = static_cast<MatchClassNode*>(node);
+            if(n->cls) out.push_back(n->cls);
             for(auto* c : n->patterns) out.push_back(c);
             for(auto* c : n->kwd_patterns) out.push_back(c);
             break;

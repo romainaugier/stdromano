@@ -389,6 +389,14 @@ TEST_CASE(test_iterators)
 
     // Iterator subscript
     ASSERT_EQUAL("b", it[1].get_data());
+
+    // Empty iterator
+    stdromano::Vector<TestObject> empty_vec;
+
+    for(auto& obj : empty_vec)
+    {
+        ASSERT(false);
+    }
 }
 
 TEST_CASE(test_const_iterators)

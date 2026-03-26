@@ -539,14 +539,13 @@ struct WalrusAssignNode : Node
 
 struct ForNode : Node
 {
-    Node* target;
+    Vector<Node*> targets;
     Node* iter;
     Vector<Node*> body;
     Vector<Node*> orelse;
 
-    ForNode(Node* target, Node* iter, std::uint32_t line, std::uint32_t column) : Node(ASTNodeFor, line, column),
-                                                                                  target(target),
-                                                                                  iter(iter) {}
+    ForNode(Node* iter, std::uint32_t line, std::uint32_t column) : Node(ASTNodeFor, line, column),
+                                                                    iter(iter) {}
 
     virtual const char* type_str() const noexcept override { return "FOR"; }
 
@@ -558,14 +557,13 @@ struct ForNode : Node
 
 struct AsyncForNode : Node
 {
-    Node* target;
+    Vector<Node*> targets;
     Node* iter;
     Vector<Node*> body;
     Vector<Node*> orelse;
 
-    AsyncForNode(Node* target, Node* iter, std::uint32_t line, std::uint32_t column) : Node(ASTNodeAsyncFor, line, column),
-                                                                                       target(target),
-                                                                                       iter(iter) {}
+    AsyncForNode(Node* iter, std::uint32_t line, std::uint32_t column) : Node(ASTNodeAsyncFor, line, column),
+                                                                         iter(iter) {}
 
     virtual const char* type_str() const noexcept override { return "ASYNC_FOR"; }
 
@@ -736,15 +734,13 @@ struct TryNode : Node
 
 struct ExceptNode : Node
 {
-    Node* type; // exception type, nullptr for 'except:'
-    StringD name;
+    Vector<Node*> types; // exception type, empty for 'except:'
+    Vector<StringD> names;
     Vector<Node*> body;
     bool is_star; // except* for exception groups
 
-    ExceptNode(Node* type, StringD name, bool is_star, std::uint32_t line, std::uint32_t column) : Node(ASTNodeExcept, line, column),
-                                                                                                   type(type),
-                                                                                                   name(std::move(name)),
-                                                                                                   is_star(is_star) {}
+    ExceptNode(bool is_star, std::uint32_t line, std::uint32_t column) : Node(ASTNodeExcept, line, column),
+                                                                         is_star(is_star) {}
 
     virtual const char* type_str() const noexcept override { return "EXCEPT"; }
 
@@ -1552,7 +1548,9 @@ struct AssertionNode : Node
     Node* expr;
     Node* message;
 
-    AssertionNode(Node* expr, Node* message, std::uint32_t line, std::uint32_t column) : Node(ASTNodeAssertion, line, column) {}
+    AssertionNode(Node* expr, Node* message, std::uint32_t line, std::uint32_t column) : Node(ASTNodeAssertion, line, column),
+                                                                                         expr(expr),
+                                                                                         message(message) {}
 
     virtual const char* type_str() const noexcept override { return "ASSERTION"; }
 
