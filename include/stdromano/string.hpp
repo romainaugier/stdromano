@@ -1528,6 +1528,18 @@ StringD join(const Container& container,
     return res;
 }
 
+// Returns any object as a formatted string
+template<typename T>
+inline StringD to_string(const T& t) noexcept
+{
+    return StringD::make_fmt("{}", t);
+}
+
+inline bool operator==(const char* lhs, const StringD& rhs) noexcept
+{
+    return std::strcmp(lhs, rhs.c_str()) == 0;
+}
+
 #if defined(STDROMANO_WIN)
 STDROMANO_EXPIMP_TEMPLATE template class STDROMANO_API String<>;
 #endif /* defined(STDROMANO_WIN) */

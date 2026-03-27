@@ -3,12 +3,13 @@
 // All rights reserved.
 
 #include "stdromano/string.hpp"
-#include "stdromano/logger.hpp"
 #include "stdromano/simd.hpp"
 #include "test.hpp"
 
 #define STDROMANO_ENABLE_PROFILING
 #include "stdromano/profiling.hpp"
+
+#include "spdlog/spdlog.h"
 
 using namespace stdromano;
 
@@ -17,14 +18,12 @@ String<> create_large_string(std::size_t size)
     String<> result;
 
     for(std::size_t i = 0; i < size; ++i)
-    {
         result.push_back(static_cast<char>('A' + (i % 26)));
-    }
 
     return result;
 }
 
-TEST_CASE(TestConstruction)
+TEST_CASE(test_construction)
 {
     String<> empty_str;
     ASSERT_EQUAL(0, empty_str.size());
@@ -40,7 +39,7 @@ TEST_CASE(TestConstruction)
     ASSERT_EQUAL(0, std::strcmp(fmt_str.c_str(), "Hello World"));
 }
 
-TEST_CASE(TestMakeRef)
+TEST_CASE(test_make_ref)
 {
     const char* raw = "Reference";
     String<> ref = String<>::make_ref(raw, std::strlen(raw));
@@ -55,7 +54,7 @@ TEST_CASE(TestMakeRef)
     ASSERT_EQUAL(str.size(), ref_from_str.size());
 }
 
-TEST_CASE(TestComparison)
+TEST_CASE(test_comparison)
 {
     String<> str1("Hello");
     String<> str2("Hello");
@@ -80,7 +79,7 @@ TEST_CASE(TestComparison)
     {
         simd_force_vectorization_mode(mode);
 
-        log_debug("strcmp vectorization mode: {}", simd_get_vectorization_mode_as_string());
+        spdlog::debug("strcmp vectorization mode: {}", simd_get_vectorization_mode_as_string());
 
         for(std::size_t i = 0; i < 10; ++i)
         {
@@ -97,7 +96,7 @@ TEST_CASE(TestComparison)
     }
 }
 
-TEST_CASE(TestPushBack)
+TEST_CASE(test_pushback)
 {
     String<> str;
     str.push_back('A');
@@ -113,7 +112,7 @@ TEST_CASE(TestPushBack)
     ASSERT_EQUAL(0, std::strcmp(str.c_str(), "ABBBBBBBBBB"));
 }
 
-TEST_CASE(TestAppendPrepend)
+TEST_CASE(test_append_prepend)
 {
     String<> str("Middle");
 
@@ -142,7 +141,7 @@ TEST_CASE(TestAppendPrepend)
 
 }
 
-TEST_CASE(TestCaseConversion)
+TEST_CASE(test_case_conversion)
 {
     String<> str("Hello World");
 
@@ -161,7 +160,7 @@ TEST_CASE(TestCaseConversion)
     ASSERT_EQUAL(0, std::strcmp(empty_str.capitalize().c_str(), ""));
 }
 
-TEST_CASE(TestStrip)
+TEST_CASE(test_strip)
 {
     String<> str("  Hello World  ");
 
@@ -194,7 +193,7 @@ TEST_CASE(TestStrip)
     ASSERT_EQUAL(0, std::strncmp(stripped_hello_ref.c_str(), "Hello", stripped_hello_ref.size()));
 }
 
-TEST_CASE(TestStartsWithEndsWith)
+TEST_CASE(test_startswith_endswith)
 {
     String<> str("Hello World");
 
@@ -214,7 +213,7 @@ TEST_CASE(TestStartsWithEndsWith)
     ASSERT(!str.endswith("Long Hello World"));
 }
 
-TEST_CASE(TestFind)
+TEST_CASE(test_fin)
 {
     String<> str("Hello Hello World");
 
@@ -228,7 +227,7 @@ TEST_CASE(TestFind)
     ASSERT_EQUAL(-1, empty_str.find("a"));
 }
 
-TEST_CASE(TestSplit)
+TEST_CASE(test_split)
 {
     String<> str("Hello,World,Test");
     String<> sep(",");
@@ -280,7 +279,7 @@ TEST_CASE(TestSplit)
     ASSERT_EQUAL(0, std::strncmp(rlsplit.c_str(), "Hello,World", rlsplit.size()));
 }
 
-TEST_CASE(TestReferenceStringRestrictions)
+TEST_CASE(test_ref_string_restrictions)
 {
     const char* raw = "Immutable";
     String<> ref = String<>::make_ref(raw, std::strlen(raw));
@@ -290,7 +289,7 @@ TEST_CASE(TestReferenceStringRestrictions)
     ASSERT_EQUAL(std::strlen(raw), ref.size());
 }
 
-TEST_CASE(TestLargeString)
+TEST_CASE(test_large_string)
 {
     String<> large_str = create_large_string(1000);
     ASSERT_EQUAL(1000, large_str.size());
@@ -303,7 +302,7 @@ TEST_CASE(TestLargeString)
     ASSERT_EQUAL(0, large_str.data()[large_str.size()]);
 }
 
-TEST_CASE(TestCopyConstructor)
+TEST_CASE(test_copy_constructor)
 {
     String<> local("Hello");
     String<> local_copy(local);
@@ -330,7 +329,7 @@ TEST_CASE(TestCopyConstructor)
     ASSERT(ref == ref_copy);
 }
 
-TEST_CASE(TestMoveConstructor)
+TEST_CASE(test_move_constructor)
 {
     String<> local("Hello");
     String<> local_moved(std::move(local));
@@ -355,7 +354,7 @@ TEST_CASE(TestMoveConstructor)
     ASSERT_EQUAL(0, ref.size());
 }
 
-TEST_CASE(TestCopyAssignment)
+TEST_CASE(test_copy_assignment)
 {
     String<> local("Hello");
     String<> target;
@@ -387,7 +386,7 @@ TEST_CASE(TestCopyAssignment)
     ASSERT_EQUAL(0, std::strcmp(self.c_str(), "Self"));
 }
 
-TEST_CASE(TestMoveAssignment)
+TEST_CASE(test_move_assignment)
 {
     String<> local("Hello");
     String<> target;
@@ -419,13 +418,13 @@ TEST_CASE(TestMoveAssignment)
     ASSERT_EQUAL(0, std::strcmp(self.c_str(), "Self"));
 }
 
-TEST_CASE(TestZeroedString)
+TEST_CASE(test_zeroed_string)
 {
     const String<> zeroed = String<>::make_zeroed(2048);
     ASSERT_EQUAL(2048, zeroed.capacity());
 }
 
-TEST_CASE(TestReplace)
+TEST_CASE(test_replace)
 {
     const String<> s = "this,string,is,sep,by,commas";
 
@@ -434,7 +433,7 @@ TEST_CASE(TestReplace)
     ASSERT_EQUAL(-1, r_without_commas.find(","));
 }
 
-TEST_CASE(TestZFill)
+TEST_CASE(test_zfill)
 {
     const String<> s = "1";
 
@@ -443,14 +442,14 @@ TEST_CASE(TestZFill)
     ASSERT_EQUAL(0, std::strcmp(zfilled.c_str(), "00000001"));
 }
 
-TEST_CASE(TestLongLongConversion)
+TEST_CASE(test_longlong_conversion)
 {
     const String<> s = "1";
 
     ASSERT_EQUAL(1, s.to_long_long());
 }
 
-TEST_CASE(TestDoubleConversion)
+TEST_CASE(test_double_conversion)
 {
     const String<> s = "1.0";
 
@@ -478,7 +477,7 @@ TEST_CASE(TestBoolConversion)
     ASSERT_EQUAL(false, _FALSE.to_bool());
 }
 
-TEST_CASE(TestSubStr)
+TEST_CASE(test_substr)
 {
     const StringD s = "Hello World!";
     const StringD w = StringD::make_ref("World!");
@@ -488,7 +487,7 @@ TEST_CASE(TestSubStr)
     ASSERT_EQUAL(0, std::strncmp(w2.data(), s.substr(6, 3).data(), w2.size()));
 }
 
-TEST_CASE(TestClear)
+TEST_CASE(test_clear)
 {
     StringD s = "Hello World!";
 
@@ -496,7 +495,7 @@ TEST_CASE(TestClear)
     ASSERT_EQUAL(0, s.size());
 }
 
-TEST_CASE(TestErase)
+TEST_CASE(test_erase)
 {
     StringD s = "Hello World!";
 
@@ -505,7 +504,7 @@ TEST_CASE(TestErase)
     ASSERT_EQUAL(0, std::strncmp(s.c_str(), "Hello", 5));
 }
 
-TEST_CASE(TestShrinkToFit)
+TEST_CASE(test_shrinktofit)
 {
     StringD s = "Hello World!";
 
@@ -520,7 +519,7 @@ TEST_CASE(TestShrinkToFit)
     ASSERT_EQUAL(0, std::strncmp(s.c_str(), "Hello", 5));
 }
 
-TEST_CASE(TestInsertion)
+TEST_CASE(test_insertion)
 {
     String<> str = "Hello World";
 
@@ -535,7 +534,7 @@ TEST_CASE(TestInsertion)
     ASSERT_EQUAL(0, std::strcmp(str.c_str(), "42: Hello Beautiful Amazing World"));
 }
 
-TEST_CASE(TestIsDigit)
+TEST_CASE(test_is_digit)
 {
     String<> digits = "0123456789";
     String<> no_digits = "abcdef";
@@ -544,6 +543,13 @@ TEST_CASE(TestIsDigit)
     ASSERT_EQUAL(true, digits.is_digit());
     ASSERT_EQUAL(false, no_digits.is_digit());
     ASSERT_EQUAL(false, mixed.is_digit());
+}
+
+TEST_CASE(test_to_string)
+{
+    ASSERT_EQUAL(0, std::strcmp("1", stdromano::to_string(1).c_str()));
+    ASSERT_EQUAL(0, std::strcmp("123456789", stdromano::to_string(123456789).c_str()));
+    ASSERT_EQUAL(0, std::strcmp("1.5", stdromano::to_string(1.5).c_str()));
 }
 
 struct UTF8TestCase {
@@ -577,22 +583,22 @@ std::vector<UTF8TestCase> get_utf8_test_cases() {
     };
 }
 
-TEST_CASE(TestUTF8Validation)
+TEST_CASE(test_utf8_validation)
 {
     for(const auto& test : get_utf8_test_cases())
     {
         if(validate_utf8(reinterpret_cast<const char*>(test.data),
                          std::strlen(test.data)) != test.expected_valid)
         {
-            log_error("Invalid UTF-8 validation: expected {} for case {}",
-                      test.expected_valid,
-                      test.description);
+            spdlog::error("Invalid UTF-8 validation: expected {} for case {}",
+                          test.expected_valid,
+                          test.description);
             STDROMANO_ASSERT(0, "Invalid UTF-8 validation");
         }
     }
 }
 
-TEST_CASE(TestUTF8Iterator)
+TEST_CASE(test_utf8_iterator)
 {
     /* 1. ASCII-only string */
     {
@@ -764,35 +770,36 @@ int main()
 {
     TestRunner runner;
 
-    runner.add_test("Construction", TestConstruction);
-    runner.add_test("MakeRef", TestMakeRef);
-    runner.add_test("Comparison", TestComparison);
-    runner.add_test("PushBack", TestPushBack);
-    runner.add_test("AppendPrepend", TestAppendPrepend);
-    runner.add_test("CaseConversion", TestCaseConversion);
-    runner.add_test("Strip", TestStrip);
-    runner.add_test("StartsWithEndsWith", TestStartsWithEndsWith);
-    runner.add_test("Find", TestFind);
-    runner.add_test("Split", TestSplit);
-    runner.add_test("ReferenceStringRestrictions", TestReferenceStringRestrictions);
-    runner.add_test("LargeString", TestLargeString);
-    runner.add_test("CopyConstructor", TestCopyConstructor);
-    runner.add_test("MoveConstructor", TestMoveConstructor);
-    runner.add_test("CopyAssignment", TestCopyAssignment);
-    runner.add_test("MoveAssignment", TestMoveAssignment);
-    runner.add_test("ZeroedString", TestZeroedString);
-    runner.add_test("Replace", TestReplace);
-    runner.add_test("ZFill", TestZFill);
-    runner.add_test("LongLongConversion", TestLongLongConversion);
-    runner.add_test("DoubleConversion", TestDoubleConversion);
-    runner.add_test("SubStr", TestSubStr);
-    runner.add_test("Clear", TestClear);
-    runner.add_test("Erase", TestErase);
-    runner.add_test("ShrinkToFit", TestShrinkToFit);
-    runner.add_test("Insertion", TestInsertion);
-    runner.add_test("IsDigit", TestIsDigit);
-    runner.add_test("UTF-8 Validation", TestUTF8Validation);
-    runner.add_test("UTF-8 Iterator", TestUTF8Iterator);
+    runner.add_test("Construction", test_construction);
+    runner.add_test("MakeRef", test_make_ref);
+    runner.add_test("Comparison", test_comparison);
+    runner.add_test("PushBack", test_pushback);
+    runner.add_test("AppendPrepend", test_append_prepend);
+    runner.add_test("CaseConversion", test_case_conversion);
+    runner.add_test("Strip", test_strip);
+    runner.add_test("StartsWithEndsWith", test_startswith_endswith);
+    runner.add_test("Find", test_fin);
+    runner.add_test("Split", test_split);
+    runner.add_test("ReferenceStringRestrictions", test_ref_string_restrictions);
+    runner.add_test("LargeString", test_large_string);
+    runner.add_test("CopyConstructor", test_copy_constructor);
+    runner.add_test("MoveConstructor", test_move_constructor);
+    runner.add_test("CopyAssignment", test_copy_assignment);
+    runner.add_test("MoveAssignment", test_move_assignment);
+    runner.add_test("ZeroedString", test_zeroed_string);
+    runner.add_test("Replace", test_replace);
+    runner.add_test("ZFill", test_zfill);
+    runner.add_test("LongLongConversion", test_longlong_conversion);
+    runner.add_test("DoubleConversion", test_double_conversion);
+    runner.add_test("SubStr", test_substr);
+    runner.add_test("Clear", test_clear);
+    runner.add_test("Erase", test_erase);
+    runner.add_test("ShrinkToFit", test_shrinktofit);
+    runner.add_test("Insertion", test_insertion);
+    runner.add_test("IsDigit", test_is_digit);
+    runner.add_test("ToString", test_to_string);
+    runner.add_test("UTF-8 Validation", test_utf8_validation);
+    runner.add_test("UTF-8 Iterator", test_utf8_iterator);
 
     runner.run_all();
 

@@ -3,7 +3,8 @@
 // All rights reserved.
 
 #include "stdromano/regex.hpp"
-#include "stdromano/logger.hpp"
+
+#include "spdlog/spdlog.h"
 
 #include <cstring>
 #include <limits>
@@ -135,7 +136,6 @@ struct RegexCompiler
 
     void error(const char* msg) noexcept
     {
-        log_error("Regex compile error at position {}: {}", this->pos, msg);
         this->has_error = true;
     }
 
@@ -576,48 +576,48 @@ static void regex_disasm(const Regex::ByteCode& bytecode) noexcept
 
     while(i < bytecode.size())
     {
-        log_debug("{:04d}: ", i);
+        spdlog::debug("{:04d}: ", i);
 
         switch(static_cast<std::uint8_t>(bytecode[i]))
         {
             case RegexInstrOpCode_TestSingle:
-                log_debug("  TESTSINGLE '{}'", CHAR(bytecode[i + 1]));
+                spdlog::debug("  TESTSINGLE '{}'", CHAR(bytecode[i + 1]));
                 i += 2;
                 break;
             case RegexInstrOpCode_TestNegatedSingle:
-                log_debug("  TESTNEGSINGLE '{}'", CHAR(bytecode[i + 1]));
+                spdlog::debug("  TESTNEGSINGLE '{}'", CHAR(bytecode[i + 1]));
                 i += 2;
                 break;
             case RegexInstrOpCode_TestRange:
-                log_debug("  TESTRANGE '{}'-'{}'", CHAR(bytecode[i + 1]), CHAR(bytecode[i + 2]));
+                spdlog::debug("  TESTRANGE '{}'-'{}'", CHAR(bytecode[i + 1]), CHAR(bytecode[i + 2]));
                 i += 3;
                 break;
             case RegexInstrOpCode_TestNegatedRange:
-                log_debug("  TESTNEGRANGE '{}'-'{}'", CHAR(bytecode[i + 1]), CHAR(bytecode[i + 2]));
+                spdlog::debug("  TESTNEGRANGE '{}'-'{}'", CHAR(bytecode[i + 1]), CHAR(bytecode[i + 2]));
                 i += 3;
                 break;
             case RegexInstrOpCode_TestAny:
-                log_debug("  TESTANY");
+                spdlog::debug("  TESTANY");
                 i++;
                 break;
             case RegexInstrOpCode_TestDigit:
-                log_debug("  TESTDIGIT");
+                spdlog::debug("  TESTDIGIT");
                 i++;
                 break;
             case RegexInstrOpCode_TestWord:
-                log_debug("  TESTWORD");
+                spdlog::debug("  TESTWORD");
                 i++;
                 break;
             case RegexInstrOpCode_TestWhitespace:
-                log_debug("  TESTWHITESPACE");
+                spdlog::debug("  TESTWHITESPACE");
                 i++;
                 break;
             case RegexInstrOpCode_TestLowerCase:
-                log_debug("  TESTLOWERCASE");
+                spdlog::debug("  TESTLOWERCASE");
                 i++;
                 break;
             case RegexInstrOpCode_TestUpperCase:
-                log_debug("  TESTUPPERCASE");
+                spdlog::debug("  TESTUPPERCASE");
                 i++;
                 break;
             case RegexInstrOpCode_Jump:
@@ -630,13 +630,13 @@ static void regex_disasm(const Regex::ByteCode& bytecode) noexcept
                 switch(static_cast<std::uint8_t>(bytecode[i]))
                 {
                     case RegexInstrOpCode_Jump:
-                        log_debug("  JUMP {}{} -> {:04d}", offset > 0 ? "+" : "", offset, target);
+                        spdlog::debug("  JUMP {}{} -> {:04d}", offset > 0 ? "+" : "", offset, target);
                         break;
                     case RegexInstrOpCode_JumpEq:
-                        log_debug("  JUMPEQ {}{} -> {:04d}", offset > 0 ? "+" : "", offset, target);
+                        spdlog::debug("  JUMPEQ {}{} -> {:04d}", offset > 0 ? "+" : "", offset, target);
                         break;
                     case RegexInstrOpCode_JumpNeq:
-                        log_debug("  JUMPNEQ {}{} -> {:04d}", offset > 0 ? "+" : "", offset, target);
+                        spdlog::debug("  JUMPNEQ {}{} -> {:04d}", offset > 0 ? "+" : "", offset, target);
                         break;
                     default:
                         break;
@@ -647,35 +647,35 @@ static void regex_disasm(const Regex::ByteCode& bytecode) noexcept
                 break;
             }
             case RegexInstrOpCode_Accept:
-                log_debug("  ACCEPT");
+                spdlog::debug("  ACCEPT");
                 i++;
                 break;
             case RegexInstrOpCode_Fail:
-                log_debug("  FAIL");
+                spdlog::debug("  FAIL");
                 i++;
                 break;
             case RegexInstrOpCode_GroupStart:
-                log_debug("  GROUPSTART {}", static_cast<std::uint8_t>(bytecode[i + 1]));
+                spdlog::debug("  GROUPSTART {}", static_cast<std::uint8_t>(bytecode[i + 1]));
                 i += 2;
                 break;
             case RegexInstrOpCode_GroupEnd:
-                log_debug("  GROUPEND {}", static_cast<std::uint8_t>(bytecode[i + 1]));
+                spdlog::debug("  GROUPEND {}", static_cast<std::uint8_t>(bytecode[i + 1]));
                 i += 2;
                 break;
             case RegexInstrOpCode_IncPos:
-                log_debug("  INCPOS");
+                spdlog::debug("  INCPOS");
                 i++;
                 break;
             case RegexInstrOpCode_IncPosEq:
-                log_debug("  INCPOSEQ");
+                spdlog::debug("  INCPOSEQ");
                 i++;
                 break;
             case RegexInstrOpCode_SetFlag:
-                log_debug("  SETFLAG {}", static_cast<std::uint8_t>(bytecode[i + 1]));
+                spdlog::debug("  SETFLAG {}", static_cast<std::uint8_t>(bytecode[i + 1]));
                 i += 2;
                 break;
             default:
-                log_debug("  UNKNOWN 0x{:02x}", static_cast<std::uint8_t>(bytecode[i]));
+                spdlog::debug("  UNKNOWN 0x{:02x}", static_cast<std::uint8_t>(bytecode[i]));
                 i++;
                 break;
         }
@@ -935,7 +935,7 @@ bool regex_exec(RegexVM* vm) noexcept
             }
             default:
             {
-                log_error("Unknown instruction in regex VM: 0x{:02x} (pc {})", opcode, vm->pc);
+                spdlog::error("Unknown instruction in regex VM: 0x{:02x} (pc {})", opcode, vm->pc);
                 return false;
             }
         }
@@ -955,20 +955,20 @@ bool Regex::compile(const StringD& regex, std::uint32_t flags) noexcept
 
     if(flags & RegexFlags_DebugCompilation)
     {
-        log_debug("Compiling regex: {}", regex);
+        spdlog::debug("Compiling regex: {}", regex);
     }
 
     RegexCompiler compiler(regex.data(), regex.size());
 
     if(!compiler.compile_alternation())
     {
-        log_error("Failed to compile regex: {}", regex);
+        spdlog::error("Failed to compile regex: {}", regex);
         return false;
     }
 
     if(!compiler.at_end())
     {
-        log_error("Unexpected trailing characters in regex at position {}", compiler.pos);
+        spdlog::error("Unexpected trailing characters in regex at position {}", compiler.pos);
         return false;
     }
 
@@ -980,7 +980,7 @@ bool Regex::compile(const StringD& regex, std::uint32_t flags) noexcept
 
     if(flags & RegexFlags_DebugCompilation)
     {
-        log_debug("Regex disasm ({} groups)", this->_group_count);
+        spdlog::debug("Regex disasm ({} groups)", this->_group_count);
         regex_disasm(this->_bytecode);
     }
 

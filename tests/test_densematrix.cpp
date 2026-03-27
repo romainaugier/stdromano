@@ -11,6 +11,8 @@
 #define STDROMANO_ENABLE_PROFILING
 #include "stdromano/profiling.hpp"
 
+#include "spdlog/spdlog.h"
+
 #if STDROMANO_DEBUG
 #define NUM_TESTS 1
 #else
@@ -19,7 +21,9 @@
 
 int main() noexcept
 {
-    stdromano::log_info("Starting dense_matrix test");
+    spdlog::set_level(spdlog::level::debug);
+
+    spdlog::info("Starting dense_matrix test");
 
 #if defined(STDROMANO_ENABLE_OPENCL)
     stdromano::OpenCLConfig config;
@@ -32,7 +36,7 @@ int main() noexcept
 
     if(!manager.initialize(config))
     {
-        stdromano::log_error("Error initializing OpenCL");
+        spdlog::error("Error initializing OpenCL");
         return 0;
     }
 #endif /* defined(STDROMANO_ENABLE_OPENCL) */
@@ -52,7 +56,7 @@ int main() noexcept
     for(std::size_t i = 0; i < NUM_TESTS; i++)
     {
         SCOPED_PROFILE_START(stdromano::ProfileUnit::MilliSeconds, matmat_mul_cpu);
-        stdromano::DenseMatrixF C = A * B;
+        stdromano::DenseMatrixF C = (A * B).unwrap();
         SCOPED_PROFILE_STOP(matmat_mul_cpu);
 
 #if STDROMANO_DEBUG
@@ -61,23 +65,23 @@ int main() noexcept
     }
 
 #if defined(STDROMANO_ENABLE_OPENCL)
-    stdromano::DenseMatrixF A_gpu = A.to_backend(stdromano::LinAlgBackend_GPU);
-    stdromano::DenseMatrixF B_gpu = B.to_backend(stdromano::LinAlgBackend_GPU);
+    stdromano::DenseMatrixF A_gpu = A.to_backend(stdromano::LinAlgBackend_GPU).unwrap();
+    stdromano::DenseMatrixF B_gpu = B.to_backend(stdromano::LinAlgBackend_GPU).unwrap();
 
     for(std::size_t i = 0; i < NUM_TESTS; i++)
     {
         SCOPED_PROFILE_START(stdromano::ProfileUnit::MilliSeconds, matmat_mul_gpu);
-        stdromano::DenseMatrixF C_gpu = A_gpu * B_gpu;
+        stdromano::DenseMatrixF C_gpu = (A_gpu * B_gpu).unwrap();
         SCOPED_PROFILE_STOP(matmat_mul_gpu);
 
 #if STDROMANO_DEBUG
-        stdromano::DenseMatrixF C = C_gpu.to_backend(stdromano::LinAlgBackend_CPU);
+        stdromano::DenseMatrixF C = C_gpu.to_backend(stdromano::LinAlgBackend_CPU).unwrap();
         C.debug(10, 10);
 #endif /* defined(STDROMANO_DEBUG) */
     }
 #endif /* defined(STDROMANO_ENABLE_OPENCL) */
 
-    stdromano::log_info("Finished dense_matrix test");
+    spdlog::info("Finished dense_matrix test");
 
     return 0;
 }

@@ -3,124 +3,126 @@
 // All rights reserved.
 
 #include "stdromano/filesystem.hpp"
-#include "stdromano/logger.hpp"
+
 #include "test.hpp"
 
-TEST_CASE(TestPathExists)
+TEST_CASE(test_path_exists)
 {
-    ASSERT_EQUAL(true, stdromano::fs_path_exists(__FILE__));
-    ASSERT_EQUAL(false, stdromano::fs_path_exists(stdromano::StringD("{}n", __FILE__)));
+    ASSERT_EQUAL(true, stdromano::fs::path_exists(__FILE__));
+    ASSERT_EQUAL(false, stdromano::fs::path_exists(stdromano::StringD("{}n", __FILE__)));
 }
 
-TEST_CASE(TestParentDir)
+TEST_CASE(test_parent_dir)
 {
-    stdromano::log_info(stdromano::fs_parent_dir(__FILE__));
+    spdlog::info(stdromano::fs::parent_dir(__FILE__));
 }
 
-TEST_CASE(TestFilename)
+TEST_CASE(test_filename)
 {
-    stdromano::log_info(stdromano::fs_filename(__FILE__));
+    spdlog::info(stdromano::fs::filename(__FILE__));
 }
 
-TEST_CASE(TestExpandExecutable)
+TEST_CASE(test_expand_executable)
 {
-    stdromano::log_info(stdromano::fs_expand_from_executable_dir("test/expand/file.c"));
+    spdlog::info(stdromano::fs::expand_from_executable_dir("test/expand/file.c").unwrap());
 }
 
-TEST_CASE(TestLoadFileContent)
+TEST_CASE(test_expand_library)
 {
-    stdromano::String<> content = stdromano::load_file_content(__FILE__, "r");
-
-    ASSERT(!content.empty());
+    spdlog::info(stdromano::fs::expand_from_lib_dir("test/expand/file.c").unwrap());
 }
 
-TEST_CASE(TestListDir)
+TEST_CASE(test_load_file_content)
 {
-    const stdromano::StringD directory_path = stdromano::fs_parent_dir(__FILE__).copy();
-    stdromano::log_debug("Listing directory: {}", directory_path);
+    auto content = stdromano::fs::load_file_content(__FILE__, "r");
 
-    stdromano::ListDirIterator it;
+    ASSERT(!content.has_error());
+}
 
-    while(fs_list_dir(it, directory_path, stdromano::ListDirFlags_ListAll))
+TEST_CASE(test_list_dir)
+{
+    const stdromano::StringD directory_path = stdromano::fs::parent_dir(__FILE__).copy();
+    spdlog::debug("Listing directory: {}", directory_path);
+
+    stdromano::fs::ListDirIterator it;
+
+    while(stdromano::fs::list_dir(it, directory_path, stdromano::fs::ListDirFlags_ListAll))
     {
-        stdromano::log_debug(it.get_current_path());
-        stdromano::log_debug(stdromano::fs_filename(it.get_current_path()));
-        stdromano::log_debug("Is File: {} | Is Dir: {}", it.is_file(), it.is_directory());
+        spdlog::debug(it.get_current_path());
+        spdlog::debug(stdromano::fs::filename(it.get_current_path()));
+        spdlog::debug("Is File: {} | Is Dir: {}", it.is_file(), it.is_directory());
     }
 }
 
-TEST_CASE(TestFileDialog)
+TEST_CASE(test_file_dialog)
 {
-    const stdromano::String<> file_path =
-                   stdromano::open_file_dialog(stdromano::FileDialogMode_OpenFile,
-                                               "Open A File",
-                                               stdromano::fs_expand_from_executable_dir(""),
-                                               "*.cpp|*.h|*.txt");
+    const stdromano::String<> file_path = stdromano::fs::open_file_dialog(stdromano::fs::FileDialogMode_OpenFile,
+                                                                          "Open A File",
+                                                                          stdromano::fs::expand_from_executable_dir("").unwrap(),
+                                                                          "*.cpp|*.h|*.txt");
 
-    stdromano::log_debug("Chosen file: {}", file_path.empty() ? "None" : file_path.c_str());
+    spdlog::debug("Chosen file: {}", file_path.empty() ? "None" : file_path.c_str());
 
 
-    const stdromano::String<> dir_path =
-                   stdromano::open_file_dialog(stdromano::FileDialogMode_OpenDir,
-                                               "Select A Directory",
-                                               stdromano::fs_expand_from_executable_dir(""),
-                                               "");
+    const stdromano::String<> dir_path = stdromano::fs::open_file_dialog(stdromano::fs::FileDialogMode_OpenDir,
+                                                                         "Select A Directory",
+                                                                         stdromano::fs::expand_from_executable_dir("").unwrap(),
+                                                                         "");
 
-    stdromano::log_debug("Chosen directory: {}", dir_path.empty() ? "None" : dir_path.c_str());
+    spdlog::debug("Chosen directory: {}", dir_path.empty() ? "None" : dir_path.c_str());
 }
 
-TEST_CASE(TestWalk)
+TEST_CASE(test_walk)
 {
-    const stdromano::StringD directory_path = stdromano::fs_parent_dir(__FILE__).copy();
+    const stdromano::StringD directory_path = stdromano::fs::parent_dir(__FILE__).copy();
 
-    stdromano::log_debug("Walk: {}", directory_path);
+    spdlog::debug("Walk: {}", directory_path);
 
-    for(stdromano::WalkIterator it(directory_path, stdromano::ListDirFlags_ListAll);
-        it != stdromano::WalkIterator();
+    for(stdromano::fs::WalkIterator it(directory_path, stdromano::fs::ListDirFlags_ListAll);
+        it != stdromano::fs::WalkIterator();
         ++it)
     {
-        stdromano::log_debug(it->get_current_path());
+        spdlog::debug(it->get_current_path());
     }
 }
 
-TEST_CASE(TestCurrentDir)
+TEST_CASE(test_current_dir)
 {
-    const stdromano::StringD cwd = stdromano::fs_current_dir();
+    const stdromano::StringD cwd = stdromano::fs::current_dir();
 
-    stdromano::log_debug("CWD: {}", cwd);
+    spdlog::debug("CWD: {}", cwd);
 }
 
-TEST_CASE(TestTmpDir)
+TEST_CASE(test_tmp_dir)
 {
-    const stdromano::StringD tmp = stdromano::fs_tmp_dir();
+    const stdromano::StringD tmp = stdromano::fs::tmp_dir().unwrap();
 
-    stdromano::log_debug("TMP: {}", tmp);
+    spdlog::debug("TMP: {}", tmp);
 }
 
-TEST_CASE(TestHomeDir)
+TEST_CASE(test_home_dir)
 {
-    const stdromano::StringD home = stdromano::fs_home_dir();
+    const stdromano::StringD home = stdromano::fs::home_dir().unwrap();
 
-    stdromano::log_debug("HOME: {}", home);
+    spdlog::debug("HOME: {}", home);
 }
 
 int main()
 {
-    stdromano::set_log_level(stdromano::LogLevel::Debug);
+    TestRunner runner("filesystem");
 
-    TestRunner runner;
-
-    runner.add_test("PathExists", TestPathExists);
-    runner.add_test("ParentDir", TestParentDir);
-    runner.add_test("Filename", TestFilename);
-    runner.add_test("Expand Executable", TestExpandExecutable);
-    runner.add_test("Load File Content", TestLoadFileContent);
-    runner.add_test("List Dir", TestListDir);
+    runner.add_test("PathExists", test_path_exists);
+    runner.add_test("ParentDir", test_parent_dir);
+    runner.add_test("Filename", test_filename);
+    runner.add_test("Expand Executable", test_expand_executable);
+    runner.add_test("Expand Library", test_expand_library);
+    runner.add_test("Load File Content", test_load_file_content);
+    runner.add_test("List Dir", test_list_dir);
     // runner.add_test("File Dialog", TestFileDialog);
-    runner.add_test("CurrentDir", TestCurrentDir);
-    runner.add_test("TmpDir", TestTmpDir);
-    runner.add_test("HomeDir", TestHomeDir);
-    runner.add_test("Walk", TestWalk);
+    runner.add_test("CurrentDir", test_current_dir);
+    runner.add_test("TmpDir", test_tmp_dir);
+    runner.add_test("HomeDir", test_home_dir);
+    runner.add_test("Walk", test_walk);
 
     runner.run_all();
 

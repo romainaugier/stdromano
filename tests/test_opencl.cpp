@@ -5,13 +5,16 @@
 #if defined(STDROMANO_ENABLE_OPENCL)
 
 #include "stdromano/opencl.hpp"
-#include "stdromano/logger.hpp"
+
+#include "spdlog/spdlog.h"
 
 #define SIZE 1000
 
 int main()
 {
-    stdromano::log_info("Starting OpenCL test");
+    spdlog::set_level(spdlog::level::trace);
+
+    spdlog::info("Starting OpenCL test");
 
     stdromano::OpenCLConfig config;
     config.preferred_vendor = "NVIDIA";
@@ -22,7 +25,7 @@ int main()
 
     if(!manager.initialize(config))
     {
-        stdromano::log_error("Error during opencl test");
+        spdlog::error("Error during opencl test");
         return 0;
     }
 
@@ -48,15 +51,15 @@ int main()
                               },
                               cl::NDRange(SIZE)))
     {
-        stdromano::log_error("Error during opencl test");
+        spdlog::error("Error during opencl test");
         return 0;
     }
 
     double exec_time = manager.get_execution_time_ms(event);
 
-    stdromano::log_info("Executed opencl kernel in {} ms", exec_time);
+    spdlog::info("Executed opencl kernel in {} ms", exec_time);
 
-    stdromano::log_info("Finished OpenCL test");
+    spdlog::info("Finished OpenCL test");
 
     return 0;
 }

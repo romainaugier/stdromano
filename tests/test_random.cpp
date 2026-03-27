@@ -20,7 +20,7 @@ TEST_CASE(test_random_seed_nonzero)
     // A zero seed is technically possible but astronomically unlikely
     // Run multiple times to be safe
     bool any_nonzero = false;
-    
+
     for(std::int32_t i = 0; i < 32; ++i)
     {
         if(stdromano::random_seed() != 0)
@@ -29,19 +29,19 @@ TEST_CASE(test_random_seed_nonzero)
             break;
         }
     }
-    
+
     ASSERT(any_nonzero);
 }
 
 TEST_CASE(test_random_seed_uniqueness)
 {
     stdromano::HashSet<std::uint32_t> seeds;
-    
+
     constexpr std::uint32_t count = 256;
-    
+
     for(std::uint32_t i = 0; i < count; ++i)
         seeds.insert(stdromano::random_seed());
-    
+
     // With a proper CSPRNG, collisions in 256 draws from a 32-bit space are extremely unlikely
     ASSERT(seeds.size() >= static_cast<size_t>(count - 1));
 }
@@ -72,20 +72,20 @@ TEST_CASE(test_pcg_float_distribution)
 {
     // Very rough uniformity check: split [0,1) into 10 bins and ensure none are empty
     std::uint32_t bins[10] = {};
-    
+
     constexpr std::uint32_t n = 100000;
-    
+
     for(std::uint32_t i = 0; i < n; ++i)
     {
         const float val = stdromano::pcg_float(i);
         std::uint32_t bin = static_cast<std::uint32_t>(val * 10.0f);
-        
+
         if(bin >= 10)
             bin = 9;
-        
+
         ++bins[bin];
     }
-    
+
     // Each bin should have roughly n/10 = 10000 entries; assert at least 5%
     for(std::uint32_t i = 0; i < 10; ++i)
         ASSERT(bins[i] > n / 20);
@@ -116,13 +116,13 @@ TEST_CASE(test_wang_hash_avalanche)
     // Check that at least several bits differ (hamming distance)
     std::uint32_t diff = h0 ^ h1;
     std::int32_t bit_diff = 0;
-    
+
     while(diff)
     {
         bit_diff += diff & 1u;
         diff >>= 1u;
     }
-    // 
+    //
     // A good hash should flip roughly half the bits; require at least 4
     ASSERT(bit_diff >= 4);
 }
@@ -132,9 +132,9 @@ TEST_CASE(test_wang_hash_avalanche)
 TEST_CASE(test_xorshift32_nonzero_propagation)
 {
     // xorshift32 with a nonzero input should produce nonzero output
-    
+
     std::uint32_t state = 1u;
-    
+
     for(std::uint32_t i = 0; i < 10000; ++i)
     {
         state = stdromano::xorshift32(state);
@@ -147,13 +147,13 @@ TEST_CASE(test_xorshift32_no_short_cycle)
     // Ensure no trivially short cycle (at least 1000 unique values)
     stdromano::HashSet<std::uint32_t> seen;
     std::uint32_t state = 42u;
-    
+
     for(std::uint32_t i = 0; i < 1000; ++i)
     {
         state = stdromano::xorshift32(state);
         seen.insert(state);
     }
-    
+
     ASSERT(seen.size() == 1000);
 }
 
@@ -183,7 +183,7 @@ TEST_CASE(test_random_int_range_bounds)
 {
     constexpr std::uint32_t low = 10;
     constexpr std::uint32_t high = 50;
-    
+
     for(std::uint32_t i = 0; i < 10000; ++i)
     {
         const std::uint32_t val = stdromano::random_int_range(i, low, high);
@@ -207,12 +207,12 @@ TEST_CASE(test_random_int_range_coverage)
     // Ensure all values in a small range are eventually hit
     constexpr std::uint32_t low = 0;
     constexpr std::uint32_t high = 5;
-    
+
     stdromano::HashSet<std::uint32_t> seen;
-    
+
     for(std::uint32_t i = 0; i < 10000; ++i)
         seen.insert(stdromano::random_int_range(i, low, high));
-    
+
     for(std::uint32_t v = low; v < high; ++v)
         ASSERT(seen.count(v) > 0);
 }
@@ -237,17 +237,17 @@ TEST_CASE(test_xoshiro_next_uint64_sequence)
 {
     stdromano::seed_xoshiro(42);
     stdromano::HashSet<std::uint64_t> seen;
-    
+
     for(std::uint32_t i = 0; i < 1000; ++i)
         seen.insert(stdromano::xoshiro_next_uint64());
-    
+
     ASSERT(seen.size() == 1000);
 }
 
 TEST_CASE(test_xoshiro_next_float_range)
 {
     stdromano::seed_xoshiro(99);
-    
+
     for(std::uint64_t i = 0; i < 10000; ++i)
     {
         const float val = stdromano::xoshiro_next_float();
@@ -275,10 +275,10 @@ TEST_CASE(test_xoshiro_seeding_resets_state)
 TEST_CASE(test_next_random_uint32_uniqueness)
 {
     stdromano::HashSet<std::uint32_t> seen;
-    
+
     for(std::uint32_t i = 0; i < 10000; ++i)
         seen.insert(stdromano::next_random_uint32());
-    
+
     // Allow a tiny number of collisions in 2^32 space
     ASSERT(seen.size() > 9900);
 }
@@ -297,7 +297,7 @@ TEST_CASE(test_next_random_int_range_bounds)
 {
     constexpr std::uint32_t low = 100;
     constexpr std::uint32_t high = 200;
-    
+
     for(std::uint32_t i = 0; i < 10000; ++i)
     {
         const std::uint32_t val = stdromano::next_random_int_range(low, high);
@@ -311,36 +311,36 @@ TEST_CASE(test_thread_safety)
     // Spawn several threads that each call the atomic generators concurrently
     constexpr std::uint32_t num_threads = 8;
     constexpr std::uint32_t per_thread = 10000;
-    
+
     stdromano::Vector<stdromano::Vector<std::uint32_t>> results(num_threads);
     stdromano::ThreadPoolWaiter waiter;
-    
-    for(std::uint32_t i = 0; i < num_threads; i++) 
+
+    for(std::uint32_t i = 0; i < num_threads; i++)
     {
         stdromano::global_threadpool().add_work([&, i](){
             for(std::uint32_t j = 0; j < per_thread; j++)
                 results[i].push_back(stdromano::next_random_uint32());
         }, &waiter);
     }
-    
+
     waiter.wait();
 
     // Collect all values and check for a reasonable level of uniqueness
     stdromano::HashSet<std::uint32_t> all;
-    
+
     for(const auto& v : results)
         for(std::uint32_t val : v)
             all.insert(val);
-            
+
     const std::size_t total = num_threads * per_thread;
-    
+
     // With good hashing, the vast majority should be unique
     ASSERT(all.size() > total * 9 / 10);
 }
 
 int main()
 {
-    TestRunner runner;
+    TestRunner runner("random");
 
     // random_seed
     runner.add_test("random_seed_nonzero", test_random_seed_nonzero);

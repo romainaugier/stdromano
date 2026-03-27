@@ -3,9 +3,8 @@
 // All rights reserved.
 
 #include "stdromano/stackvector.hpp"
-#include "test.hpp"
 
-#include <string>
+#include "test.hpp"
 
 INIT_TEST_OBJECT;
 
@@ -101,7 +100,7 @@ TEST_CASE(test_capacity)
     // Test capacity growth
     for(int i = 0; i < 100; ++i)
     {
-        vec.push_back(TestObject(std::to_string(i)));
+        vec.push_back(TestObject(stdromano::to_string(i)));
     }
 
     ASSERT_EQUAL(100u, vec.size());
@@ -110,7 +109,7 @@ TEST_CASE(test_capacity)
 
 int main()
 {
-    TestRunner runner;
+    TestRunner runner("stack_vector");
 
     runner.add_test("Constructor and Destructor", test_constructor_and_destructor);
     runner.add_test("Push Back and Pop Back", test_push_back_and_pop_back);

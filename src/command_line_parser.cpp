@@ -2,13 +2,12 @@
 // Copyright (c) 2025 - Present Romain Augier
 // All rights reserved.
 
-#include "stdromano/command_line_parser.hpp"
-#include "stdromano/logger.hpp"
-#include "stdromano/vector.hpp"
-
 #if defined(STDROMANO_WIN)
 #include <processenv.h>
 #endif /* defined(STDROMANO_WIN) */
+
+#include "stdromano/command_line_parser.hpp"
+#include "stdromano/vector.hpp"
 
 STDROMANO_NAMESPACE_BEGIN
 
@@ -20,32 +19,27 @@ CommandLineParser::~CommandLineParser()
 {
 }
 
-void CommandLineParser::add_argument(const StringD& arg_name,
-                                     std::uint32_t arg_type,
-                                     std::uint32_t arg_mode,
-                                     const StringD& arg_short_name) noexcept
+Expected<void> CommandLineParser::add_argument(const StringD& arg_name,
+                                               std::uint32_t arg_type,
+                                               std::uint32_t arg_mode,
+                                               const StringD& arg_short_name) noexcept
 {
     if(this->_args.find(arg_name) != this->_args.end())
-    {
-        log_warn("Argument \"{}\" is already declared in the command line parser", arg_name);
-        return;
-    }
+        return Error(StringD::make_fmt("Argument \"{}\" is already declared in the command line parser", arg_name));
 
     this->_args[arg_name] = CommandLineArg(arg_name, arg_type, arg_mode);
 
     if(arg_short_name != nullptr)
-    {
         this->_aliases.emplace(arg_short_name, arg_name);
-    }
+
+    return Ok();
 }
 
-void CommandLineParser::parse(int argc, char** argv) noexcept
+Expected<void> CommandLineParser::parse(int argc, char** argv) noexcept
 {
-    for(int i = 1; i < argc; i++)
+    for(std::int32_t i = 1; i < argc; i++)
     {
         const char* arg = argv[i];
-
-        log_debug("arg {}: {}", i, arg);
 
         if(arg[0] == '-' && arg[1] == '-' && arg[2] == '\0')
         {
@@ -53,7 +47,7 @@ void CommandLineParser::parse(int argc, char** argv) noexcept
             {
                 StringD after_args;
 
-                for(int j = i + 1; j < argc; j++)
+                for(std::int32_t j = i + 1; j < argc; j++)
                 {
                     if(j > i + 1)
                         after_args.push_back(' ');
@@ -63,6 +57,7 @@ void CommandLineParser::parse(int argc, char** argv) noexcept
 
                 this->_command_after_args = std::move(after_args);
             }
+
             break;
         }
 
@@ -97,11 +92,7 @@ void CommandLineParser::parse(int argc, char** argv) noexcept
         auto arg_it = this->_args.find(key);
 
         if(arg_it == this->_args.end())
-        {
-            log_warn("Argument \"{}\" found in command line but not declared in the command line parser",
-                     StringD(key_start, key_len).c_str());
             continue;
-        }
 
         if(arg_it->second.get_mode() == ArgMode::ArgMode_StoreTrue)
         {
@@ -126,17 +117,13 @@ void CommandLineParser::parse(int argc, char** argv) noexcept
                     value++;
 
                     const char* value_end = value;
+
                     while(*value_end != '\0' && *value_end != quote)
-                    {
                         value_end++;
-                    }
 
                     if(*value_end != quote)
-                    {
-                        log_error("Cannot find closing quote for argument: {}",
-                                  StringD(key_start, key_len).c_str());
-                        continue;
-                    }
+                        return Error(StringD::make_fmt("Cannot find closing quote for argument: {}",
+                                                       fmt::string_view(key_start, key_len)));
 
                     value_len = value_end - value;
                 }
@@ -153,9 +140,8 @@ void CommandLineParser::parse(int argc, char** argv) noexcept
             }
             else
             {
-                log_error("Argument \"{}\" requires a value but none provided",
-                          StringD(key_start, key_len).c_str());
-                continue;
+                return Error(StringD::make_fmt("Argument \"{}\" requires a value but none provided",
+                                               fmt::string_view(key_start, key_len)));
             }
 
             this->_args[std::move(key)].set_data(value, value_len);

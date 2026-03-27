@@ -3,25 +3,25 @@
 // All rights reserved.
 
 #include "stdromano/linalg/transform.hpp"
-#include "stdromano/logger.hpp"
 
 #include "test.hpp"
 
 using namespace stdromano;
 
-TEST_CASE(TestTransform44DefaultConstructor)
+TEST_CASE(test_transform44_default_constructor)
 {
     Transform44F tr = Transform44F::ident();
     Transform44F ident = Transform44F::ident();
     ASSERT(tr.equal_with_abs_error(ident, 1e-6f));
 }
 
-TEST_CASE(TestTransform44ElementConstructor)
+TEST_CASE(test_transform44_element_constructor)
 {
     Transform44F tr(1.0f, 2.0f, 3.0f, 4.0f,
                     5.0f, 6.0f, 7.0f, 8.0f,
                     9.0f, 10.0f, 11.0f, 12.0f,
                     13.0f, 14.0f, 15.0f, 16.0f);
+
     ASSERT_EQUAL(tr(0, 0), 1.0f);
     ASSERT_EQUAL(tr(0, 1), 2.0f);
     ASSERT_EQUAL(tr(0, 2), 3.0f);
@@ -40,7 +40,7 @@ TEST_CASE(TestTransform44ElementConstructor)
     ASSERT_EQUAL(tr(3, 3), 16.0f);
 }
 
-TEST_CASE(TestTransform44CopyConstructor)
+TEST_CASE(test_transform44_copy_constructor)
 {
     Transform44F src(1.0f, 2.0f, 3.0f, 4.0f,
                      5.0f, 6.0f, 7.0f, 8.0f,
@@ -50,7 +50,7 @@ TEST_CASE(TestTransform44CopyConstructor)
     ASSERT(dst.equal_with_abs_error(src, 1e-6f));
 }
 
-TEST_CASE(TestTransform44Zero)
+TEST_CASE(test_transform44_zero)
 {
     Transform44F tr = Transform44F::zero();
     for (std::size_t i = 0; i < 16; ++i) {
@@ -58,7 +58,7 @@ TEST_CASE(TestTransform44Zero)
     }
 }
 
-TEST_CASE(TestTransform44Identity)
+TEST_CASE(test_transform44_identity)
 {
     Transform44F tr = Transform44F::ident();
     ASSERT_EQUAL(tr(0, 0), 1.0f);
@@ -79,7 +79,7 @@ TEST_CASE(TestTransform44Identity)
     ASSERT_EQUAL(tr(3, 2), 0.0f);
 }
 
-TEST_CASE(TestTransform44FromTranslation)
+TEST_CASE(test_transform44_from_translation)
 {
     Vec3F t(1.0f, 2.0f, 3.0f);
     Transform44F tr = Transform44F::from_translation(t);
@@ -90,7 +90,7 @@ TEST_CASE(TestTransform44FromTranslation)
     ASSERT(maths::equal_with_abs_error(extracted.z, t.z, 1e-6f));
 }
 
-TEST_CASE(TestTransform44FromScale)
+TEST_CASE(test_transform44_from_scale)
 {
     Vec3F s(2.0f, 3.0f, 4.0f);
     Transform44F tr = Transform44F::from_scale(s);
@@ -101,7 +101,7 @@ TEST_CASE(TestTransform44FromScale)
     ASSERT(maths::equal_with_abs_error(extracted.z, s.z, 1e-6f));
 }
 
-TEST_CASE(TestTransform44FromRotX)
+TEST_CASE(test_transform44_from_rot_x)
 {
     float angle = maths::constants<float>::pi / 2.0f; // 90 degrees
     Transform44F tr = Transform44F::from_rotx(angle);
@@ -112,7 +112,7 @@ TEST_CASE(TestTransform44FromRotX)
     ASSERT(maths::equal_with_abs_error(transformed.z, 1.0f, 1e-6f));
 }
 
-TEST_CASE(TestTransform44FromRotY)
+TEST_CASE(test_transform44_from_rot_y)
 {
     float angle = maths::constants<float>::pi / 2.0f; // 90 degrees
     Transform44F tr = Transform44F::from_roty(angle);
@@ -123,7 +123,7 @@ TEST_CASE(TestTransform44FromRotY)
     ASSERT(maths::equal_with_abs_error(transformed.z, -1.0f, 1e-6f));
 }
 
-TEST_CASE(TestTransform44FromRotZ)
+TEST_CASE(test_transform44_from_rot_z)
 {
     float angle = maths::constants<float>::pi / 2.0f; // 90 degrees
     Transform44F tr = Transform44F::from_rotz(angle);
@@ -134,7 +134,7 @@ TEST_CASE(TestTransform44FromRotZ)
     ASSERT(maths::equal_with_abs_error(transformed.z, 0.0f, 1e-6f));
 }
 
-TEST_CASE(TestTransform44FromAxisAngle)
+TEST_CASE(test_transform44_from_axis_angle)
 {
     Vec3F axis(0.0f, 1.0f, 0.0f);
     float angle = maths::constants<float>::pi / 2.0f; // 90 degrees
@@ -146,7 +146,7 @@ TEST_CASE(TestTransform44FromAxisAngle)
     ASSERT(maths::equal_with_abs_error(transformed.z, -1.0f, 1e-6f));
 }
 
-TEST_CASE(TestTransform44FromTRS)
+TEST_CASE(test_transform44_from_trs)
 {
     Vec3F t(1.0f, 2.0f, 3.0f);
     Vec3F r(maths::constants<float>::pi / 4.0f, 0.0f, 0.0f); // 45 degrees around X
@@ -165,7 +165,7 @@ TEST_CASE(TestTransform44FromTRS)
     ASSERT(maths::equal_with_abs_error(s_extracted.z, s.z, 1e-6f));
 }
 
-TEST_CASE(TestTransform44FromXYZT)
+TEST_CASE(test_transform44_from_xyzt)
 {
     Vec3F x(1.0f, 0.0f, 0.0f);
     Vec3F y(0.0f, 1.0f, 0.0f);
@@ -182,7 +182,7 @@ TEST_CASE(TestTransform44FromXYZT)
     ASSERT(maths::equal_with_abs_error(t_extracted.z, t.z, 1e-6f));
 }
 
-TEST_CASE(TestTransform44FromLookAt)
+TEST_CASE(test_transform44_from_lookat)
 {
     Vec3F eye(0.0f, 0.0f, 5.0f);
     Vec3F target(0.0f, 0.0f, 0.0f);
@@ -199,7 +199,7 @@ TEST_CASE(TestTransform44FromLookAt)
     ASSERT(maths::equal_with_abs_error(t_extracted.z, eye.z, 1e-6f));
 }
 
-TEST_CASE(TestTransform44MatrixMultiplication)
+TEST_CASE(test_transform44_matrix_multiplication)
 {
     Transform44F tr1 = Transform44F::from_translation(Vec3F(1.0f, 2.0f, 3.0f));
     Transform44F tr2 = Transform44F::from_scale(Vec3F(2.0f, 2.0f, 2.0f));
@@ -212,7 +212,7 @@ TEST_CASE(TestTransform44MatrixMultiplication)
     ASSERT(maths::equal_with_abs_error(transformed.z, 5.0f, 1e-6f));
 }
 
-TEST_CASE(TestTransform44Transpose)
+TEST_CASE(test_transform44_transpose)
 {
     Transform44F tr(1.0f, 2.0f, 3.0f, 4.0f,
                     5.0f, 6.0f, 7.0f, 8.0f,
@@ -225,14 +225,14 @@ TEST_CASE(TestTransform44Transpose)
     ASSERT_EQUAL(transposed(3, 2), tr(2, 3));
 }
 
-TEST_CASE(TestTransform44Trace)
+TEST_CASE(test_transform44_trace)
 {
     Transform44F tr = Transform44F::ident();
     float trace = tr.trace();
     ASSERT_EQUAL(trace, 4.0f); // 1+1+1+1
 }
 
-TEST_CASE(TestTransform44TransformPoint)
+TEST_CASE(test_transform44_transform_point)
 {
     Transform44F tr = Transform44F::from_translation(Vec3F(1.0f, 2.0f, 3.0f));
     Vec3F point(1.0f, 1.0f, 1.0f);
@@ -242,7 +242,7 @@ TEST_CASE(TestTransform44TransformPoint)
     ASSERT(maths::equal_with_abs_error(transformed.z, 4.0f, 1e-6f));
 }
 
-TEST_CASE(TestTransform44TransformDir)
+TEST_CASE(test_transform44_transform_dir)
 {
     Transform44F tr = Transform44F::from_scale(Vec3F(2.0f, 3.0f, 4.0f));
     Vec3F dir(1.0f, 1.0f, 1.0f);
@@ -252,7 +252,7 @@ TEST_CASE(TestTransform44TransformDir)
     ASSERT(maths::equal_with_abs_error(transformed.z, 4.0f, 1e-6f));
 }
 
-TEST_CASE(TestTransform44DecompTaitBryan)
+TEST_CASE(test_transform44_decomp_tait_bryan)
 {
     Vec3F r(maths::constants<float>::pi / 4.0f, 0.0f, 0.0f);
     Transform44F tr = Transform44F::from_trs(Vec3F(0.0f, 0.0f, 0.0f), r, Vec3F(1.0f, 1.0f, 1.0f),
@@ -266,29 +266,28 @@ TEST_CASE(TestTransform44DecompTaitBryan)
 
 int main()
 {
-    stdromano::set_log_level(stdromano::LogLevel::Debug);
-    TestRunner runner;
+    TestRunner runner("linalg_transform");
 
-    runner.add_test("Default Constructor", TestTransform44DefaultConstructor);
-    runner.add_test("Element Constructor", TestTransform44ElementConstructor);
-    runner.add_test("Copy Constructor", TestTransform44CopyConstructor);
-    runner.add_test("Zero", TestTransform44Zero);
-    runner.add_test("Identity", TestTransform44Identity);
-    runner.add_test("From Translation", TestTransform44FromTranslation);
-    runner.add_test("From Scale", TestTransform44FromScale);
-    runner.add_test("From RotX", TestTransform44FromRotX);
-    runner.add_test("From RotY", TestTransform44FromRotY);
-    runner.add_test("From RotZ", TestTransform44FromRotZ);
-    runner.add_test("From Axis Angle", TestTransform44FromAxisAngle);
-    runner.add_test("From TRS", TestTransform44FromTRS);
-    runner.add_test("From XYZT", TestTransform44FromXYZT);
-    runner.add_test("From LookAt", TestTransform44FromLookAt);
-    runner.add_test("Matrix Multiplication", TestTransform44MatrixMultiplication);
-    runner.add_test("Transpose", TestTransform44Transpose);
-    runner.add_test("Trace", TestTransform44Trace);
-    runner.add_test("Transform Point", TestTransform44TransformPoint);
-    runner.add_test("Transform Dir", TestTransform44TransformDir);
-    runner.add_test("Decomp Tait-Bryan", TestTransform44DecompTaitBryan);
+    runner.add_test("Default Constructor", test_transform44_default_constructor);
+    runner.add_test("Element Constructor", test_transform44_element_constructor);
+    runner.add_test("Copy Constructor", test_transform44_copy_constructor);
+    runner.add_test("Zero", test_transform44_zero);
+    runner.add_test("Identity", test_transform44_identity);
+    runner.add_test("From Translation", test_transform44_from_translation);
+    runner.add_test("From Scale", test_transform44_from_scale);
+    runner.add_test("From RotX", test_transform44_from_rot_x);
+    runner.add_test("From RotY", test_transform44_from_rot_y);
+    runner.add_test("From RotZ", test_transform44_from_rot_z);
+    runner.add_test("From Axis Angle", test_transform44_from_axis_angle);
+    runner.add_test("From TRS", test_transform44_from_trs);
+    runner.add_test("From XYZT", test_transform44_from_xyzt);
+    runner.add_test("From LookAt", test_transform44_from_lookat);
+    runner.add_test("Matrix Multiplication", test_transform44_matrix_multiplication);
+    runner.add_test("Transpose", test_transform44_transpose);
+    runner.add_test("Trace", test_transform44_trace);
+    runner.add_test("Transform Point", test_transform44_transform_point);
+    runner.add_test("Transform Dir", test_transform44_transform_dir);
+    runner.add_test("Decomp Tait-Bryan", test_transform44_decomp_tait_bryan);
 
     runner.run_all();
 

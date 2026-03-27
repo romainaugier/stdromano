@@ -1,4 +1,6 @@
-
+// SPDX-License-Identifier: BSD-3-Clause
+// Copyright (c) 2025 - Present Romain Augier
+// All rights reserved.
 
 #include "stdromano/hashset.hpp"
 
@@ -398,7 +400,7 @@ TEST_CASE(test_set_stress_lookup_and_failed_insert)
 
 int main()
 {
-    TestRunner runner;
+    TestRunner runner("hashset");
 
     runner.add_test("HashSet Basic Operations", test_set_basic_operations);
     runner.add_test("HashSet Complex Key", test_set_complex_key);

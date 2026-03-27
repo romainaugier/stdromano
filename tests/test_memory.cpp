@@ -2,7 +2,6 @@
 // Copyright (c) 2025 - Present Romain Augier
 // All rights reserved.
 
-#include "stdromano/logger.hpp"
 #include "stdromano/memory.hpp"
 #include "stdromano/string.hpp"
 #include "test.hpp"
@@ -64,9 +63,7 @@ TEST_CASE(test_memory_arena)
 
 int main()
 {
-    stdromano::set_log_level(stdromano::LogLevel::Debug);
-
-    TestRunner runner;
+    TestRunner runner("memory");
 
     runner.add_test("Memory Arena", test_memory_arena);
 

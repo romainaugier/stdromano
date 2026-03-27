@@ -112,7 +112,7 @@ TEST_CASE(test_capacity)
     // Test capacity growth
     for(int i = 0; i < 100; ++i)
     {
-        vec.push_back(TestObject(std::to_string(i)));
+        vec.push_back(TestObject(stdromano::to_string(i)));
     }
 
     ASSERT_EQUAL(100u, vec.size());
@@ -164,7 +164,7 @@ TEST_CASE(test_clear)
 {
     stdromano::Vector<TestObject> vec;
     for (int i = 0; i < 10; ++i)
-        vec.push_back(TestObject(std::to_string(i)));
+        vec.push_back(TestObject(stdromano::to_string(i)));
 
     ASSERT_EQUAL(10u, vec.size());
     size_t cap_before = vec.capacity();
@@ -448,12 +448,12 @@ TEST_CASE(test_growth_under_pressure)
     stdromano::Vector<TestObject> vec;
     // Push many elements to trigger multiple growths
     for (int i = 0; i < 1000; ++i)
-        vec.push_back(TestObject(std::to_string(i)));
+        vec.push_back(TestObject(stdromano::to_string(i)));
 
     ASSERT_EQUAL(1000u, vec.size());
     // Verify data integrity after multiple reallocations
     for (int i = 0; i < 1000; ++i)
-        ASSERT_EQUAL(std::to_string(i), vec[i].get_data());
+        ASSERT_EQUAL(stdromano::to_string(i), vec[i].get_data());
 }
 
 TEST_CASE(test_self_assignment)

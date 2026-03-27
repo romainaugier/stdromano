@@ -3,7 +3,6 @@
 // All rights reserved.
 
 #include "stdromano/vector.hpp"
-#include "stdromano/logger.hpp"
 #include "stdromano/enumerate.hpp"
 
 #include "test.hpp"
@@ -17,21 +16,15 @@ TEST_CASE(test_enumerate)
     ASSERT_EQUAL(0u, vec.size());
 
     for(int i = 0; i < 100; ++i)
-    {
-        vec.push_back(TestObject(std::to_string(i)));
-    }
+        vec.push_back(TestObject(stdromano::to_string(i)));
 
-    for(const auto& [i, obj] : stdromano::enumerate(vec))    
-    {
-        stdromano::log_debug("{} : {}", i, obj.get_data());
-    }
+    for(const auto& [i, obj] : stdromano::enumerate(vec))
+        spdlog::debug("{} : {}", i, obj.get_data());
 }
 
 int main()
 {
-    stdromano::set_log_level(stdromano::LogLevel::Debug);
-
-    TestRunner runner;
+    TestRunner runner("enumerate");
 
     runner.add_test("Enumerate", test_enumerate);
 

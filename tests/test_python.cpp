@@ -3,7 +3,6 @@
 // All rights reserved.
 
 #include "stdromano/python.hpp"
-#include "stdromano/logger.hpp"
 #include "stdromano/filesystem.hpp"
 
 #define STDROMANO_ENABLE_PROFILING
@@ -25,19 +24,16 @@ int main()
 
     const stdromano::StringD source_code_path("{}/python/test_all.py", TESTS_DATA_DIR);
 
-    if(!stdromano::fs_path_exists(source_code_path))
+    if(!stdromano::fs::path_exists(source_code_path))
     {
         spdlog::warn("Source code file does not exist, discarding test");
         return 0;
     }
 
-    const stdromano::StringD source_code = stdromano::load_file_content(source_code_path);
-
-    if(source_code.empty())
-    {
-        spdlog::error("Cannot load source code from file content");
-        return 1;
-    }
+    const stdromano::StringD source_code = stdromano::fs::load_file_content(source_code_path).value_or([&](const stdromano::Error& err) {
+        spdlog::error("Error caught while loading file content: {}", err.message);
+        std::exit(1);
+    });
 
     if(!ast.from_text(source_code, true))
     {

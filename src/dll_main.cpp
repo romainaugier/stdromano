@@ -3,7 +3,6 @@
 // All rights reserved.
 
 #include "stdromano/cpu.hpp"
-#include "stdromano/logger.hpp"
 #include "stdromano/simd.hpp"
 
 #include <cstdio>
@@ -37,10 +36,13 @@ void STDROMANO_LIB_EXIT lib_exit(void)
 }
 
 #if defined(STDROMANO_WIN)
-BOOL APIENTRY DllMain(STDROMANO_MAYBE_UNUSED HMODULE hModule, 
+BOOL APIENTRY DllMain(STDROMANO_MAYBE_UNUSED HMODULE hModule,
                       DWORD ul_reason_for_call,
                       STDROMANO_MAYBE_UNUSED LPVOID lpReserved)
 {
+    STDROMANO_UNUSED(hModule);
+    STDROMANO_UNUSED(lpReserved);
+
     switch(ul_reason_for_call)
     {
         case DLL_PROCESS_ATTACH:

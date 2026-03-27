@@ -9,6 +9,7 @@
 
 #include "stdromano/string.hpp"
 #include "stdromano/hashmap.hpp"
+#include "stdromano/expected.hpp"
 
 STDROMANO_NAMESPACE_BEGIN
 
@@ -98,12 +99,12 @@ public:
 
     ~CommandLineParser();
 
-    void add_argument(const StringD& arg_name,
-                      std::uint32_t arg_type,
-                      std::uint32_t arg_mode = ArgMode_Store,
-                      const StringD& arg_alias = StringD()) noexcept;
+    Expected<void> add_argument(const StringD& arg_name,
+                                std::uint32_t arg_type,
+                                std::uint32_t arg_mode = ArgMode_Store,
+                                const StringD& arg_alias = StringD()) noexcept;
 
-    void parse(int argc, char** argv) noexcept;
+    Expected<void> parse(int argc, char** argv) noexcept;
 
     STDROMANO_FORCE_INLINE bool has_parsed_argument(const StringD& arg_name) const noexcept
     {

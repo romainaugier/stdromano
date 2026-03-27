@@ -11,7 +11,7 @@
 #include "stdromano/linalg/backend.hpp"
 #include "stdromano/linalg/traits.hpp"
 #include "stdromano/filesystem.hpp"
-#include "stdromano/logger.hpp"
+#include "stdromano/expected.hpp"
 
 #if defined(STDROMANO_ENABLE_OPENCL)
 #include "stdromano/opencl.hpp"
@@ -89,9 +89,7 @@ private:
         if(this->_backend == LinAlgBackend_CPU)
         {
             if(this->_data != nullptr)
-            {
                 mem_aligned_free(this->_data);
-            }
 
             this->_data = mem_aligned_alloc<T>(size, ALIGNMENT);
 
@@ -104,7 +102,7 @@ private:
 #if defined(STDROMANO_ENABLE_OPENCL)
             this->_gpu_data = opencl_manager.create_buffer<T>(this->size());
 #else
-            log_error("OpenCL Backed not available");
+            STDROMANO_ASSERT(false, "GPU backend not available")
 #endif /* defined(STDROMANO_ENABLE_OPENCL) */
         }
     }
@@ -150,9 +148,7 @@ public:
     ~DenseMatrix() noexcept
     {
         if(this->_data != nullptr)
-        {
             mem_aligned_free(this->_data);
-        }
     }
 
     DenseMatrix(const DenseMatrix& other) noexcept : _data(nullptr),
@@ -172,9 +168,9 @@ public:
         else if(this->_backend == LinAlgBackend_GPU)
         {
 #if defined(STDROMANO_ENABLE_OPENCL)
-        opencl_manager.copy_buffer(this->_gpu_data, other._gpu_data, this->nbytes());
+            opencl_manager.copy_buffer(this->_gpu_data, other._gpu_data, this->nbytes());
 #else
-        log_error("OpenCL Backend not available");
+            STDROMANO_ASSERT(false, "GPU backend not available");
 #endif /* defined(STDROMANO_ENABLE_OPENCL) */
         }
     }
@@ -211,9 +207,7 @@ public:
         if(this != std::addressof(other))
         {
             if(this->_data != nullptr)
-            {
                 mem_aligned_free(this->_data);
-            }
 
             this->_nrows = other._nrows;
             this->_ncols = other._ncols;
@@ -242,8 +236,7 @@ public:
 
     STDROMANO_FORCE_INLINE T& operator()(std::size_t row, std::size_t col) noexcept
     {
-        STDROMANO_ASSERT(this->_backend != LinAlgBackend_GPU,
-                         "GPU Backend has no per element access");
+        STDROMANO_ASSERT(this->_backend != LinAlgBackend_GPU, "GPU Backend has no per element access");
         STDROMANO_ASSERT(row < this->_nrows && col < this->_ncols, "Out-of-bounds access");
 
         return this->_data[col * this->_nrows + row];
@@ -251,8 +244,7 @@ public:
 
     STDROMANO_FORCE_INLINE const T& operator()(size_t row, size_t col) const noexcept
     {
-        STDROMANO_ASSERT(this->_backend != LinAlgBackend_GPU,
-                         "GPU Backend has no per element access");
+        STDROMANO_ASSERT(this->_backend != LinAlgBackend_GPU, "GPU backend has no per element access");
         STDROMANO_ASSERT(row < this->_nrows && col < this->_ncols, "Out-of-bounds access");
 
         return this->_data[col * this->_nrows + row];
@@ -260,8 +252,7 @@ public:
 
     STDROMANO_FORCE_INLINE T& at(size_t row, size_t col) noexcept
     {
-        STDROMANO_ASSERT(this->_backend != LinAlgBackend_GPU,
-                         "GPU Backend has no per element access");
+        STDROMANO_ASSERT(this->_backend != LinAlgBackend_GPU, "GPU backend has no per element access");
         STDROMANO_ASSERT(row < this->_nrows && col < this->_ncols, "Out-of-bounds access");
 
         return this->_data[col * this->_nrows + row];
@@ -269,8 +260,7 @@ public:
 
     STDROMANO_FORCE_INLINE const T& at(size_t row, size_t col) const noexcept
     {
-        STDROMANO_ASSERT(this->_backend != LinAlgBackend_GPU,
-                         "GPU Backend has no per element access");
+        STDROMANO_ASSERT(this->_backend != LinAlgBackend_GPU, "GPU backend has no per element access");
         STDROMANO_ASSERT(row < this->_nrows && col < this->_ncols, "Out-of-bounds access");
 
         return this->_data[col * this->_nrows + row];
@@ -284,7 +274,7 @@ public:
     STDROMANO_FORCE_INLINE const cl::Buffer& gpu_data() const noexcept { return this->_gpu_data; }
 #endif /* defined(STDROMANO_ENABLE_OPENCL) */
 
-    DenseMatrix to_backend(std::uint32_t backend) const noexcept
+    Expected<DenseMatrix> to_backend(std::uint32_t backend) const noexcept
     {
         DenseMatrix res(this->_nrows, this->_ncols, backend);
 
@@ -297,18 +287,16 @@ public:
 #if defined(STDROMANO_ENABLE_OPENCL)
             opencl_manager.write_buffer(res.gpu_data(), this->data(), this->size());
 #else
-            log_error("OpenCL Backend not available");
+            return Error("GPU backend not available");
 #endif /* defined(STDROMANO_ENABLE_OPENCL) */
         }
         else if(this->_backend == LinAlgBackend_GPU && backend == LinAlgBackend_CPU)
         {
 #if defined(STDROMANO_ENABLE_OPENCL)
             if(!opencl_manager.read_buffer(this->gpu_data(), res.data(), this->size()))
-            {
-                log_error("Error when reading data from the GPU, check the log for more information");
-            }
+                return Error("Error when reading data from the GPU, check the log for more information");
 #else
-            log_error("OpenCL Backend not available");
+            return Error("GPU backend not available");
 #endif /* defined(STDROMANO_ENABLE_OPENCL) */
         }
         else if(this->_backend == LinAlgBackend_GPU && backend == LinAlgBackend_GPU)
@@ -316,23 +304,20 @@ public:
 #if defined(STDROMANO_ENABLE_OPENCL)
             opencl_manager.copy_buffer(this->gpu_data(), res.gpu_data(), this->nbytes());
 #else
-            log_error("OpenCL Backend not available");
+            return Error("GPU backend not available");
 #endif /* defined(STDROMANO_ENABLE_OPENCL) */
         }
 
         return res;
     }
 
-    DenseMatrix operator*(const DenseMatrix& other) const noexcept
+    Expected<DenseMatrix> operator*(const DenseMatrix& other) const noexcept
     {
         DenseMatrix res(this->_nrows, other._ncols, this->_backend);
         res.zero();
 
         if(this->_backend != other._backend)
-        {
-            log_error("Matmul error: backend mis-match");
-            return res;
-        }
+            return Error("Backend mismatch");
 
         const std::size_t M = this->_nrows;
         const std::size_t K = this->_ncols;
@@ -362,10 +347,9 @@ public:
 
             if(!opencl_manager.has_kernel_source(kernel_name))
             {
-                log_error("Matmul error: cannot find opencl kernel \"{}\" (path should be: {})",
-                          kernel_name,
-                          fs_expand_from_lib_dir(StringD("cl/{}.cl", kernel_name)));
-                return res;
+                return Error(StringD::make_fmt("Matmul error: cannot find opencl kernel \"{}\" (path should be: {})",
+                                               kernel_name,
+                                               fs_expand_from_lib_dir(StringD("cl/{}.cl", kernel_name))));
             }
 
             const std::size_t global_x = ((N + 15) / 16) * 16;
@@ -385,17 +369,14 @@ public:
                                              cl::NDRange(global_x, global_y),
                                              cl::NDRange(16, 16)))
             {
-                log_error("Matmul error: error caught during scheduling on GPU, check the log for more details");
-                return res;
+                return Error("Matmul error: error caught during scheduling on GPU, check the log for more details");
             }
 
             event.wait();
 
             const double time = opencl_manager.get_execution_time_ms(event);
-
-            log_debug("Matmul real time: {:.3f} ms", time);
 #else
-            log_error("OpenCL Backend not available");
+            return Error("GPU Backend not available");
 #endif /* defined(STDROMANO_ENABLE_OPENCL) */
         }
 
@@ -407,24 +388,18 @@ public:
         DenseMatrix result(this->_ncols, this->_nrows);
 
         for(std::size_t i = 0; i < this->_nrows; ++i)
-        {
             for(std::size_t j = 0; j < this->_ncols; ++j)
-            {
                 result(j, i) = (*this)(i, j);
-            }
-        }
 
         return result;
     }
 
-    void fill(T value) noexcept
+    Expected<void> fill(T value) noexcept
     {
         if(this->_backend == LinAlgBackend_CPU)
         {
             for(std::size_t i = 0; i < this->size(); i++)
-            {
                 this->_data[i] = value;
-            }
         }
         else if(this->_backend == LinAlgBackend_GPU)
         {
@@ -433,10 +408,9 @@ public:
 
             if(!opencl_manager.has_kernel_source(kernel_name))
             {
-                log_error("Fill error: cannot find opencl kernel \"{}\" (path should be: {})",
-                          kernel_name,
-                          fs_expand_from_lib_dir(StringD("cl/{}.cl", kernel_name)));
-                return;
+                return Error(StringD::make_fmt("Fill error: cannot find opencl kernel \"{}\" (path should be: {})",
+                                               kernel_name,
+                                               fs_expand_from_lib_dir(StringD("cl/{}.cl", kernel_name))));
             }
 
             cl::Event event;
@@ -450,20 +424,23 @@ public:
                                              },
                                              cl::NDRange(this->_ncols, this->_nrows)))
             {
-                log_error("Fill error: error caught during scheduling on GPU, check the log for more details");
-                return;
+                return Error("Fill error: error caught during scheduling on GPU, check the log for more details");
             }
 
             event.wait();
 #else
-            log_error("OpenCL Backend not available");
+            STDROMANO_ASSERT(false, "GPU backend not available");
+
+            return Error("GPU backend not available");
 #endif /* defined(STDROMANO_ENABLE_OPENCL) */
         }
+
+        return Ok();
     }
 
-    void zero() noexcept
+    Expected<void> zero() noexcept
     {
-        this->fill(T{});
+        return this->fill(T{});
     }
 
     void debug(std::size_t max_rows = 0, std::size_t max_cols = 0) const noexcept
@@ -505,21 +482,15 @@ public:
         STDROMANO_ASSERT(this->_backend != LinAlgBackend_GPU, "GPU Backend has no trace");
 
         if(this->_backend == LinAlgBackend_GPU)
-        {
             return static_cast<T>(0);
-        }
 
         if(this->_nrows != this->_ncols)
-        {
             return static_cast<T>(0);
-        }
 
         T result = static_cast<T>(0);
 
         for(std::size_t i = 0; i < this->_nrows; i++)
-        {
             result += (*this)(i, i);
-        }
 
         return result;
     }

@@ -8,6 +8,7 @@
 #define __STDROMANO_FILESYSTEM
 
 #include "stdromano/string.hpp"
+#include "stdromano/expected.hpp"
 
 #include <queue>
 
@@ -17,28 +18,40 @@
 #include <dirent.h>
 #endif /* defined(STDROMANO_WIN) */
 
+#define FS_NAMESPACE_BEGIN namespace fs {
+#define FS_NAMESPACE_END }
+
 STDROMANO_NAMESPACE_BEGIN
 
-STDROMANO_API bool fs_path_exists(const String<>& path) noexcept;
+FS_NAMESPACE_BEGIN
 
-STDROMANO_API String<> fs_parent_dir(const String<>& path) noexcept;
+STDROMANO_API bool path_exists(const String<>& path) noexcept;
 
-STDROMANO_API String<> fs_filename(const String<>& path) noexcept;
+STDROMANO_API String<> parent_dir(const String<>& path) noexcept;
 
-STDROMANO_API StringD fs_current_dir() noexcept;
+STDROMANO_API String<> filename(const String<>& path) noexcept;
 
-STDROMANO_API void fs_mkdir(const StringD& dir_path) noexcept;
+STDROMANO_API StringD current_dir() noexcept;
 
-STDROMANO_API String<> fs_expand_from_executable_dir(const String<>& path_to_expand) noexcept;
+STDROMANO_API bool mkdir(const StringD& dir_path) noexcept;
 
-STDROMANO_API String<> fs_expand_from_lib_dir(const String<>& path_to_expand) noexcept;
+STDROMANO_API Expected<StringD> expand_from_executable_dir(const String<>& path_to_expand) noexcept;
 
-STDROMANO_API String<> fs_tmp_dir() noexcept;
+STDROMANO_API Expected<StringD> expand_from_lib_dir(const String<>& path_to_expand) noexcept;
 
-STDROMANO_API String<> fs_home_dir(bool use_env = false) noexcept;
+STDROMANO_API Expected<StringD> tmp_dir() noexcept;
 
-STDROMANO_API String<> load_file_content(const String<>& file_path,
-                                         const char* mode = "rb") noexcept;
+STDROMANO_API Expected<StringD> home_dir(bool use_env = false) noexcept;
+
+// Loads the content of file_path into a StringD
+STDROMANO_API Expected<StringD> load_file_content(const String<>& file_path,
+                                                  const char* mode = "rb") noexcept;
+
+// Write data to file_path. If the path to the parent directory of file_path does not exist, it will be created
+STDROMANO_API Expected<void> write_file_content(const char* data,
+                                                const std::size_t data_sz,
+                                                const StringD& file_path,
+                                                const char* mode = "w") noexcept;
 
 enum ListDirFlags : uint32_t
 {
@@ -51,7 +64,7 @@ enum ListDirFlags : uint32_t
 class STDROMANO_API ListDirIterator
 {
 public:
-    friend STDROMANO_API bool fs_list_dir(ListDirIterator&,
+    friend STDROMANO_API bool list_dir(ListDirIterator&,
                                           const String<>&,
                                           const std::uint32_t) noexcept;
 
@@ -121,9 +134,9 @@ public:
     bool is_directory() const noexcept;
 };
 
-STDROMANO_API bool fs_list_dir(ListDirIterator& it,
-                               const String<>& directory_path,
-                               const uint32_t flags) noexcept;
+STDROMANO_API bool list_dir(ListDirIterator& it,
+                            const String<>& directory_path,
+                            const uint32_t flags) noexcept;
 
 enum FileDialogMode_ : uint32_t
 {
@@ -250,6 +263,8 @@ private:
                            ) const noexcept;
 #endif /* defined(STDROMANO_WIN) */
 };
+
+FS_NAMESPACE_END
 
 STDROMANO_NAMESPACE_END
 

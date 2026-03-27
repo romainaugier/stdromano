@@ -2,7 +2,8 @@
 #define __STDROMANO_PROFILING
 
 #include "stdromano/cpu.hpp"
-#include "stdromano/logger.hpp"
+
+#include "spdlog/spdlog.h"
 
 #include <chrono>
 #include <ratio>
@@ -10,16 +11,15 @@
 
 STDROMANO_NAMESPACE_BEGIN
 
-static STDROMANO_FORCE_INLINE uint64_t get_timestamp() noexcept
+static STDROMANO_FORCE_INLINE std::uint64_t get_timestamp() noexcept
 {
     return cpu_rdtsc();
 }
 
-static STDROMANO_FORCE_INLINE double get_elapsed_time(const uint64_t start,
+static STDROMANO_FORCE_INLINE double get_elapsed_time(const std::uint64_t start,
                                                       const double unit_multiplier) noexcept
 {
-    return ((double)(cpu_rdtsc() - start) / ((double)cpu_get_current_frequency() * 1000000.0) *
-            unit_multiplier);
+    return ((double)(cpu_rdtsc() - start) / ((double)cpu_get_current_frequency() * 1000000.0) * unit_multiplier);
 }
 
 namespace ProfileUnit
@@ -95,8 +95,11 @@ template <typename Unit>
 class ScopedProfile
 {
     char* _name = nullptr;
+
     std::chrono::steady_clock::time_point _start;
+
     bool _stopped = false;
+
     double _time = 0;
 
 public:
@@ -110,9 +113,7 @@ public:
     ~ScopedProfile()
     {
         if(!_stopped)
-        {
             this->stop();
-        }
     }
 
     double time() const noexcept
@@ -124,14 +125,14 @@ public:
     {
         if(!this->_stopped)
         {
-            this->_time = std::chrono::duration_cast<std::chrono::duration<double, Unit>>(
-                          std::chrono::steady_clock::now() - this->_start)
-                          .count();
+            const auto now = std::chrono::steady_clock::now();
 
-            log_debug("Scoped profile \"{}\" -> {} {}",
-                      this->_name,
-                      this->_time,
-                      UnitName<Unit>().get_name());
+            this->_time = std::chrono::duration_cast<std::chrono::duration<double, Unit>>(now - this->_start).count();
+
+            spdlog::debug("Scoped profile \"{}\" -> {} {}",
+                          this->_name,
+                          this->_time,
+                          UnitName<Unit>().get_name());
 
             this->_stopped = true;
         }
@@ -142,8 +143,11 @@ template <>
 class ScopedProfile<ProfileUnit::Cycles>
 {
     char* _name = nullptr;
+
     std::uint64_t _start = 0;
+
     bool _stopped = false;
+
     double _time = 0;
 
 public:
@@ -162,9 +166,7 @@ public:
     ~ScopedProfile()
     {
         if(!this->_stopped)
-        {
             this->stop();
-        }
     }
 
     STDROMANO_FORCE_INLINE void stop() noexcept
@@ -173,10 +175,10 @@ public:
         {
             this->_time = static_cast<double>(cpu_rdtsc() - this->_start);
 
-            log_debug("Scoped profile \"{}\" -> {:.3f} {}",
-                      this->_name,
-                      this->_time,
-                      UnitName<ProfileUnit::Cycles>().get_name());
+            spdlog::debug("Scoped profile \"{}\" -> {:.3f} {}",
+                          this->_name,
+                          this->_time,
+                          UnitName<ProfileUnit::Cycles>().get_name());
 
             this->_stopped = true;
         }
@@ -191,12 +193,11 @@ static auto __chrono_func_timer(const char* func_name, F&& func, Args&&... args)
 
     auto ret = func(std::forward<Args>(args)...);
 
-    log_debug("Func profile \"{}\" -> {} {}",
-              func_name,
-              std::chrono::duration_cast<std::chrono::duration<float, Unit>>(
-                  std::chrono::steady_clock::now() - start)
-                  .count(),
-              UnitName<Unit>().get_name());
+    const auto end = std::chrono::steady_clock::now();
+
+    const auto duration = std::chrono::duration_cast<std::chrono::duration<float, Unit>>(end - start).count();
+
+    spdlog::debug("Func profile \"{}\" -> {} {}", func_name, duration, UnitName<Unit>().get_name());
 
     return ret;
 }
@@ -204,14 +205,15 @@ static auto __chrono_func_timer(const char* func_name, F&& func, Args&&... args)
 template <typename F, typename... Args>
 static auto __cycles_func_timer(const char* func_name, F&& func, Args&&... args) noexcept
 {
-    const uint64_t start = cpu_rdtsc();
+    const std::uint64_t start = cpu_rdtsc();
 
     auto ret = func(std::forward<Args>(args)...);
 
-    log_debug("Func profile \"{}\" -> {} {}",
-              func_name,
-              (uint64_t)(cpu_rdtsc() - start),
-              UnitName<ProfileUnit::Cycles>().get_name());
+    const std::uint64_t end = cpu_rdtsc();
+
+    const std::uint64_t duration = end - start;
+
+    spdlog::debug("Func profile \"{}\" -> {} {}", func_name, duration, UnitName<ProfileUnit::Cycles>().get_name());
 
     return ret;
 }
@@ -220,13 +222,9 @@ template <typename Unit, typename F, typename... Args>
 static auto _func_timer(const char* func_name, F&& func, Args&&... args)
 {
     if constexpr (std::is_same_v<Unit, ProfileUnit::Cycles>)
-    {
         return __cycles_func_timer(func_name, std::forward<F>(func), std::forward<Args>(args)...);
-    }
     else
-    {
         return __chrono_func_timer<Unit>(func_name, std::forward<F>(func), std::forward<Args>(args)...);
-    }
 }
 
 STDROMANO_NAMESPACE_END

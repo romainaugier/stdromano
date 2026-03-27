@@ -19,37 +19,29 @@ class Optional
 {
 private:
     typename std::aligned_storage<sizeof(T), alignof(T)>::type _data;
+
     bool _has_value;
 
 public:
-    Optional()
-        : _has_value(false)
-    {
-    }
+    Optional() : _has_value(false) {}
 
-    Optional(const T& value)
-        : _has_value(false)
+    Optional(const T& value) : _has_value(false)
     {
         this->construct(value);
     }
 
-    Optional(T&& value) noexcept
-        : _has_value(false)
+    Optional(T&& value) noexcept : _has_value(false)
     {
         this->construct(std::move(value));
     }
 
-    Optional(const Optional& other)
-        : _has_value(false)
+    Optional(const Optional& other) : _has_value(false)
     {
         if(other._has_value)
-        {
             this->construct(*other);
-        }
     }
 
-    Optional(Optional&& other) noexcept
-        : _has_value(false)
+    Optional(Optional&& other) noexcept : _has_value(false)
     {
         if(other._has_value)
         {
@@ -62,6 +54,7 @@ public:
     {
         this->reset();
         this->construct(value);
+
         return *this;
     }
 
@@ -69,6 +62,7 @@ public:
     {
         this->reset();
         this->construct(std::move(value));
+
         return *this;
     }
 
@@ -77,11 +71,11 @@ public:
         if(this != &other)
         {
             this->reset();
+
             if(other._has_value)
-            {
                 this->construct(*other);
-            }
         }
+
         return *this;
     }
 
@@ -90,12 +84,14 @@ public:
         if(this != &other)
         {
             this->reset();
+
             if(other._has_value)
             {
                 this->construct(std::move(*other));
                 other.reset();
             }
         }
+
         return *this;
     }
 
@@ -149,9 +145,7 @@ public:
     T& value() &
     {
         if(!this->_has_value)
-        {
             throw std::runtime_error("Accessing empty Optional");
-        }
 
         return **this;
     }
@@ -159,9 +153,7 @@ public:
     const T& value() const&
     {
         if(!this->_has_value)
-        {
             throw std::runtime_error("Accessing empty Optional");
-        }
 
         return **this;
     }

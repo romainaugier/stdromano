@@ -94,9 +94,7 @@ TEST_CASE(test_iterator)
     const int TEST_SIZE = 10;
 
     for(int i = 0; i < TEST_SIZE; ++i)
-    {
         map.insert(std::pair<int, int>(i, i * i));
-    }
 
     size_t count = 0;
 
@@ -170,9 +168,7 @@ TEST_CASE(test_clear_and_reserve)
     ASSERT(capacity >= 100);
 
     for(int i = 0; i < 50; ++i)
-    {
         map.insert(std::pair<int, int>(i, i));
-    }
 
     map.clear();
     ASSERT_EQUAL(0u, map.size());
@@ -240,9 +236,7 @@ TEST_CASE(test_stress)
     SCOPED_PROFILE_START(stdromano::ProfileUnit::MilliSeconds, map_iterate);
 
     for(auto it = map.begin(); it != map.end(); ++it)
-    {
         ++count;
-    }
 
     SCOPED_PROFILE_STOP(map_iterate);
 
@@ -253,9 +247,7 @@ TEST_CASE(test_stress)
     SCOPED_PROFILE_START(stdromano::ProfileUnit::MilliSeconds, map_erase);
 
     for(int i = 0; i < TEST_SIZE / 2; i++)
-    {
         map.erase(keys[i]);
-    }
 
     SCOPED_PROFILE_STOP(map_erase);
 
@@ -266,12 +258,8 @@ TEST_CASE(test_stress)
     SCOPED_PROFILE_START(stdromano::ProfileUnit::MilliSeconds, map_find);
 
     for(int i = 0; i < TEST_SIZE; ++i)
-    {
         if(map.find(keys[i]) != map.end())
-        {
             num_found++;
-        }
-    }
 
     SCOPED_PROFILE_STOP(map_find);
 
@@ -291,9 +279,7 @@ TEST_CASE(test_stress_emplace_vs_find_existing)
     std::vector<std::int64_t> keys = get_random_shuffle_range_ints(TEST_SIZE);
 
     for(int i = 0; i < TEST_SIZE; ++i)
-    {
         map.insert(std::pair<int64_t, std::string>(keys[i], std::string(1000, 'a')));
-    }
 
     SCOPED_PROFILE_START(stdromano::ProfileUnit::MilliSeconds, find_time);
     for(int i = 0; i < TEST_SIZE; ++i)
@@ -322,9 +308,7 @@ TEST_CASE(test_initializer_list)
 
 int main()
 {
-    stdromano::set_log_level(stdromano::LogLevel::Debug);
-
-    TestRunner runner;
+    TestRunner runner("hashmap");
 
     runner.add_test("Basic Operations", test_basic_operations);
     runner.add_test("Operator []", test_operator_bracket);

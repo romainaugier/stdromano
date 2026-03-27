@@ -3,7 +3,6 @@
 // All rights reserved.
 
 #include "stdromano/json.hpp"
-#include "stdromano/logger.hpp"
 #include "stdromano/filesystem.hpp"
 
 #define STDROMANO_ENABLE_PROFILING
@@ -11,7 +10,7 @@
 
 int main()
 {
-    stdromano::set_log_level(stdromano::LogLevel::Debug);
+    spdlog::set_level(spdlog::level::debug);
 
     stdromano::Json json;
 

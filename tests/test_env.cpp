@@ -5,6 +5,8 @@
 #include "stdromano/env.hpp"
 #include "test.hpp"
 
+#include "spdlog/spdlog.h"
+
 TEST_CASE(test_env_set_and_get)
 {
     const bool ok = stdromano::env::set("STDROMANO_TEST_VAR", "hello");
@@ -479,7 +481,7 @@ TEST_CASE(test_env_special_characters)
 
 int main()
 {
-    TestRunner runner;
+    TestRunner runner("env");
 
     /* get / set */
     runner.add_test("env::set and env::get", test_env_set_and_get);

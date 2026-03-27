@@ -5,9 +5,12 @@
 #if !defined(__STDROMANO_TEST)
 #define __STDROMANO_TEST
 
+#include "stdromano/string.hpp"
+#include "stdromano/vector.hpp"
+
+#include "spdlog/spdlog.h"
+
 #include <functional>
-#include <string>
-#include <vector>
 
 #define TEST_CASE(name) void name()
 
@@ -16,10 +19,10 @@
     {                                                                                              \
         if(!(condition))                                                                           \
         {                                                                                          \
-            std::printf("Assertion failed: %s\nFile: %s\nLine: %d\n",                              \
-                        #condition,                                                                \
-                        __FILE__,                                                                  \
-                        __LINE__);                                                                 \
+            spdlog::error("Assertion failed: {}\nFile: {}\nLine: {}",                              \
+                          #condition,                                                              \
+                          __FILE__,                                                                \
+                          __LINE__);                                                               \
             std::abort();                                                                          \
         }                                                                                          \
     } while(0)
@@ -47,16 +50,16 @@
     } while(0)
 
 #define ASSERT_EQUAL(expected, actual)                                                             \
-    do                                                                                             \
+do                                                                                                 \
     {                                                                                              \
         if(!((expected) == (actual)))                                                              \
         {                                                                                          \
-            std::printf("Assertion failed\nExpected: %sActual: "                                   \
-                        "%s\nFile: %s\nLine: %d\n",                                                \
-                        #expected,                                                                 \
-                        #actual,                                                                   \
-                        __FILE__,                                                                  \
-                        __LINE__);                                                                 \
+            spdlog::error("Assertion failed\nExpected: {}\nActual: "                                 \
+                          "{}\nFile: {}\nLine: {}",                                                \
+                          #expected,                                                               \
+                          #actual,                                                                 \
+                          __FILE__,                                                                \
+                          __LINE__);                                                               \
             std::abort();                                                                          \
         }                                                                                          \
     } while(0)
@@ -69,61 +72,75 @@ class TestRunner
         std::function<void()> func;
     };
 
-    std::vector<TestCase> tests;
+    stdromano::Vector<TestCase> tests;
+
     int passed = 0;
     int failed = 0;
 
-  public:
-    void add_test(const char* name, std::function<void()> test)
+    const char* name = nullptr;
+
+public:
+    TestRunner(const char* name = nullptr) : name(name)
     {
-        tests.push_back({name, test});
+        spdlog::set_level(spdlog::level::trace);
+    }
+
+    void add_test(const char* test_name, std::function<void()> test)
+    {
+        tests.push_back({test_name, test});
     }
 
     void run_all()
     {
-        for(const auto& test : tests)
+        if(this->name != nullptr)
+            spdlog::info("Starting {} test", this->name);
+
+        for(const auto& test : this->tests)
         {
-            std::printf("Running %s ...\n", test.name);
+            spdlog::info("Running {} ...", test.name);
 
             try
             {
                 test.func();
-                std::printf("PASSED\n");
+                spdlog::info("PASSED");
                 ++passed;
             }
             catch(const std::exception& e)
             {
-                std::printf("FAILED: %s\n", e.what());
+                spdlog::error("FAILED: {}", e.what());
                 ++failed;
             }
         }
 
-        std::printf("Test Summary:\nPassed: %d\nFailed: %d\nTotal: %zu\n",
-                    passed,
-                    failed,
-                    tests.size());
+        spdlog::info("Test Summary:\nPassed: {}\nFailed: {}\nTotal: {}",
+                     passed,
+                     failed,
+                     tests.size());
+
+        if(this->name != nullptr)
+            spdlog::info("Finished {} test", this->name);
     }
 };
 
 class TestObject
 {
   private:
-    std::string* data = nullptr;
+    stdromano::StringD* data = nullptr;
     size_t ref_count;
     static size_t total_instances;
 
   public:
-    TestObject(const std::string& str = "")
+    TestObject(const stdromano::StringD& str = "")
         : ref_count(0)
     {
-        this->data = new std::string(str);
+        this->data = new stdromano::StringD(str);
         ++TestObject::total_instances;
     }
 
     TestObject(const TestObject& other)
         : ref_count(other.ref_count)
     {
-        this->data = new std::string(*other.data);
+        this->data = new stdromano::StringD(*other.data);
         ++TestObject::total_instances;
     }
 
@@ -140,7 +157,7 @@ class TestObject
         {
             delete this->data;
 
-            this->data = new std::string(*other.data);
+            this->data = new stdromano::StringD(*other.data);
             this->ref_count = other.ref_count;
         }
 
@@ -183,7 +200,7 @@ class TestObject
         return !(*this == other);
     }
 
-    std::string get_data() const
+    stdromano::StringD get_data() const
     {
         return this->data ? *this->data : "";
     }
