@@ -147,6 +147,8 @@ Expected<void> CommandLineParser::parse(int argc, char** argv) noexcept
             this->_args[std::move(key)].set_data(value, value_len);
         }
     }
+
+    return Ok();
 }
 
 STDROMANO_NAMESPACE_END
