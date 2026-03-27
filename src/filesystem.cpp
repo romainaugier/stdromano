@@ -120,7 +120,7 @@ Expected<StringD> expand_from_executable_dir(const String<>& path_to_expand) noe
     ssize_t count = readlink("/proc/self/exe", sz_path, PATH_MAX);
 
     if(count < 0 || count >= PATH_MAX)
-        return "";
+        return Error("Error during readlink: {}", errno());
 
     sz_path[count] = '\0';
 
@@ -162,7 +162,7 @@ Expected<StringD> expand_from_lib_dir(const String<>& path_to_expand) noexcept
     ssize_t count = readlink("/proc/self/exe", sz_path, PATH_MAX);
 
     if(count < 0 || count >= PATH_MAX)
-        return "";
+        return Error("Error during readlink: {}", errno());
 
     sz_path[count] = '\0';
 
