@@ -3,10 +3,12 @@
 // All rights reserved.
 
 #include "stdromano/filesystem.hpp"
+#include "stdromano/loop_guard.hpp"
 
 #if defined(STDROMANO_WIN)
 #define STRICT_TYPED_ITEMIDS // Better type safety for IDLists
 #include "ShlObj_core.h"
+#include "shellapi.h"
 #include "Shlwapi.h"
 #include "commdlg.h"
 #elif defined(STDROMANO_LINUX)
@@ -23,38 +25,42 @@
 #include <unistd.h>
 #endif // defined(STDROMANO_WIN)
 
+#include <stack>
+
+#define STDROMANO_ERR_BUFFER_SZ 1024
+
 STDROMANO_NAMESPACE_BEGIN
 
 FS_NAMESPACE_BEGIN
 
-bool path_exists(const String<>& path) noexcept
+bool path_exists(const StringD& path) noexcept
 {
 #if defined(STDROMANO_WIN)
-    return PathFileExistsA(path.c_str());
+    return PathFileExistsA(path.is_ref() ? path.copy().c_str() : path.c_str());
 #elif defined(STDROMANO_LINUX)
     struct stat sb;
-    return stat(path.c_str(), &sb) == 0 && (S_ISDIR(sb.st_mode) || S_ISREG(sb.st_mode));
+    return stat(path.is_ref() ? path.copy().c_str() : path.c_str(), &sb) == 0 && (S_ISDIR(sb.st_mode) || S_ISREG(sb.st_mode));
 #endif /* defined(STDROMANO_WIN) */
 }
 
-String<> parent_dir(const String<>& path) noexcept
+StringD parent_dir(const StringD& path) noexcept
 {
-    size_t path_len = path.size() - 1;
+    std::size_t path_len = path.size() - 1;
 
     while(path_len > 0 && (path[path_len] != '/' && path[path_len] != '\\'))
         path_len--;
 
-    return String<>::make_ref(path.c_str(), path_len);
+    return StringD::make_ref(path.c_str(), path_len);
 }
 
-String<> filename(const String<>& path) noexcept
+StringD filename(const StringD& path) noexcept
 {
-    size_t path_len = path.size() - 1;
+    std::size_t path_len = path.size() - 1;
 
     while(path_len > 0 && (path[path_len] != '/' && path[path_len] != '\\'))
         path_len--;
 
-    return String<>::make_ref(path.c_str() + path_len + 1, path.size() - path_len - 1);
+    return StringD::make_ref(path.c_str() + path_len + 1, path.size() - path_len - 1);
 }
 
 StringD current_dir() noexcept
@@ -86,21 +92,221 @@ StringD current_dir() noexcept
 #endif /* defined(STDROMANO_WIN) */
 }
 
-bool makedir(const StringD& dir_path) noexcept
+Expected<void> makedir(const StringD& dir_path) noexcept
 {
     if(path_exists(dir_path))
-        return true;
+        return Ok();
 
 #if defined(STDROMANO_WIN)
-    return CreateDirectoryA(dir_path.is_ref() ? dir_path.copy().c_str() : dir_path.c_str(), NULL);
+    std::stack<StringD> to_create;
+    to_create.push(dir_path);
+
+    LoopGuard guard("Too many parent directories or error", 128);
+
+    while(guard--)
+    {
+        StringD parent = parent_dir(to_create.top()).copy();
+
+        if(!path_exists(parent))
+        {
+            to_create.push(std::move(parent));
+            continue;
+        }
+
+        break;
+    }
+
+    while(!to_create.empty())
+    {
+        StringD dir = std::move(to_create.top());
+
+        if(!CreateDirectoryA(dir.is_ref() ? dir.copy().c_str() : dir.c_str(), NULL))
+        {
+            DWORD last_err = GetLastError();
+
+            char buffer[STDROMANO_ERR_BUFFER_SZ];
+            std::memset(buffer, 0, STDROMANO_ERR_BUFFER_SZ * sizeof(char));
+            DWORD res = FormatMessageA(FORMAT_MESSAGE_FROM_SYSTEM,
+                                    nullptr,
+                                    last_err,
+                                    LANG_ENGLISH,
+                                    buffer,
+                                    STDROMANO_ERR_BUFFER_SZ,
+                                    nullptr);
+
+            if(res == 0)
+                return Error(StringD::make_fmt("Cannot format error message (CreateDirectoryA error: {}, FormatMessageA error: {})",
+                                            last_err,
+                                            GetLastError()));
+
+            return Error(StringD::make_fmt("CreateDirectoryA failed (Last error: {} ({}))",
+                                        fmt::string_view(buffer, res),
+                                        last_err));
+        }
+
+        to_create.pop();
+    }
+
 #elif defined(STDROMANO_LINUX)
     return mkdir(dir_path.is_ref() ? dir_path.copy().c_str() : dir_path.c_str(), 0755) == 0;
 #else
     STDROMANO_NOT_IMPLEMENTED;
 #endif /* defined(STDROMANO_WIN) */
+
+    return Ok();
 }
 
-Expected<StringD> expand_from_executable_dir(const String<>& path_to_expand) noexcept
+Expected<void> removedir(const StringD& dir_path, const bool recursive) noexcept
+{
+    if(!path_exists(dir_path))
+        return Ok();
+
+#if defined(STDROMANO_WIN)
+    char* path_buffer = static_cast<char*>(mem_alloca((dir_path.size() + 2) * sizeof(char)));
+    std::memset(path_buffer, 0, dir_path.size() + 2);
+    std::memcpy(path_buffer, dir_path.c_str(), dir_path.size());
+
+    SHFILEOPSTRUCTA file_op;
+    std::memset(&file_op, 0, sizeof(SHFILEOPSTRUCTA));
+
+    file_op.wFunc = FO_DELETE;
+    file_op.pFrom = path_buffer;
+    file_op.fFlags = FOF_NOCONFIRMATION | FOF_NO_UI | FOF_SILENT;
+
+    if(!recursive)
+        file_op.fFlags |= FOF_NORECURSION;
+
+    int ret = SHFileOperationA(&file_op);
+
+    if(ret != 0)
+        return Error(StringD::make_fmt("SHFileOperationA failed (error: {})", ret));
+#elif defined(STDROMANO_LINUX)
+    static thread_local StringD last_error;
+
+    auto callback = [](const char* fpath, const struct stat* sb, int typeflag, struct FTW* ftw) -> int {
+        int rv = remove(fpath);
+
+        if(rv != 0)
+            last_error = StringD::make_fmt("Cannot delete file: {} ({})", fpath, errno);
+
+        return rv;
+    };
+
+    int res = nftw(dir_path.is_ref() ? dir_path.copy().c_str() : dir_path.c_str(), callback, 64, FTW_DEPTH | FTW_PHYS);
+
+    if(res != 0)
+        return Error(std::move(last_error));
+#endif // defined(STDROMANO_WIN)
+
+    return Ok();
+}
+
+Expected<void> removefile(const StringD& file_path) noexcept
+{
+    if(!path_exists(file_path))
+        return Ok();
+
+#if defined(STDROMANO_WIN)
+    if(!DeleteFileA(file_path.is_ref() ? file_path.copy().c_str() : file_path.c_str()))
+    {
+        DWORD last_err = GetLastError();
+
+        char buffer[STDROMANO_ERR_BUFFER_SZ];
+        std::memset(buffer, 0, STDROMANO_ERR_BUFFER_SZ * sizeof(char));
+
+        DWORD res = FormatMessageA(FORMAT_MESSAGE_FROM_SYSTEM,
+                                   nullptr,
+                                   last_err,
+                                   LANG_ENGLISH,
+                                   buffer,
+                                   STDROMANO_ERR_BUFFER_SZ,
+                                   nullptr);
+
+        if(res == 0)
+            return Error(StringD::make_fmt("Cannot format error message (DeleteFileA error: {}, FormatMessageA error: {})",
+                                           last_err,
+                                           GetLastError()));
+
+        return Error(StringD::make_fmt("DeleteFileA failed (Last error: {} ({}))",
+                                       fmt::string_view(buffer, res),
+                                       last_err));
+    }
+#elif defined(STDROMANO_LINUX)
+    int res = remove(file_path.is_ref() ? file_path.copy().c_str() : file_path.c_str());
+
+    if(res != 0)
+        return Error(StringD::make_fmt("Cannot delete file: {} ({})", file_path, errno));
+#endif // defined(STDROMANO_WIN)
+
+    return Ok();
+}
+
+Expected<void> copyfile(const StringD& src, const StringD& dst) noexcept
+{
+    if(!path_exists(src))
+        return Error(StringD::make_fmt("Cannot find src file for copy: {}", src));
+
+#if defined(STDROMANO_WIN)
+    if(!CopyFileA(src.is_ref() ? src.copy().c_str() : src.c_str(), dst.is_ref() ? dst.copy().c_str() : dst.c_str(), true))
+    {
+        DWORD last_err = GetLastError();
+
+        char buffer[STDROMANO_ERR_BUFFER_SZ];
+        std::memset(buffer, 0, STDROMANO_ERR_BUFFER_SZ * sizeof(char));
+
+        DWORD res = FormatMessageA(FORMAT_MESSAGE_FROM_SYSTEM,
+                                   nullptr,
+                                   last_err,
+                                   LANG_ENGLISH,
+                                   buffer,
+                                   STDROMANO_ERR_BUFFER_SZ,
+                                   nullptr);
+
+        if(res == 0)
+            return Error(StringD::make_fmt("Cannot format error message (CopyFileA error: {}, FormatMessageA error: {})",
+                                           last_err,
+                                           GetLastError()));
+
+        return Error(StringD::make_fmt("CopyFileA failed (Last error: {} ({}))",
+                                       fmt::string_view(buffer, res),
+                                       last_err));
+    }
+#elif defined(STDROMANO_LINUX)
+    int input, output;
+
+    if((input = open(src.is_ref() ? src.copy().c_str() : src.c_str(), O_RDONLY)) == -1)
+        return Error(StringD::make_fmt("Cannot open src file \"{}\" for copy", src));
+
+    if((output = create(dst.is_ref() ? dst.copy().c_str() : dst.c_str(), 0660)) == -1)
+        return Error(StringD::make_fmt("Cannot create dst file \"{}\" for copy", dst));
+
+    struct stat file_stat;
+    std::memset(&file_stat, 0, sizeof(struct stat));
+
+    int res = fstat(, &file_stat);
+
+    off_t copied = 0;
+
+    while(res == 0 && copied < file_stat.st_size)
+    {
+        ssize_t written = sendfile(output, input, &copied, SSIZE_MAX);
+        copied += written;
+
+        if(written == -1)
+            result = -1;
+    }
+
+    close(input);
+    close(output);
+
+    if(result == -1)
+        return Error(StringD::make_fmt("Cannot copy file \"{}\" to \"{}\" ({})", src, dst, errno));
+#endif // defined(STDROMANO_WIN)
+
+    return Ok();
+}
+
+Expected<StringD> expand_from_executable_dir(const StringD& path_to_expand) noexcept
 {
     std::size_t size;
 
@@ -131,10 +337,10 @@ Expected<StringD> expand_from_executable_dir(const String<>& path_to_expand) noe
 
 #endif /* defined(STDROMANO_WIN) */
 
-    return String<>("{}/{}", fmt::string_view(sz_path, size), path_to_expand);
+    return StringD("{}/{}", fmt::string_view(sz_path, size), path_to_expand);
 }
 
-Expected<StringD> expand_from_lib_dir(const String<>& path_to_expand) noexcept
+Expected<StringD> expand_from_lib_dir(const StringD& path_to_expand) noexcept
 {
     std::size_t size;
 
@@ -173,14 +379,14 @@ Expected<StringD> expand_from_lib_dir(const String<>& path_to_expand) noexcept
 
 #endif /* defined(STDROMANO_WIN) */
 
-    return String<>("{}/{}", fmt::string_view(sz_path, size), path_to_expand);
+    return StringD::make_fmt("{}/{}", fmt::string_view(sz_path, size), path_to_expand);
 }
 
 Expected<StringD> tmp_dir() noexcept
 {
 #if defined(STDROMANO_WIN)
     DWORD buf_sz = MAX_PATH + 1;
-    String<> buf = String<>::make_zeroed(static_cast<std::size_t>(buf_sz));
+    StringD buf = StringD::make_zeroed(static_cast<std::size_t>(buf_sz));
 
     DWORD sz = GetTempPathA(buf_sz, buf.data());
 
@@ -191,7 +397,7 @@ Expected<StringD> tmp_dir() noexcept
 
     return buf;
 #elif defined(STDROMANO_LINUX)
-    return String<>::make_ref("/tmp");
+    return StringD::make_ref("/tmp");
 #endif // defined(STDROMANO_WIN)
 }
 
@@ -203,7 +409,7 @@ Expected<StringD> home_dir(bool use_env) noexcept
         const char* userprofile = std::getenv("USERPROFILE");
 
         if(userprofile != nullptr)
-            return String<>::make_from_c_str(userprofile);
+            return StringD::make_from_c_str(userprofile);
     }
 
     PWSTR ppsz_path;
@@ -225,7 +431,7 @@ Expected<StringD> home_dir(bool use_env) noexcept
                                                        nullptr,
                                                        nullptr);
 
-        String<> res = String<>::make_zeroed(ppsz_path_sz);
+        StringD res = StringD::make_zeroed(ppsz_path_sz);
 
         WideCharToMultiByte(CP_UTF8,
                             0,
@@ -250,11 +456,11 @@ Expected<StringD> home_dir(bool use_env) noexcept
     if((homedir = std::getenv("HOME")) == nullptr)
         homedir = getpwuid(getuid())->pw_dir;
 
-    return String<>::make_from_c_str(homedir);
+    return StringD::make_from_c_str(homedir);
 #endif // defined(STDROMANO_WIN)
 }
 
-Expected<StringD> load_file_content(const String<>& file_path,
+Expected<StringD> load_file_content(const StringD& file_path,
                                     const char* mode) noexcept
 {
     std::FILE* file_handle = std::fopen(file_path.c_str(), mode);
@@ -265,7 +471,7 @@ Expected<StringD> load_file_content(const String<>& file_path,
     std::fseek(file_handle, 0, SEEK_END);
     const size_t file_size = std::ftell(file_handle);
 
-    stdromano::String<> file_content = stdromano::String<>::make_zeroed(file_size);
+    stdromano::StringD file_content = stdromano::StringD::make_zeroed(file_size);
 
     std::rewind(file_handle);
     std::fread(file_content.data(), sizeof(char), file_size, file_handle);
@@ -331,18 +537,18 @@ ListDirIterator::~ListDirIterator()
 #endif /* defined(STDROMANO_WIN) */
 }
 
-String<> ListDirIterator::get_current_path() const noexcept
+StringD ListDirIterator::get_current_path() const noexcept
 {
 #if defined(STDROMANO_WIN)
-    return String<>("{}{}",
-                    fmt::string_view(this->_directory_path.c_str(), this->_directory_path.size() - 1),
-                    this->_find_data.cFileName);
+    return StringD("{}{}",
+                   fmt::string_view(this->_directory_path.c_str(), this->_directory_path.size() - 1),
+                   this->_find_data.cFileName);
 #elif defined(STDROMANO_LINUX)
-    return String<>("{}/{}",
-                    fmt::string_view(this->_directory_path.c_str(), this->_directory_path.size()),
-                    this->_entry->d_name);
+    return StringD("{}/{}",
+                   fmt::string_view(this->_directory_path.c_str(), this->_directory_path.size()),
+                   this->_entry->d_name);
 #else
-    return String<>();
+    return StringD();
 #endif /* defined(STDROMANO_WIN) */
 }
 
@@ -368,7 +574,7 @@ bool ListDirIterator::is_directory() const noexcept
 #endif /* defined(STDROMANO_WIN) */
 }
 
-bool list_dir(ListDirIterator& it, const String<>& directory_path, const std::uint32_t flags) noexcept
+bool list_dir(ListDirIterator& it, const StringD& directory_path, const std::uint32_t flags) noexcept
 {
     if(!path_exists(directory_path))
         return false;
@@ -391,7 +597,7 @@ bool list_dir(ListDirIterator& it, const String<>& directory_path, const std::ui
 
         if((it._find_data.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY))
         {
-            const size_t c_file_name_size = std::strlen(it._find_data.cFileName);
+            const std::size_t c_file_name_size = std::strlen(it._find_data.cFileName);
 
             if((it._find_data.cFileName[0] != '.' || c_file_name_size > 2) &&
                (flags & ListDirFlags_ListDirs))
@@ -405,13 +611,15 @@ bool list_dir(ListDirIterator& it, const String<>& directory_path, const std::ui
         }
     }
 
-    while(true)
+    LoopGuard guard("Cannot find next file", 100000000);
+
+    while(guard--)
     {
         if(FindNextFileA(it._h_find, &it._find_data))
         {
             if((it._find_data.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY))
             {
-                const size_t c_file_name_size = std::strlen(it._find_data.cFileName);
+                const std::size_t c_file_name_size = std::strlen(it._find_data.cFileName);
 
                 if((it._find_data.cFileName[0] != '.' || c_file_name_size > 2) &&
                    (flags & ListDirFlags_ListDirs))
@@ -429,9 +637,7 @@ bool list_dir(ListDirIterator& it, const String<>& directory_path, const std::ui
             DWORD err = GetLastError();
 
             if(err != ERROR_NO_MORE_FILES)
-            {
                 std::fprintf(stderr, "Error during fs_list_dir. Error code: %lu", err);
-            }
 
             return false;
         }
@@ -461,7 +667,7 @@ bool list_dir(ListDirIterator& it, const String<>& directory_path, const std::ui
         if(it._entry->d_type == DT_UNKNOWN)
         {
             struct stat st;
-            const String<> full_path = it.get_current_path();
+            const StringD full_path = it.get_current_path();
 
             if(stat(full_path.c_str(), &st) == 0)
             {
@@ -484,10 +690,10 @@ bool list_dir(ListDirIterator& it, const String<>& directory_path, const std::ui
 #endif /* defined(STDROMANO_WIN) */
 }
 
-String<> open_file_dialog(FileDialogMode_ mode,
-                          const String<>& title,
-                          const String<>& initial_path,
-                          const String<>& filter) noexcept
+StringD open_file_dialog(FileDialogMode_ mode,
+                         const StringD& title,
+                         const StringD& initial_path,
+                         const StringD& filter) noexcept
 {
 #if defined(STDROMANO_WIN)
     if(mode == FileDialogMode_OpenFile || mode == FileDialogMode_SaveFile)
@@ -502,7 +708,7 @@ String<> open_file_dialog(FileDialogMode_ mode,
         ofn.lpstrFile = filename;
         ofn.nMaxFile = sizeof(filename);
 
-        String<> windows_filter = filter.replace('|', '\0');
+        StringD windows_filter = filter.replace('|', '\0');
         windows_filter.push_back('\0');
         ofn.lpstrFilter = windows_filter.c_str();
 
@@ -518,9 +724,9 @@ String<> open_file_dialog(FileDialogMode_ mode,
         BOOL result = GetOpenFileNameA(&ofn);
 
         if(result)
-            return String<>(filename);
+            return StringD(filename);
 
-        return String<>();
+        return StringD();
     }
     else if(mode == FileDialogMode_OpenDir)
     {
@@ -554,15 +760,11 @@ String<> open_file_dialog(FileDialogMode_ mode,
         }
 
         LPITEMIDLIST pidl = SHBrowseForFolderA(&bi);
-        String<> dirpath = String<>::make_zeroed(MAX_PATH);
+        StringD dirpath = StringD::make_zeroed(MAX_PATH);
 
         if(pidl != NULL)
-        {
             if(!SHGetPathFromIDListA((PCIDLIST_ABSOLUTE)pidl, dirpath.c_str()))
-            {
-                dirpath = String<>();
-            }
-        }
+                dirpath = StringD();
 
         IMalloc* p_malloc = NULL;
         if(SUCCEEDED(SHGetMalloc(&p_malloc)))
@@ -574,12 +776,12 @@ String<> open_file_dialog(FileDialogMode_ mode,
         return dirpath;
     }
 
-    return String<>();
+    return StringD();
 #elif defined(STDROMANO_LINUX)
     gtk_init(nullptr, nullptr);
 
     GtkWidget* dialog = nullptr;
-    String<> result;
+    StringD result;
 
     switch(mode)
     {
@@ -617,22 +819,18 @@ String<> open_file_dialog(FileDialogMode_ mode,
     }
 
     if(!initial_path.empty())
-    {
         gtk_file_chooser_set_current_folder(GTK_FILE_CHOOSER(dialog), initial_path.c_str());
-    }
 
     if(!filter.empty())
     {
         GtkFileFilter* gtkFilter = gtk_file_filter_new();
         gtk_file_filter_set_name(gtkFilter, "Specified Files");
 
-        String<>::split_iterator it;
-        String<> token;
+        StringD::split_iterator it;
+        StringD token;
 
         while(filter.split("|", it, token))
-        {
             gtk_file_filter_add_pattern(gtkFilter, token.c_str());
-        }
 
         gtk_file_filter_add_pattern(gtkFilter, filter.c_str());
 
@@ -651,12 +849,10 @@ String<> open_file_dialog(FileDialogMode_ mode,
     gtk_widget_destroy(dialog);
 
     while(gtk_events_pending())
-    {
         gtk_main_iteration();
-    }
 
     return result;
-#endif /* defined(STDROMANO_WIN) */
+#endif // defined(STDROMANO_WIN)
 }
 
 bool WalkIterator::process_current_directory() noexcept
@@ -681,26 +877,32 @@ bool WalkIterator::process_current_directory() noexcept
         this->_h_find = FindFirstFileA(search_path.c_str(), &find_data);
 
         if(this->_h_find == INVALID_HANDLE_VALUE)
-        {
             return false;
-        }
     }
     else
     {
         if(!FindNextFileA(this->_h_find, &find_data))
         {
+            DWORD last_err = GetLastError();
+
+            FindClose(this->_h_find);
+            this->_h_find = INVALID_HANDLE_VALUE;
+
+            if(last_err != ERROR_NO_MORE_FILES)
+                this->_is_end = true;
+
             return false;
         }
     }
 
-    while(true)
+    LoopGuard guard("Cannot find next file", 100000000);
+
+    while(guard--)
     {
         if(this->should_skip_entry(find_data.cFileName, find_data.dwFileAttributes))
         {
             if(!FindNextFileA(this->_h_find, &find_data))
-            {
                 break;
-            }
 
             continue;
         }
@@ -710,9 +912,7 @@ bool WalkIterator::process_current_directory() noexcept
         bool is_dir = (find_data.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) != 0;
 
         if(is_dir && this->_flags & WalkFlags_Recursive)
-        {
-            this->_pending_dirs.push(full_path);
-        }
+            this->_pending_dirs.push(std::move(full_path).copy());
 
         if((is_dir && (this->_flags & WalkFlags_ListDirs)) ||
            (!is_dir && (this->_flags & WalkFlags_ListFiles)))
@@ -722,9 +922,7 @@ bool WalkIterator::process_current_directory() noexcept
         }
 
         if(!FindNextFileA(this->_h_find, &find_data))
-        {
             break;
-        }
     }
 
     FindClose(this->_h_find);
@@ -752,9 +950,7 @@ bool WalkIterator::process_current_directory() noexcept
         bool is_hidden = entry->d_name[0] == '.';
 
         if(is_hidden && !(this->_flags & WalkFlags_ListHidden))
-        {
             continue;
-        }
 
         bool is_dir = false;
 
@@ -765,18 +961,14 @@ bool WalkIterator::process_current_directory() noexcept
             struct stat st;
 
             if(stat(full_path.c_str(), &st) == 0)
-            {
                 is_dir = S_ISDIR(st.st_mode);
-            }
         }
         else if(entry->d_type == DT_DIR)
         {
             is_dir = true;
 
             if(this->_flags & WalkFlags_Recursive)
-            {
-                this->_pending_dirs.push(full_path);
-            }
+                this->_pending_dirs.push(std::move(full_path.copy()));
         }
 
         if((is_dir && (this->_flags & WalkFlags_ListFiles)) ||
@@ -792,7 +984,7 @@ bool WalkIterator::process_current_directory() noexcept
 
 #else
     STDROMANO_NOT_IMPLEMENTED;
-#endif /* defined(STDROMANO_WIN) */
+#endif // defined(STDROMANO_WIN)
 
     return false;
 }
@@ -800,9 +992,7 @@ bool WalkIterator::process_current_directory() noexcept
 void WalkIterator::move_to_next_directory() noexcept
 {
     if(this->_pending_dirs.empty())
-    {
         this->_is_end = true;
-    }
 }
 
 bool WalkIterator::should_skip_entry(const char* name
@@ -810,19 +1000,15 @@ bool WalkIterator::should_skip_entry(const char* name
                                     , DWORD attrs) const noexcept
 #else
                                      ) const noexcept
-#endif /* defined(STDROMANO_WIN) */
+#endif // defined(STDROMANO_WIN)
 {
     if(name[0] == '.' && (name[1] == '\0' || (name[1] == '.' && name[2] == '\0')))
-    {
         return true;
-    }
 
 #if defined(STDROMANO_WIN)
     if((attrs & FILE_ATTRIBUTE_HIDDEN) && !(this->_flags & ListDirFlags_ListHidden))
-    {
         return true;
-    }
-#endif /* defined(STDROMANO_WIN) */
+#endif // defined(STDROMANO_WIN)
 
     return false;
 }
