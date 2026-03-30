@@ -86,7 +86,7 @@ StringD current_dir() noexcept
 #endif /* defined(STDROMANO_WIN) */
 }
 
-bool mkdir(const StringD& dir_path) noexcept
+bool makedir(const StringD& dir_path) noexcept
 {
     if(path_exists(dir_path))
         return true;
@@ -284,7 +284,7 @@ Expected<void> write_file_content(const char* data,
     const StringD parent = parent_dir(file_path);
 
     if(!path_exists(parent))
-        if(!mkdir(parent))
+        if(!makedir(parent))
             return Error(StringD::make_fmt("Cannot create parent directory for file: {}", file_path));
 
     std::FILE* file_handle = std::fopen(file_path.c_str(), mode);

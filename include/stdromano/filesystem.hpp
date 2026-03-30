@@ -33,7 +33,7 @@ STDROMANO_API String<> filename(const String<>& path) noexcept;
 
 STDROMANO_API StringD current_dir() noexcept;
 
-STDROMANO_API bool mkdir(const StringD& dir_path) noexcept;
+STDROMANO_API bool makedir(const StringD& dir_path) noexcept;
 
 STDROMANO_API Expected<StringD> expand_from_executable_dir(const String<>& path_to_expand) noexcept;
 
