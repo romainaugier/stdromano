@@ -23,6 +23,8 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <unistd.h>
+#include <fcntl.h>
+#include <ftw.h>
 #endif // defined(STDROMANO_WIN)
 
 #include <stack>
@@ -148,7 +150,8 @@ Expected<void> makedir(const StringD& dir_path) noexcept
     }
 
 #elif defined(STDROMANO_LINUX)
-    return mkdir(dir_path.is_ref() ? dir_path.copy().c_str() : dir_path.c_str(), 0755) == 0;
+    if(mkdir(dir_path.is_ref() ? dir_path.copy().c_str() : dir_path.c_str(), 0755) !!= 0)
+        return Error(StringD::make_fmt("mkdir failed ({})", errno));
 #else
     STDROMANO_NOT_IMPLEMENTED;
 #endif /* defined(STDROMANO_WIN) */
@@ -277,13 +280,13 @@ Expected<void> copyfile(const StringD& src, const StringD& dst) noexcept
     if((input = open(src.is_ref() ? src.copy().c_str() : src.c_str(), O_RDONLY)) == -1)
         return Error(StringD::make_fmt("Cannot open src file \"{}\" for copy", src));
 
-    if((output = create(dst.is_ref() ? dst.copy().c_str() : dst.c_str(), 0660)) == -1)
+    if((output = creat(dst.is_ref() ? dst.copy().c_str() : dst.c_str(), 0660)) == -1)
         return Error(StringD::make_fmt("Cannot create dst file \"{}\" for copy", dst));
 
     struct stat file_stat;
     std::memset(&file_stat, 0, sizeof(struct stat));
 
-    int res = fstat(, &file_stat);
+    int res = fstat(input, &file_stat);
 
     off_t copied = 0;
 
@@ -299,7 +302,7 @@ Expected<void> copyfile(const StringD& src, const StringD& dst) noexcept
     close(input);
     close(output);
 
-    if(result == -1)
+    if(res == -1)
         return Error(StringD::make_fmt("Cannot copy file \"{}\" to \"{}\" ({})", src, dst, errno));
 #endif // defined(STDROMANO_WIN)
 
