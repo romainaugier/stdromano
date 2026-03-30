@@ -151,8 +151,8 @@ struct fmt::formatter<stdromano::Expected<T>>
 
     auto format(const stdromano::Expected<T>& e, format_context& ctx) const
     {
-        return !e.has_error() ? format_to(ctx.out(), "{}", e.value())
-                              : format_to(ctx.out(), "{}", e.error());
+        return !e.has_error() ? format_to(ctx.out(), "Expected<T>: {}", e.value())
+                              : format_to(ctx.out(), "Error: {}", e.error());
     }
 };
 
