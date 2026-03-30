@@ -22,6 +22,7 @@
 #include <pwd.h>
 #include <sys/stat.h>
 #include <sys/types.h>
+#include <sys/sendfile.h>
 #include <unistd.h>
 #include <fcntl.h>
 #include <ftw.h>
@@ -150,7 +151,7 @@ Expected<void> makedir(const StringD& dir_path) noexcept
     }
 
 #elif defined(STDROMANO_LINUX)
-    if(mkdir(dir_path.is_ref() ? dir_path.copy().c_str() : dir_path.c_str(), 0755) !!= 0)
+    if(mkdir(dir_path.is_ref() ? dir_path.copy().c_str() : dir_path.c_str(), 0755) != 0)
         return Error(StringD::make_fmt("mkdir failed ({})", errno));
 #else
     STDROMANO_NOT_IMPLEMENTED;
@@ -296,7 +297,7 @@ Expected<void> copyfile(const StringD& src, const StringD& dst) noexcept
         copied += written;
 
         if(written == -1)
-            result = -1;
+            res = -1;
     }
 
     close(input);
