@@ -34,6 +34,9 @@ STDROMANO_API StringD parent_dir(const StringD& path) noexcept;
 // Returns the filename component of the given path (e.g. "/foo/bar/baz.txt" -> "baz.txt")
 STDROMANO_API StringD filename(const StringD& path) noexcept;
 
+// Returns the file size of the given path. If it's not a file or an error occured, an error is returned
+STDROMANO_API Expected<std::size_t> filesize(const StringD& path) noexcept;
+
 // Returns the current working directory of the process
 STDROMANO_API StringD current_dir() noexcept;
 

@@ -66,6 +66,71 @@ StringD filename(const StringD& path) noexcept
     return StringD::make_ref(path.c_str() + path_len + 1, path.size() - path_len - 1);
 }
 
+Expected<std::size_t> filesize(const StringD& path) noexcept
+{
+    if(!path_exists(path))
+        return Error(StringD::make_fmt("File \"{}\" does not exist", path));
+
+#if defined(STDROMANO_WIN)
+    HANDLE file = CreateFileA(path.c_str(),
+                              GENERIC_READ,
+                              FILE_SHARE_READ,
+                              0,
+                              OPEN_EXISTING,
+                              FILE_ATTRIBUTE_NORMAL,
+                              nullptr);
+
+    if(file == INVALID_HANDLE_VALUE)
+    {
+        DWORD last_err = GetLastError();
+
+        char buffer[1024];
+        std::memset(buffer, 0, 1024 * sizeof(char));
+        DWORD res = FormatMessageA(FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS,
+                                   nullptr,
+                                   last_err,
+                                   MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT),
+                                   buffer,
+                                   1024,
+                                   nullptr);
+
+        if(res == 0)
+        {
+            DWORD fmt_error = GetLastError();
+
+            return Error(StringD::make_fmt("Cannot get file size ({})", last_err));
+        }
+
+        return Error(StringD::make_fmt("Cannot get file size: {} ({})", fmt::string_view(buffer, res), last_err));
+    }
+
+    LARGE_INTEGER file_size;
+    std::memset(&file_size, 0, sizeof(LARGE_INTEGER));
+
+    if(!GetFileSizeEx(file, &file_size))
+    {
+        DWORD last_err = GetLastError();
+
+        CloseHandle(file);
+
+        return Error();
+    }
+
+    CloseHandle(file);
+
+    return static_cast<std::size_t>(file_size.QuadPart);
+#elif defined(STDROMANO_LINUX)
+    struct stat file_stat;
+
+    if(stat(path.c_str(), &file_stat) != 0)
+        return Error(StringD::make_fmt("Cannot get file size ({})", errno));
+
+    return static_cast<std::size_t>(st_size);
+#else
+    STDROMANO_NOT_IMPLEMENTED;
+#endif // defined(STDROMANO_WIN)
+}
+
 StringD current_dir() noexcept
 {
 #if defined(STDROMANO_WIN)
@@ -132,7 +197,7 @@ Expected<void> makedir(const StringD& dir_path) noexcept
             DWORD res = FormatMessageA(FORMAT_MESSAGE_FROM_SYSTEM,
                                     nullptr,
                                     last_err,
-                                    LANG_ENGLISH,
+                                    MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT),
                                     buffer,
                                     STDROMANO_ERR_BUFFER_SZ,
                                     nullptr);
@@ -221,7 +286,7 @@ Expected<void> removefile(const StringD& file_path) noexcept
         DWORD res = FormatMessageA(FORMAT_MESSAGE_FROM_SYSTEM,
                                    nullptr,
                                    last_err,
-                                   LANG_ENGLISH,
+                                   MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT),
                                    buffer,
                                    STDROMANO_ERR_BUFFER_SZ,
                                    nullptr);
@@ -261,7 +326,7 @@ Expected<void> copyfile(const StringD& src, const StringD& dst) noexcept
         DWORD res = FormatMessageA(FORMAT_MESSAGE_FROM_SYSTEM,
                                    nullptr,
                                    last_err,
-                                   LANG_ENGLISH,
+                                   MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT),
                                    buffer,
                                    STDROMANO_ERR_BUFFER_SZ,
                                    nullptr);

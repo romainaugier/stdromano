@@ -60,6 +60,20 @@ TEST_CASE(test_filename_no_directory)
     ASSERT(!name.empty());
 }
 
+/* filesize */
+
+TEST_CASE(test_filesize)
+{
+    const std::size_t size = stdromano::fs::filesize(__FILE__).unwrap();
+    spdlog::debug("Size: {}", size);
+
+    const stdromano::StringD content = stdromano::fs::load_file_content(__FILE__).unwrap();
+
+    ASSERT(size == content.size());
+
+    spdlog::debug("Content size: {}", content.size());
+}
+
 /* current_dir */
 
 TEST_CASE(test_current_dir)
@@ -634,6 +648,9 @@ int main()
     /* filename */
     runner.add_test("Filename_FromPath", test_filename_from_path);
     runner.add_test("Filename_NoDirectory", test_filename_no_directory);
+
+    /* filesize */
+    runner.add_test("FileSize", test_filesize);
 
     /* current_dir / tmp_dir / home_dir */
     runner.add_test("CurrentDir", test_current_dir);
