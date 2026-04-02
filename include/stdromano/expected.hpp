@@ -9,6 +9,10 @@
 
 #include "stdromano/string.hpp"
 
+#if defined(STDROMANO_WIN)
+#include <Windows.h>
+#endif // defined(STDROMANO_WIN)
+
 // TODO: replace with better alternatives
 #include <variant>
 #include <optional>
@@ -23,6 +27,34 @@ struct Error
     Error() = default;
 
     Error(StringD msg) : message(std::move(msg)) {}
+
+    static Error from_win32_last_error()
+    {
+#if defined(STDROMANO_WIN)
+        DWORD last_err = GetLastError();
+
+        char buffer[1024];
+        std::memset(buffer, 0, 1024 * sizeof(char));
+        DWORD res = FormatMessageA(FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS,
+                                   nullptr,
+                                   last_err,
+                                   MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT),
+                                   buffer,
+                                   1024,
+                                   nullptr);
+
+        if(res == 0)
+        {
+            DWORD fmt_error = GetLastError();
+
+            return Error(StringD::make_fmt("Cannot format error message. Code: {}", last_err));
+        }
+
+        return Error(StringD::make_fmt("{} ({})", fmt::string_view(buffer, res), last_err));
+#else
+        return Error("win32 is not available on this platform");
+#endif // defined(STDROMANO_WIN)
+    }
 };
 
 // Rust's Result-like struct to handle error easily
