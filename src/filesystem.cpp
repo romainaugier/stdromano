@@ -125,10 +125,23 @@ Expected<std::size_t> filesize(const StringD& path) noexcept
     if(stat(path.c_str(), &file_stat) != 0)
         return Error(StringD::make_fmt("Cannot get file size ({})", errno));
 
-    return static_cast<std::size_t>(st_size);
+    return static_cast<std::size_t>(file_stat.st_size);
 #else
     STDROMANO_NOT_IMPLEMENTED;
 #endif // defined(STDROMANO_WIN)
+}
+
+Expected<StringD> relative_to(const StringD& path, const StringD& other) noexcept
+{
+    if(path.size() <= other.size())
+        return Error("path cannot be shorter than the path you want to make it relative to");
+
+    std::size_t i = 0;
+
+    while(i < other.size() && path[i] == other[i])
+        i++;
+
+    return StringD::make_ref(path.c_str() + i, path.size() - i);
 }
 
 StringD current_dir() noexcept

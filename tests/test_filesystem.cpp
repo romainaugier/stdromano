@@ -74,6 +74,16 @@ TEST_CASE(test_filesize)
     spdlog::debug("Content size: {}", content.size());
 }
 
+/* relative_to */
+
+TEST_CASE(test_relative_to)
+{
+    const stdromano::StringD parent = stdromano::fs::parent_dir(__FILE__);
+    const stdromano::StringD rel = stdromano::fs::relative_to(__FILE__, parent).unwrap();
+
+    spdlog::debug("Relative to: {}, {}", parent, rel);
+}
+
 /* current_dir */
 
 TEST_CASE(test_current_dir)
@@ -651,6 +661,9 @@ int main()
 
     /* filesize */
     runner.add_test("FileSize", test_filesize);
+
+    /* relative_to */
+    runner.add_test("RelativeTo", test_relative_to);
 
     /* current_dir / tmp_dir / home_dir */
     runner.add_test("CurrentDir", test_current_dir);
