@@ -671,9 +671,7 @@ public:
     constexpr String copy() const noexcept
     {
         if(this->_is_ref)
-        {
-            return String(this->data(), this->size());
-        }
+            return String::make_from_c_str(this->data(), this->size());
 
         return String(*this);
     }
