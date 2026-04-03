@@ -28,19 +28,16 @@ FS_NAMESPACE_BEGIN
 // Returns true if the given path exists on the filesystem (file or directory), false otherwise
 STDROMANO_API bool path_exists(const StringD& path) noexcept;
 
-// Returns the parent directory of the given path (e.g. "/foo/bar/baz.txt" -> "/foo/bar") as a reference
-// If you need a full string, make sure to call copy() afterwards
+// Returns the parent directory of the given path (e.g. "/foo/bar/baz.txt" -> "/foo/bar")
 STDROMANO_API StringD parent_dir(const StringD& path) noexcept;
 
-// Returns the filename component of the given path (e.g. "/foo/bar/baz.txt" -> "baz.txt") as a reference
-// If you need a full string, make sure to call copy() afterwards
+// Returns the filename component of the given path (e.g. "/foo/bar/baz.txt" -> "baz.txt")
 STDROMANO_API StringD filename(const StringD& path) noexcept;
 
 // Returns the file size of the given path. If it's not a file or an error occured, an error is returned
 STDROMANO_API Expected<std::size_t> filesize(const StringD& path) noexcept;
 
-// Returns path relative to other(e.g. "/foo/bar/baz.txt" and "/foo/bar" -> "/baz.txt") as a reference
-// If you need a full string, make sure to call copy() afterwards
+// Returns path relative to other(e.g. "/foo/bar/baz.txt" and "/foo/bar" -> "/baz.txt")
 STDROMANO_API Expected<StringD> relative_to(const StringD& path, const StringD& other) noexcept;
 
 // Returns the current working directory of the process
