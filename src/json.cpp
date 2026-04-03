@@ -23,18 +23,19 @@ STDROMANO_NAMESPACE_BEGIN
 
 enum JsonTag : uint64_t
 {
-    JsonTag_Null  = 1u << 0,
-    JsonTag_Bool  = 1u << 1,
-    JsonTag_U64   = 1u << 2,
-    JsonTag_I64   = 1u << 3,
-    JsonTag_F64   = 1u << 4,
-    JsonTag_Str   = 1u << 5,
+    JsonTag_Null = 1u << 0,
+    JsonTag_Bool = 1u << 1,
+    JsonTag_U64 = 1u << 2,
+    JsonTag_I64 = 1u << 3,
+    JsonTag_F64 = 1u << 4,
+    JsonTag_Str = 1u << 5,
     JsonTag_Array = 1u << 6,
-    JsonTag_Dict  = 1u << 7,
+    JsonTag_Dict = 1u << 7,
+    JsonTag_Invalid = 1u << 8,
 };
 
-static constexpr uint64_t JSON_TAGS_MASK = (1u << 8) - 1;
-static constexpr uint64_t JSON_SZ_MASK   = 0xFFFFFFFFULL << 32;
+static constexpr std::uint64_t JSON_TAGS_MASK = (1u << 8) - 1;
+static constexpr std::uint64_t JSON_SZ_MASK = 0xFFFFFFFFULL << 32;
 
 STDROMANO_FORCE_INLINE void tag_set_type(uint64_t& tags, uint64_t tag) noexcept
 {
@@ -65,17 +66,17 @@ STDROMANO_FORCE_INLINE void tag_decr_sz(uint64_t& tags) noexcept
 
 STDROMANO_FORCE_INLINE void tag_set_invalid(uint64_t& tags) noexcept
 {
-    tags |= 1ULL << 8;
+    tags |= JsonTag_Invalid;
 }
 
 STDROMANO_FORCE_INLINE void tag_clear_invalid(uint64_t& tags) noexcept
 {
-    tags &= ~(1ULL << 8);
+    tags &= ~(JsonTag_Invalid);
 }
 
 STDROMANO_FORCE_INLINE bool tag_get_invalid(std::uint64_t& tags) noexcept
 {
-    return (tags & (1ULL << 8)) > 0;
+    return (tags & (JsonTag_Invalid)) > 0;
 }
 
 /*******************************/
