@@ -55,6 +55,19 @@ struct Error
         return Error("win32 is not available on this platform");
 #endif // defined(STDROMANO_WIN)
     }
+
+    static Error from_unix_errno()
+    {
+#if defined(STDROMANO_LINUX)
+        int last_err = errno;
+
+        char* last_err_str = strerror(last_err);
+
+        return Error(StringD::make_fmt("{} ({})", last_err_str, last_err));
+#else
+        return Error("unix errno is not available on this platform");
+#endif // defined(STDROMANO_LINUX)
+    }
 };
 
 // Rust's Result-like struct to handle error easily
