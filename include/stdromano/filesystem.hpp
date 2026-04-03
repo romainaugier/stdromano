@@ -266,6 +266,9 @@ public:
 #if defined(STDROMANO_WIN)
         if(this->_h_find != INVALID_HANDLE_VALUE)
             FindClose(this->_h_find);
+#elif defined(STDROMANO_LINUX)
+        if(this->_dir != nullptr)
+            closedir(this->_dir);
 #endif /* defined(STDROMANO_WIN) */
     }
 
