@@ -18,7 +18,7 @@
 
 STDROMANO_NAMESPACE_BEGIN
 
-enum class MemoryOrder 
+enum class MemoryOrder
 {
     Relaxed,
     Consume,
@@ -29,13 +29,13 @@ enum class MemoryOrder
 };
 
 #if defined(STDROMANO_LINUX)
-constexpr int to_gcc_memory_order(MemoryOrder order) 
+constexpr int to_gcc_memory_order(MemoryOrder order)
 {
     switch (order) {
-        case MemoryOrder::Relaxed: 
+        case MemoryOrder::Relaxed:
             return __ATOMIC_RELAXED;
         case MemoryOrder::Consume:
-        case MemoryOrder::Acquire: 
+        case MemoryOrder::Acquire:
             return __ATOMIC_ACQUIRE;
         case MemoryOrder::Release:
             return __ATOMIC_RELEASE;
@@ -43,7 +43,7 @@ constexpr int to_gcc_memory_order(MemoryOrder order)
             return __ATOMIC_ACQ_REL;
         case MemoryOrder::SeqCst:
             return __ATOMIC_SEQ_CST;
-        default: 
+        default:
             return __ATOMIC_SEQ_CST;
     }
 }
@@ -52,10 +52,10 @@ constexpr int to_gcc_memory_order(MemoryOrder order)
 template<typename T>
 using is_valid_for_atomic = std::conjunction<std::is_integral<T>,
                                              std::disjunction<std::bool_constant<sizeof(T) == 4>,
-                                                              std::bool_constant<sizeof(T) == 8>>>;                                         
+                                                              std::bool_constant<sizeof(T) == 8>>>;
 
 template<typename T>
-class Atomic 
+class Atomic
 {
     static_assert(is_valid_for_atomic<T>::value, "T must be integral and of size 4|8");
 
@@ -69,23 +69,23 @@ public:
     Atomic(const Atomic&) = delete;
     Atomic& operator=(const Atomic&) = delete;
 
-    T load(STDROMANO_MAYBE_UNUSED MemoryOrder order = MemoryOrder::SeqCst) noexcept 
+    T load(STDROMANO_MAYBE_UNUSED MemoryOrder order = MemoryOrder::SeqCst) const noexcept
     {
 #if defined(STDROMANO_WIN)
         if constexpr (sizeof(T) == 4)
         {
-            return _InterlockedOr(reinterpret_cast<volatile long*>(&this->_value), 0);
+            return _InterlockedOr(const_cast<volatile long*>(reinterpret_cast<const volatile long*>(&this->_value)), 0);
         }
         else if constexpr (sizeof(T) == 8)
         {
-            return _InterlockedOr64(reinterpret_cast<volatile __int64*>(&this->_value), 0);
+            return _InterlockedOr64(const_cast<volatile __int64*>(reinterpret_cast<const volatile __int64*>(&this->_value)), 0);
         }
 #elif defined(STDROMANO_LINUX)
         return __atomic_load_n(&this->_value, to_gcc_memory_order(order));
 #endif /* defined(STDROMANO_WIN) */
     }
 
-    void store(T value, STDROMANO_MAYBE_UNUSED MemoryOrder order = MemoryOrder::SeqCst) noexcept 
+    void store(T value, STDROMANO_MAYBE_UNUSED MemoryOrder order = MemoryOrder::SeqCst) noexcept
     {
 #if defined(STDROMANO_WIN)
         if constexpr (sizeof(T) == 4)
@@ -101,7 +101,13 @@ public:
 #endif /* defined(STDROMANO_WIN) */
     }
 
-    T exchange(T value, STDROMANO_MAYBE_UNUSED MemoryOrder order = MemoryOrder::SeqCst) noexcept 
+    Atomic<T>& operator=(T value) noexcept
+    {
+        this->store(value);
+        return *this;
+    }
+
+    T exchange(T value, STDROMANO_MAYBE_UNUSED MemoryOrder order = MemoryOrder::SeqCst) noexcept
     {
 #if defined(STDROMANO_WIN)
         if constexpr (sizeof(T) == 4)
@@ -118,7 +124,7 @@ public:
     }
 
     T fetch_add(T arg,
-                STDROMANO_MAYBE_UNUSED MemoryOrder order = MemoryOrder::SeqCst) noexcept 
+                STDROMANO_MAYBE_UNUSED MemoryOrder order = MemoryOrder::SeqCst) noexcept
     {
 #if defined(STDROMANO_WIN)
         if constexpr (sizeof(T) == 4)
@@ -135,7 +141,7 @@ public:
     }
 
     T fetch_sub(T arg,
-                STDROMANO_MAYBE_UNUSED MemoryOrder order = MemoryOrder::SeqCst) noexcept 
+                STDROMANO_MAYBE_UNUSED MemoryOrder order = MemoryOrder::SeqCst) noexcept
     {
 #if defined(STDROMANO_WIN)
         if constexpr (sizeof(T) == 4)
@@ -154,10 +160,10 @@ public:
     bool compare_exchange(T& expected,
                           T value,
                           STDROMANO_MAYBE_UNUSED MemoryOrder success = MemoryOrder::SeqCst,
-                          STDROMANO_MAYBE_UNUSED MemoryOrder failure = MemoryOrder::SeqCst) noexcept 
+                          STDROMANO_MAYBE_UNUSED MemoryOrder failure = MemoryOrder::SeqCst) noexcept
     {
 #if defined(STDROMANO_WIN)
-        if constexpr (sizeof(T) == 4) 
+        if constexpr (sizeof(T) == 4)
         {
             T orig = static_cast<T>(_InterlockedCompareExchange(reinterpret_cast<volatile long*>(&_value),
                                                                 value,
@@ -170,15 +176,15 @@ public:
             }
 
             return ok;
-        } 
-        else if constexpr (sizeof(T) == 8) 
+        }
+        else if constexpr (sizeof(T) == 8)
         {
             T orig = static_cast<T>(_InterlockedCompareExchange64(reinterpret_cast<volatile __int64*>(&_value),
                                                                   value,
                                                                   expected));
             bool ok = (orig == expected);
 
-            if(!ok) 
+            if(!ok)
             {
                 expected = orig;
             }
@@ -195,29 +201,29 @@ public:
 #endif /* defined(STDROMANO_WIN) */
     }
 
-    T operator++() noexcept 
+    T operator++() noexcept
     {
         return fetch_add(1) + 1;
     }
 
-    T operator++(int) noexcept 
+    T operator++(int) noexcept
     {
         return fetch_add(1);
     }
 
-    T operator--() noexcept 
+    T operator--() noexcept
     {
         return fetch_sub(1) - 1;
     }
 
-    T operator--(int) noexcept 
+    T operator--(int) noexcept
     {
         return fetch_sub(1);
     }
 };
 
 template<>
-class Atomic<bool> 
+class Atomic<bool>
 {
 private:
     volatile long _value;
@@ -229,15 +235,13 @@ public:
     Atomic(const Atomic&) = delete;
     Atomic& operator=(const Atomic&) = delete;
 
-    bool load(MemoryOrder order = MemoryOrder::SeqCst) const noexcept 
+    bool load(MemoryOrder order = MemoryOrder::SeqCst) const noexcept
     {
 #if defined(STDROMANO_WIN)
         long val = _InterlockedOr(const_cast<volatile long*>(&this->_value), 0);
 
         if(order == MemoryOrder::Acquire)
-        {
             MemoryBarrier();
-        }
 
         return val != 0;
 #elif defined(STDROMANO_LINUX)
@@ -246,10 +250,10 @@ public:
 #endif
     }
 
-    void store(bool value, MemoryOrder order = MemoryOrder::SeqCst) noexcept 
+    void store(bool value, MemoryOrder order = MemoryOrder::SeqCst) noexcept
     {
 #if defined(STDROMANO_WIN)
-        if(order == MemoryOrder::Release) 
+        if(order == MemoryOrder::Release)
         {
             MemoryBarrier();
         }
@@ -260,8 +264,14 @@ public:
 #endif
     }
 
+    Atomic<bool>& operator=(bool value) noexcept
+    {
+        this->store(value);
+        return *this;
+    }
+
     bool exchange(bool value,
-                  STDROMANO_MAYBE_UNUSED MemoryOrder order = MemoryOrder::SeqCst) noexcept 
+                  STDROMANO_MAYBE_UNUSED MemoryOrder order = MemoryOrder::SeqCst) noexcept
     {
 #if defined(STDROMANO_WIN)
         long old = _InterlockedExchange(const_cast<volatile long*>(&this->_value), value ? 1 : 0);
@@ -274,7 +284,7 @@ public:
 
     bool compare_exchange(bool& expected, bool value,
                           STDROMANO_MAYBE_UNUSED MemoryOrder success = MemoryOrder::SeqCst,
-                          STDROMANO_MAYBE_UNUSED MemoryOrder failure = MemoryOrder::SeqCst) noexcept 
+                          STDROMANO_MAYBE_UNUSED MemoryOrder failure = MemoryOrder::SeqCst) noexcept
     {
 #if defined(STDROMANO_WIN)
         long expected_val = expected ? 1 : 0;
