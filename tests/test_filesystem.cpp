@@ -19,7 +19,7 @@ TEST_CASE(test_path_exists_nonexistent)
 
 TEST_CASE(test_path_exists_directory)
 {
-    const stdromano::StringD dir = stdromano::fs::parent_dir(__FILE__).copy();
+    const stdromano::StringD dir = stdromano::fs::parent_dir(__FILE__);
     ASSERT_EQUAL(true, stdromano::fs::path_exists(dir));
 }
 
@@ -33,7 +33,9 @@ TEST_CASE(test_path_exists_empty)
 TEST_CASE(test_parent_dir_file)
 {
     const stdromano::String<> parent = stdromano::fs::parent_dir(__FILE__);
+
     ASSERT(!parent.empty());
+
     ASSERT_EQUAL(true, stdromano::fs::path_exists(parent));
 }
 

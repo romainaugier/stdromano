@@ -39,11 +39,14 @@ FS_NAMESPACE_BEGIN
 
 bool path_exists(const StringD& path) noexcept
 {
+    const StringD p = path.is_ref() ? path.copy() : path;
+
 #if defined(STDROMANO_WIN)
-    return PathFileExistsA(path.is_ref() ? path.copy().c_str() : path.c_str());
+    return PathFileExistsA(p.c_str());
 #elif defined(STDROMANO_LINUX)
     struct stat sb;
-    return stat(path.is_ref() ? path.copy().c_str() : path.c_str(), &sb) == 0 && (S_ISDIR(sb.st_mode) || S_ISREG(sb.st_mode));
+    std::memset(&sb, 0, sizeof(struct stat));
+    return stat(p.c_str(), &sb) == 0 && (S_ISDIR(sb.st_mode & 0xFFFF) || S_ISREG(sb.st_mode & 0xFFFF));
 #endif /* defined(STDROMANO_WIN) */
 }
 
@@ -54,7 +57,7 @@ StringD parent_dir(const StringD& path) noexcept
     while(path_len > 0 && (path[path_len] != '/' && path[path_len] != '\\'))
         path_len--;
 
-    return StringD::make_ref(path.c_str(), path_len);
+    return StringD::make_from_c_str(path.c_str(), path_len);
 }
 
 StringD filename(const StringD& path) noexcept
@@ -64,7 +67,7 @@ StringD filename(const StringD& path) noexcept
     while(path_len > 0 && (path[path_len] != '/' && path[path_len] != '\\'))
         path_len--;
 
-    return StringD::make_ref(path.c_str() + path_len + 1, path.size() - path_len - 1);
+    return StringD::make_from_c_str(path.c_str() + path_len + 1, path.size() - path_len - 1);
 }
 
 Expected<std::size_t> filesize(const StringD& path) noexcept
@@ -142,7 +145,7 @@ Expected<StringD> relative_to(const StringD& path, const StringD& other) noexcep
     while(i < other.size() && path[i] == other[i])
         i++;
 
-    return StringD::make_ref(path.c_str() + i, path.size() - i);
+    return StringD::make_from_c_str(path.c_str() + i, path.size() - i);
 }
 
 StringD current_dir() noexcept
@@ -179,9 +182,12 @@ Expected<void> makedir(const StringD& dir_path) noexcept
     if(path_exists(dir_path))
         return Ok();
 
-#if defined(STDROMANO_WIN)
     std::stack<StringD> to_create;
-    to_create.push(dir_path);
+
+    if(dir_path.is_ref())
+        to_create.push(dir_path.copy());
+    else
+        to_create.push(dir_path);
 
     LoopGuard guard("Too many parent directories or error", 128);
 
@@ -202,39 +208,18 @@ Expected<void> makedir(const StringD& dir_path) noexcept
     {
         StringD dir = std::move(to_create.top());
 
-        if(!CreateDirectoryA(dir.is_ref() ? dir.copy().c_str() : dir.c_str(), NULL))
-        {
-            DWORD last_err = GetLastError();
-
-            char buffer[STDROMANO_ERR_BUFFER_SZ];
-            std::memset(buffer, 0, STDROMANO_ERR_BUFFER_SZ * sizeof(char));
-            DWORD res = FormatMessageA(FORMAT_MESSAGE_FROM_SYSTEM,
-                                    nullptr,
-                                    last_err,
-                                    MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT),
-                                    buffer,
-                                    STDROMANO_ERR_BUFFER_SZ,
-                                    nullptr);
-
-            if(res == 0)
-                return Error(StringD::make_fmt("Cannot format error message (CreateDirectoryA error: {}, FormatMessageA error: {})",
-                                            last_err,
-                                            GetLastError()));
-
-            return Error(StringD::make_fmt("CreateDirectoryA failed (Last error: {} ({}))",
-                                        fmt::string_view(buffer, res),
-                                        last_err));
-        }
+#if defined(STDROMANO_WIN)
+        if(!CreateDirectoryA(dir.c_str(), NULL))
+            return Error::from_win32_last_error();
+#elif defined(STDROMANO_LINUX)
+        if(mkdir(dir.c_str(), 0755) != 0)
+            return Error::from_unix_errno();
+#else
+        STDROMANO_NOT_IMPLEMENTED;
+#endif /* defined(STDROMANO_WIN) */
 
         to_create.pop();
     }
-
-#elif defined(STDROMANO_LINUX)
-    if(mkdir(dir_path.is_ref() ? dir_path.copy().c_str() : dir_path.c_str(), 0755) != 0)
-        return Error(StringD::make_fmt("mkdir failed ({})", errno));
-#else
-    STDROMANO_NOT_IMPLEMENTED;
-#endif /* defined(STDROMANO_WIN) */
 
     return Ok();
 }
@@ -1120,8 +1105,8 @@ bool WalkIterator::process_current_directory() noexcept
                 this->_pending_dirs.push(std::move(full_path.copy()));
         }
 
-        if((is_dir && (this->_flags & WalkFlags_ListFiles)) ||
-           (!is_dir && (this->_flags & WalkFlags_ListDirs)))
+        if((is_dir && (this->_flags & WalkFlags_ListDirs)) ||
+           (!is_dir && (this->_flags & WalkFlags_ListFiles)))
         {
             this->_current_item = { std::move(full_path), is_dir };
             return true;
