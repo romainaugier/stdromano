@@ -320,9 +320,14 @@ public:
         return this->_stop.load();
     }
 
-    STDROMANO_FORCE_INLINE std::size_t num_workers() noexcept
+    STDROMANO_FORCE_INLINE std::size_t num_workers() const noexcept
     {
         return this->_num_workers.load();
+    }
+
+    STDROMANO_FORCE_INLINE std::size_t num_working() const noexcept
+    {
+        return this->_num_active_workers.load();
     }
 
     STDROMANO_FORCE_INLINE void set_max_active_workers(std::size_t max_workers) noexcept
@@ -419,9 +424,7 @@ private:
         void execute() override
         {
             if(this->_func != nullptr)
-            {
                 this->_func();
-            }
         }
     };
 
@@ -551,9 +554,7 @@ public:
         this->_running.store(true, MemoryOrder::Release);
 
         for(auto& worker : this->_workers)
-        {
             worker->thread->start();
-        }
     }
 
     ~StealingThreadPool()
@@ -586,7 +587,7 @@ public:
         if(waiter != nullptr)
             waiter->_expected.fetch_add(1, MemoryOrder::Release);
 
-        std::size_t target_worker = _next_worker.fetch_add(1, MemoryOrder::Relaxed) % _num_workers;
+        std::size_t target_worker = _next_worker.fetch_add(1, MemoryOrder::Relaxed) % this->_num_workers;
 
         this->_workers[target_worker]->local_queue.enqueue(work);
         this->_workers[target_worker]->queue_size.fetch_add(1, MemoryOrder::Release);
@@ -626,9 +627,14 @@ public:
         return !this->_running.load(MemoryOrder::Acquire);
     }
 
-    STDROMANO_FORCE_INLINE std::size_t num_workers() noexcept
+    STDROMANO_FORCE_INLINE std::size_t num_workers() const noexcept
     {
         return this->_num_workers;
+    }
+
+    STDROMANO_FORCE_INLINE std::size_t num_working() const noexcept
+    {
+        return this->_active_workers.load();
     }
 
     STDROMANO_FORCE_INLINE void set_max_active_workers(std::size_t max_workers) noexcept
