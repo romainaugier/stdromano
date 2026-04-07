@@ -4,6 +4,7 @@
 
 #include "stdromano/filesystem.hpp"
 #include "stdromano/loop_guard.hpp"
+#include "stdromano/threading.hpp"
 
 #if defined(STDROMANO_WIN)
 #define STRICT_TYPED_ITEMIDS // Better type safety for IDLists
@@ -279,6 +280,72 @@ Expected<void> removedir(const StringD& dir_path, const bool recursive) noexcept
     if(res != 0)
         return Error(std::move(last_error));
 #endif // defined(STDROMANO_WIN)
+
+    return Ok();
+}
+
+Expected<void> copydir(const StringD& src, const StringD& dst, const bool recursive) noexcept
+{
+    if(!path_exists(src))
+        return Error("Cannot find source directory to copy");
+
+    std::uint32_t flags = WalkFlags_ListAll;
+
+    if(recursive)
+        flags |= WalkFlags_Recursive;
+
+    ThreadPoolWaiter waiter;
+
+    Atomic<bool> any_err = false;
+    StringD err_string;
+
+    for(WalkIterator it = WalkIterator(src, flags); it != WalkIterator(); ++it)
+    {
+        if(any_err.load())
+            break;
+
+        const StringD& current_path = it->get_current_path();
+
+        auto relative_path = relative_to(current_path, src);
+
+        if(!relative_path)
+            return relative_path.error();
+
+        const StringD new_path = StringD::make_fmt("{}{}", dst, relative_path.value());
+
+        if(it->is_file())
+        {
+            global_threadpool().add_work([&, current_path, new_path]() {
+                if(any_err.load())
+                    return;
+
+                auto res = copyfile(current_path, new_path);
+
+                if(!res)
+                {
+                    any_err.store(true);
+
+                    while(global_threadpool().num_working() > 1)
+                        thread_yield();
+
+                    err_string = StringD::make_fmt("Error while copying file {}: {}",
+                                                   current_path,
+                                                   res.error().message);
+                }
+
+            }, &waiter);
+        }
+        else
+        {
+            if(!makedir(new_path))
+                return Error(StringD::make_fmt("Cannot create directory: {}", new_path));
+        }
+    }
+
+    waiter.wait();
+
+    if(any_err.load())
+        return Error("Error during file copy, check the log for more information");
 
     return Ok();
 }

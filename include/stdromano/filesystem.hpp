@@ -53,6 +53,9 @@ STDROMANO_API Expected<void> makedir(const StringD& dir_path) noexcept;
 // If the directory does not exist, return Ok (no-op)
 STDROMANO_API Expected<void> removedir(const StringD& dir_path, const bool recursive = true) noexcept;
 
+// Copies the directory from src to dst, recursively when recursive=true
+STDROMANO_API Expected<void> copydir(const StringD& src, const StringD& dst, const bool recursive = true) noexcept;
+
 // Removes the file at the given path. If the file does not exist, return Ok (no-op)
 STDROMANO_API Expected<void> removefile(const StringD& file_path) noexcept;
 

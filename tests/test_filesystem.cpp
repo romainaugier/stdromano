@@ -186,6 +186,38 @@ TEST_CASE(test_removedir_recursive)
     ASSERT_EQUAL(false, stdromano::fs::path_exists(root));
 }
 
+/* copydir */
+
+TEST_CASE(test_copydir)
+{
+    const stdromano::StringD tmp = stdromano::fs::tmp_dir().unwrap();
+    const stdromano::StringD root = stdromano::StringD("{}/stdromano_test_copy_recursive", tmp);
+    const stdromano::StringD child = stdromano::StringD("{}/child", root);
+
+    stdromano::fs::removedir(root, true);
+
+    // Create parent and child
+    ASSERT(!stdromano::fs::makedir(root).has_error());
+    ASSERT(!stdromano::fs::makedir(child).has_error());
+    ASSERT_EQUAL(true, stdromano::fs::path_exists(child));
+
+    // Write a file inside the child dir
+    const stdromano::StringD file_in_child = stdromano::StringD("{}/dummy.txt", child);
+    const char* data = "hello";
+    ASSERT(!stdromano::fs::write_file_content(data, 5, file_in_child).has_error());
+    ASSERT_EQUAL(true, stdromano::fs::path_exists(file_in_child));
+
+    const stdromano::StringD root2 = stdromano::StringD("{}/stdromano_test_copy_recursive2", tmp);
+
+    if(stdromano::fs::path_exists(root2))
+        stdromano::fs::removedir(root2);
+
+    ASSERT(stdromano::fs::copydir(root, root2));
+
+    for(auto it = stdromano::fs::WalkIterator(root2); it != stdromano::fs::WalkIterator(); ++it)
+        spdlog::debug("Copied path: {}", it->get_current_path());
+}
+
 /* removefile */
 
 TEST_CASE(test_removefile)
@@ -675,6 +707,9 @@ int main()
     runner.add_test("MakeDir_RemoveDir", test_makedir_removedir);
     runner.add_test("RemoveDir_Nonexistent", test_removedir_nonexistent);
     runner.add_test("RemoveDir_Recursive", test_removedir_recursive);
+
+    /* copydir */
+    runner.add_test("CopyDir", test_copydir);
 
     /* removefile */
     runner.add_test("RemoveFile", test_removefile);
