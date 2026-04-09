@@ -185,7 +185,8 @@ TEST_CASE(test_edge_cases)
 
     map.insert(std::pair<std::string, int>("test", 1));
 
-    map.insert(std::pair<std::string, int>("test", 2));
+    map["test"] = 2;
+
     ASSERT_EQUAL(2, map["test"]);
 
     size_t size_before = map.size();

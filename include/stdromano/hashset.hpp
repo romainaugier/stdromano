@@ -7,170 +7,78 @@
 #if !defined(__STDROMANO_HASHSET)
 #define __STDROMANO_HASHSET
 
-#include "stdromano/hashmap.hpp"
+#include "stdromano/hashcontainer.hpp"
 
-#include <type_traits>
+#include <initializer_list>
 
 STDROMANO_NAMESPACE_BEGIN
 
-namespace detail
-{
-struct EmptyValue
-{
-};
-} // namespace detail
-
 template <class Key, class Hash = std::hash<Key>>
-class HashSet : private HashMap<Key, detail::EmptyValue, Hash>
+class HashSet : public HashContainer<Key, Key, detail::IdentityKeySelect<Key>, Hash>
 {
 private:
-    using Base = HashMap<Key, detail::EmptyValue, Hash>;
-    using DummyValue = detail::EmptyValue;
-
-    using BaseKeySelect = typename Base::KeySelect;
+    using Base = HashContainer<Key, Key, detail::IdentityKeySelect<Key>, Hash>;
 
 public:
     using key_type = Key;
     using value_type = Key;
     using size_type = typename Base::size_type;
-    using difference_type = std::ptrdiff_t;
     using hasher = typename Base::hasher;
-    using reference = const value_type&;
-    using const_reference = const value_type&;
-    using pointer = const value_type*;
-    using const_pointer = const value_type*;
 
-    class const_iterator
-    {
-        friend class HashSet;
-        typename Base::const_iterator base_iterator;
+    // Keys must not be mutated through iterators, so only const views are exposed.
+    using iterator = typename Base::const_iterator;
+    using const_iterator = typename Base::const_iterator;
 
-        const_iterator(typename Base::const_iterator it)
-            : base_iterator(it)
-        {
-        }
-
-    public:
-        using iterator_category = std::forward_iterator_tag;
-        using value_type = const Key;
-        using difference_type = std::ptrdiff_t;
-        using pointer = const Key*;
-        using reference = const Key&;
-
-        const_iterator() = default;
-
-        reference operator*() const
-        {
-            return BaseKeySelect()(*base_iterator);
-        }
-
-        pointer operator->() const
-        {
-            return std::addressof(BaseKeySelect()(*base_iterator));
-        }
-
-        const_iterator& operator++()
-        {
-            ++base_iterator;
-            return *this;
-        }
-
-        const_iterator operator++(int)
-        {
-            const_iterator temp = *this;
-            ++(*this);
-            return temp;
-        }
-
-        friend bool operator==(const const_iterator& lhs, const const_iterator& rhs)
-        {
-            return lhs.base_iterator == rhs.base_iterator;
-        }
-
-        friend bool operator!=(const const_iterator& lhs, const const_iterator& rhs)
-        {
-            return !(lhs == rhs);
-        }
-    };
-
-    using iterator = const_iterator;
-
-    explicit HashSet(size_type initial_capacity = Base::INITIAL_CAPACITY)
-        : Base(initial_capacity)
-    {
-    }
+    explicit HashSet(std::size_t initial_capacity = Base::INITIAL_CAPACITY,
+                     const Hash& hash = Hash()) : Base(initial_capacity, hash) {}
 
     HashSet(std::initializer_list<value_type> init,
             std::size_t initial_capacity = 0,
-            const Hash& hash = Hash()) : Base(initial_capacity, hash)
+            const Hash& hash = Hash())
+        : Base(initial_capacity, hash)
     {
         if(init.size() > 0)
         {
+            const std::size_t required_buckets = static_cast<std::size_t>(std::ceil(init.size() / Base::MAX_LOAD_FACTOR));
+            const std::size_t new_capacity = bit_ceil(required_buckets);
+
+            if(new_capacity > this->_buckets.size())
+                this->grow(new_capacity, false);
+
             for(const auto& item : init)
-            {
                 this->emplace(item);
-            }
         }
     }
 
-    iterator begin() const
-    {
-        return const_iterator(Base::cbegin());
-    }
-    iterator end() const
-    {
-        return const_iterator(Base::cend());
-    }
-    const_iterator cbegin() const
-    {
-        return const_iterator(Base::cbegin());
-    }
-    const_iterator cend() const
-    {
-        return const_iterator(Base::cend());
-    }
-
-    using Base::capacity;
-    using Base::empty;
-    using Base::load_factor;
-    using Base::memory_usage;
-    using Base::reserve;
-    using Base::size;
-
-    using Base::clear;
+    iterator begin() const { return this->cbegin(); }
+    iterator end() const { return this->cend(); }
 
     std::pair<iterator, bool> insert(const key_type& key)
     {
-        auto result = Base::emplace(key, DummyValue{});
-        return {const_iterator(result.first), result.second};
+        auto result = this->emplace(key);
+        return {iterator(result.first), result.second};
     }
 
     std::pair<iterator, bool> insert(key_type&& key)
     {
-        auto result = Base::emplace(std::move(key), DummyValue{});
-        return {const_iterator(result.first), result.second};
+        auto result = this->emplace(std::move(key));
+        return {iterator(result.first), result.second};
     }
 
-    template <typename... Args>
-    std::pair<iterator, bool> emplace(Args&&... args)
+    STDROMANO_FORCE_INLINE size_type count(const key_type& key) const
     {
-        key_type temp_key(std::forward<Args>(args)...);
-
-        auto result = Base::emplace(std::move(temp_key), DummyValue{});
-
-        return {const_iterator(result.first), result.second};
+        return this->contains(key) ? 1 : 0;
     }
 
     iterator erase(const_iterator pos)
     {
-        if(pos != cend())
+        if(pos != this->cend())
         {
             key_type key_to_erase = *pos;
             Base::erase(key_to_erase);
-            return end();
         }
 
-        return pos;
+        return this->end();
     }
 
     STDROMANO_FORCE_INLINE size_type erase(const key_type& key)
@@ -185,28 +93,8 @@ public:
 
         return 0;
     }
-
-    STDROMANO_FORCE_INLINE size_type count(const key_type& key) const
-    {
-        return Base::find(key) != Base::end() ? 1 : 0;
-    }
-
-    STDROMANO_FORCE_INLINE iterator find(const key_type& key)
-    {
-        return const_iterator(Base::find(key));
-    }
-
-    STDROMANO_FORCE_INLINE const_iterator find(const key_type& key) const
-    {
-        return const_iterator(Base::find(key));
-    }
-
-    STDROMANO_FORCE_INLINE bool contains(const key_type& key) const
-    {
-        return Base::find(key) != Base::end();
-    }
 };
 
 STDROMANO_NAMESPACE_END
 
-#endif /* !defined(__STDROMANO_HASHSET) */
+#endif // !defined(__STDROMANO_HASHSET)
