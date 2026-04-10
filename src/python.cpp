@@ -5290,7 +5290,7 @@ bool AST::from_text(const StringD& source_code, const bool debug) noexcept
         this->_logger->debug("{0:*^{1}}", "", 50);
         this->_logger->debug("LEX: Tokens ({})", tokens.size());
 
-        for(const auto token : tokens)
+        for(const auto& token : tokens)
             this->_logger->debug("{} \"{}\" ({}:{})",
                                  Token::kind_as_string(token.kind),
                                  token.value,

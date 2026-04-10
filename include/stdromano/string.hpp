@@ -1507,13 +1507,13 @@ using String16 = String<16>;
 // Join function to join container types as a string
 template<typename Container>
 StringD join(const Container& container,
-             std::function<StringD(const typename Container::value_type)>&& f,
+             std::function<StringD(const typename Container::value_type&)>&& f,
              const char* sep = ",") noexcept
 {
     StringD res;
     bool first = true;
 
-    for(const auto element : container)
+    for(const auto& element : container)
     {
         if(first)
             first = false;

@@ -82,7 +82,7 @@ private:
 
     std::uint32_t _backend;
 
-    static constexpr size_t ALIGNMENT = 32;
+    static constexpr std::size_t ALIGNMENT = 32;
 
     void allocate(std::size_t size) noexcept
     {
@@ -189,13 +189,13 @@ public:
         return *this;
     }
 
-    DenseMatrix(DenseMatrix&& other) noexcept : _nrows(other._nrows),
-                                                _ncols(other._ncols),
-                                                _backend(other._backend),
+    DenseMatrix(DenseMatrix&& other) noexcept : _data(other._data),
 #if defined(STDROMANO_ENABLE_OPENCL)
                                                 _gpu_data(std::move(other._gpu_data)),
 #endif /* defined(STDROMANO_ENABLE_OPENCL) */
-                                                _data(other._data)
+                                                _nrows(other._nrows),
+                                                _ncols(other._ncols),
+                                                _backend(other._backend)
     {
         other._nrows = 0;
         other._ncols = 0;

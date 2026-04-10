@@ -14,6 +14,10 @@
 
 STDROMANO_NAMESPACE_BEGIN
 
+#if defined(STDROMANO_GCC)
+#pragma GCC diagnostic ignored "-Warray-bounds"
+#endif // defined(STDROMANO_GCC)
+
 enum RegexFlags_ : std::uint32_t
 {
     RegexFlags_DebugCompilation = 0x1,
@@ -64,7 +68,7 @@ public:
 
     RegexGroup group(std::uint32_t index) const noexcept
     {
-        if(index < _group_count)
+        if(index < this->_group_count)
             return this->_groups[index];
 
         return RegexGroup();

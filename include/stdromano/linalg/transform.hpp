@@ -482,21 +482,17 @@ public:
 
         T scale = maths::sqrt(maths::sqr(x) + maths::sqr(y));
 
-        T r00, r01, r10, r11;
+        T r00, r01;
 
         if(scale > eps)
         {
-            r00 =  x / scale;
+            r00 = x / scale;
             r01 = -y / scale;
-            r10 =  y / scale;
-            r11 =  x / scale;
         }
         else
         {
-            r00 = 1;
-            r01 = 0;
-            r10 = 0;
-            r11 = 1;
+            r00 = make_one_v<T>;
+            r01 = make_zero_v<T>;
         }
 
         *angle = maths::atan2(r01, r00);

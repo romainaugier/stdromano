@@ -15,8 +15,6 @@ INIT_TEST_OBJECT
 
 TEST_CASE(test_random_seed_nonzero)
 {
-    const std::uint32_t seed = stdromano::random_seed();
-
     // A zero seed is technically possible but astronomically unlikely
     // Run multiple times to be safe
     bool any_nonzero = false;

@@ -230,7 +230,8 @@ TEST_CASE(test_insert_count)
     vec.push_back(TestObject("a"));
     vec.push_back(TestObject("d"));
 
-    auto it = vec.insert(vec.begin() + 1, 2, TestObject("x"));
+    vec.insert(vec.begin() + 1, 2, TestObject("x"));
+
     ASSERT_EQUAL(4u, vec.size());
     ASSERT_EQUAL("a", vec[0].get_data());
     ASSERT_EQUAL("x", vec[1].get_data());
@@ -293,7 +294,7 @@ TEST_CASE(test_erase_single)
     vec.push_back(TestObject("b"));
     vec.push_back(TestObject("c"));
 
-    auto it = vec.erase(vec.cbegin() + 1);
+    vec.erase(vec.cbegin() + 1);
     ASSERT_EQUAL(2u, vec.size());
     ASSERT_EQUAL("a", vec[0].get_data());
     ASSERT_EQUAL("c", vec[1].get_data());
@@ -366,8 +367,13 @@ TEST_CASE(test_iterators)
 
     // Range-based for
     count = 0;
-    for (const auto& item : vec)
+
+    for(const auto& elem : vec)
+    {
+        STDROMANO_UNUSED(elem);
         count++;
+    }
+
     ASSERT_EQUAL(3u, count);
 
     // Iterator arithmetic
@@ -393,8 +399,9 @@ TEST_CASE(test_iterators)
     // Empty iterator
     stdromano::Vector<TestObject> empty_vec;
 
-    for(auto& obj : empty_vec)
+    for(auto& elem : empty_vec)
     {
+        STDROMANO_UNUSED(elem);
         ASSERT(false);
     }
 }

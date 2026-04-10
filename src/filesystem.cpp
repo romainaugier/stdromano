@@ -960,7 +960,7 @@ StringD open_file_dialog(FileDialogMode_ mode,
         GtkFileFilter* gtkFilter = gtk_file_filter_new();
         gtk_file_filter_set_name(gtkFilter, "Specified Files");
 
-        StringD::split_iterator it;
+        StringD::split_iterator it = 0;
         StringD token;
 
         while(filter.split("|", it, token))

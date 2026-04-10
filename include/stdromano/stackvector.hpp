@@ -42,8 +42,8 @@ private:
 
     T* _heap_storage;
 
-    size_t _size;
-    size_t _capacity;
+    std::size_t _size;
+    std::size_t _capacity;
 
     STDROMANO_FORCE_INLINE bool uses_heap() const noexcept
     {
@@ -107,45 +107,33 @@ private:
     }
 
 public:
-    StackVector() : _size(0), _capacity(N), _heap_storage(nullptr) {}
+    StackVector() : _heap_storage(nullptr), _size(0), _capacity(N) {}
 
-    explicit StackVector(size_t count, const T& value = T{}) : _size(0), _capacity(N), _heap_storage(nullptr)
+    explicit StackVector(size_t count, const T& value = T{}) : _heap_storage(nullptr), _size(0), _capacity(N)
     {
         if(count > N)
-        {
             this->transition_to_heap(count);
-        }
 
-        for(size_t i = 0; i < count; i++)
-        {
+        for(std::size_t i = 0; i < count; i++)
             this->push_back(value);
-        }
     }
 
-    StackVector(std::initializer_list<T> init) : _size(0), _capacity(N), _heap_storage(nullptr)
+    StackVector(std::initializer_list<T> init) : _heap_storage(nullptr), _size(0), _capacity(N)
     {
         if(init.size() > N)
-        {
             this->transition_to_heap(init.size());
-        }
 
         for(const auto& item : init)
-        {
             this->push_back(item);
-        }
     }
 
-    StackVector(const StackVector& other) : _size(0), _capacity(N), _heap_storage(nullptr)
+    StackVector(const StackVector& other) : _heap_storage(nullptr), _size(0), _capacity(N)
     {
         if(other._size > N)
-        {
             this->transition_to_heap(other._size);
-        }
 
-        for(size_t i = 0; i < other._size; i++)
-        {
+        for(std::size_t i = 0; i < other._size; i++)
             ::new(this->data() + i) T(other[i]);
-        }
 
         this->_size = other.size();
     }
@@ -161,7 +149,7 @@ public:
         }
         else
         {
-            for(size_t i = 0; i < this->_size; i++)
+            for(std::size_t i = 0; i < this->_size; i++)
             {
                 ::new(this->data() + i) T(std::move_if_noexcept(other.data()[i]));
                 other.data()[i].~T();
@@ -181,10 +169,8 @@ public:
 
             this->reserve(other._size);
 
-            for(size_t i = 0; i < other._size; i++)
-            {
+            for(std::size_t i = 0; i < other._size; i++)
                 this->push_back(other[i]);
-            }
         }
 
         return *this;
@@ -203,20 +189,16 @@ public:
             }
 
             if(other.uses_heap())
-            {
                 this->_heap_storage = other._heap_storage;
-            }
             else
-            {
                 this->_heap_storage = nullptr;
-            }
 
             this->_size = other._size;
             this->_capacity = other.uses_heap() ? other._capacity : N;
 
             if(!this->uses_heap())
             {
-                for(size_t i = 0; i < this->_size; i++)
+                for(std::size_t i = 0; i < this->_size; i++)
                 {
                     ::new(this->data() + i) T(std::move_if_noexcept(other.data()[i]));
                     other.data()[i].~T();
@@ -333,10 +315,8 @@ public:
 
     void clear() noexcept
     {
-        for(size_t i = 0; i < this->_size; i++)
-        {
+        for(std::size_t i = 0; i < this->_size; i++)
             this->data()[i].~T();
-        }
 
         this->_size = 0;
     }
@@ -378,26 +358,20 @@ public:
         }
     }
 
-    void resize(size_t count, const T& value = T{})
+    void resize(std::size_t count, const T& value = T{})
     {
         if(count > this->_size)
-        {
             this->reserve(count);
-        }
 
         if(count > this->_size)
         {
-            for(size_t i = this->_size; i < count; i++)
-            {
+            for(std::size_t i = this->_size; i < count; i++)
                 ::new(this->data() + i) T(value);
-            }
         }
         else if (count < this->_size)
         {
-            for (size_t i = count; i < this->_size; i++)
-            {
+            for(std::size_t i = count; i < this->_size; i++)
                 this->data()[i].~T();
-            }
         }
 
         this->_size = count;

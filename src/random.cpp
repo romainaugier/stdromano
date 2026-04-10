@@ -41,16 +41,17 @@ std::uint32_t random_seed() noexcept
     return value;
 }
 
-STDROMANO_FORCE_INLINE uint64_t rotl(const uint64_t x, int k)
+STDROMANO_FORCE_INLINE std::uint64_t rotl(const std::uint64_t x, std::int32_t k)
 {
     return (x << k) | (x >> (64 - k));
 }
 
-constexpr uint32_t tofloat32 = 0x2f800004UL;
+constexpr float tofloat32 = bit_cast<std::uint32_t, float>(0x2f800004UL);
 
-uint64_t xoshiro_random_uint64(const uint64_t seed) noexcept
+
+std::uint64_t xoshiro_random_uint64(const std::uint64_t seed) noexcept
 {
-    uint64_t s[4];
+    std::uint64_t s[4];
     s[0] = seed;
 
     for(int i = 1; i < 4; i++)
@@ -61,8 +62,8 @@ uint64_t xoshiro_random_uint64(const uint64_t seed) noexcept
         s[i] = s[i] ^ (s[i] >> 31);
     }
 
-    const uint64_t result = rotl(s[0] + s[3], 23) + s[0];
-    const uint64_t t = s[1] << 17;
+    const std::uint64_t result = rotl(s[0] + s[3], 23) + s[0];
+    const std::uint64_t t = s[1] << 17;
 
     s[2] ^= s[0];
     s[3] ^= s[1];
@@ -75,9 +76,9 @@ uint64_t xoshiro_random_uint64(const uint64_t seed) noexcept
     return result;
 }
 
-static thread_local uint64_t xoshiro_s[4] = {0x123456789abcdef0ULL, 0x42, 0x1337, 0xdeadbeef};
+static thread_local std::uint64_t xoshiro_s[4] = {0x123456789abcdef0ULL, 0x42, 0x1337, 0xdeadbeef};
 
-void seed_xoshiro(uint64_t seed) noexcept
+void seed_xoshiro(std::uint64_t seed) noexcept
 {
     xoshiro_s[0] = seed;
 
@@ -90,10 +91,10 @@ void seed_xoshiro(uint64_t seed) noexcept
     }
 }
 
-uint64_t xoshiro_next_uint64() noexcept
+std::uint64_t xoshiro_next_uint64() noexcept
 {
-    const uint64_t result = rotl(xoshiro_s[0] + xoshiro_s[3], 23) + xoshiro_s[0];
-    const uint64_t t = xoshiro_s[1] << 17;
+    const std::uint64_t result = rotl(xoshiro_s[0] + xoshiro_s[3], 23) + xoshiro_s[0];
+    const std::uint64_t t = xoshiro_s[1] << 17;
 
     xoshiro_s[2] ^= xoshiro_s[0];
     xoshiro_s[3] ^= xoshiro_s[1];
@@ -108,8 +109,7 @@ uint64_t xoshiro_next_uint64() noexcept
 
 float xoshiro_next_float() noexcept
 {
-    return static_cast<float>(xoshiro_next_uint64() >> 32) *
-           reinterpret_cast<const float&>(tofloat32);
+    return static_cast<float>(xoshiro_next_uint64() >> 32) * tofloat32;
 }
 
 STDROMANO_NAMESPACE_END

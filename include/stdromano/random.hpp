@@ -7,7 +7,7 @@
 #if !defined(__STDROMANO_RANDOM)
 #define __STDROMANO_RANDOM
 
-#include "stdromano/stdromano.hpp"
+#include "stdromano/bits.hpp"
 
 #include <atomic>
 
@@ -18,18 +18,18 @@ STDROMANO_API std::uint32_t random_seed() noexcept;
 
 /* Very fast pseudo random generator with a good distribution */
 
-STDROMANO_FORCE_INLINE float pcg_float(unsigned int state) noexcept
+STDROMANO_FORCE_INLINE float pcg_float(std::uint32_t state) noexcept
 {
-    constexpr uint32_t tofloat = 0x2f800004u;
+    constexpr float tofloat = bit_cast<std::uint32_t, float>(0x2f800004u);
 
-    const unsigned int state2 = state * 747796405u + 2891336453u;
-    const unsigned int word = ((state2 >> ((state2 >> 28u) + 4u)) ^ state2) * 277803737u;
+    const std::uint32_t state2 = state * 747796405u + 2891336453u;
+    const std::uint32_t word = ((state2 >> ((state2 >> 28u) + 4u)) ^ state2) * 277803737u;
     state = (word >> 22u) ^ word;
 
-    return static_cast<float>(state) * reinterpret_cast<const float&>(tofloat);
+    return static_cast<float>(state) * tofloat;
 }
 
-STDROMANO_FORCE_INLINE uint32_t wang_hash(uint32_t seed) noexcept
+STDROMANO_FORCE_INLINE std::uint32_t wang_hash(std::uint32_t seed) noexcept
 {
     seed = (seed ^ 61u) ^ (seed >> 16u);
     seed *= 9u;
@@ -39,7 +39,7 @@ STDROMANO_FORCE_INLINE uint32_t wang_hash(uint32_t seed) noexcept
     return 1u + seed;
 }
 
-STDROMANO_FORCE_INLINE uint32_t xorshift32(uint32_t state) noexcept
+STDROMANO_FORCE_INLINE std::uint32_t xorshift32(std::uint32_t state) noexcept
 {
     state ^= state << 13u;
     state ^= state >> 17u;
@@ -47,54 +47,52 @@ STDROMANO_FORCE_INLINE uint32_t xorshift32(uint32_t state) noexcept
     return state;
 }
 
-STDROMANO_FORCE_INLINE float wang_hash_float(uint32_t state) noexcept
+STDROMANO_FORCE_INLINE float wang_hash_float(std::uint32_t state) noexcept
 {
-    constexpr uint32_t tofloat = 0x2f800004u;
+    constexpr float tofloat = bit_cast<std::uint32_t, float>(0x2f800004u);
 
-    const uint32_t x = xorshift32(wang_hash(state));
+    const std::uint32_t x = xorshift32(wang_hash(state));
 
-    return static_cast<float>(x) * reinterpret_cast<const float&>(tofloat);
+    return static_cast<float>(x) * tofloat;
 }
 
-STDROMANO_FORCE_INLINE uint32_t random_int_range(const uint32_t state,
-                                                 const uint32_t low,
-                                                 const uint32_t high) noexcept
+STDROMANO_FORCE_INLINE std::uint32_t random_int_range(const std::uint32_t state,
+                                                      const std::uint32_t low,
+                                                      const std::uint32_t high) noexcept
 {
-    return static_cast<uint32_t>(wang_hash_float(state) *
-                                 (static_cast<float>(high) - static_cast<float>(low))) +
-           low;
+    return static_cast<std::uint32_t>(wang_hash_float(state) * (static_cast<float>(high) - static_cast<float>(low))) + low;
 }
 
-STDROMANO_API uint64_t xoshiro_random_uint64(const uint64_t seed) noexcept;
+STDROMANO_API std::uint64_t xoshiro_random_uint64(const std::uint64_t seed) noexcept;
 
-STDROMANO_API void seed_xoshiro(uint64_t seed) noexcept;
+STDROMANO_API void seed_xoshiro(std::uint64_t seed) noexcept;
 
-STDROMANO_API uint64_t xoshiro_next_uint64() noexcept;
+STDROMANO_API std::uint64_t xoshiro_next_uint64() noexcept;
 
 STDROMANO_API float xoshiro_next_float() noexcept;
 
-/* Thread safe random generators */
+// Per-thread random generators
 
-static std::atomic<uint32_t> _state;
+static thread_local std::uint32_t _state = random_seed();
 
-STDROMANO_FORCE_INLINE uint32_t next_random_uint32() noexcept
+STDROMANO_FORCE_INLINE std::uint32_t next_random_uint32() noexcept
 {
-    const uint32_t state = ++_state;
+    const std::uint32_t state = ++_state;
 
     return xorshift32(wang_hash(state));
 }
 
 STDROMANO_FORCE_INLINE float next_random_float_01() noexcept
 {
-    const uint32_t state = ++_state;
+    const std::uint32_t state = ++_state;
 
     return wang_hash_float(state);
 }
 
-STDROMANO_FORCE_INLINE uint32_t next_random_int_range(const uint32_t low,
-                                                      const uint32_t high) noexcept
+STDROMANO_FORCE_INLINE std::uint32_t next_random_int_range(const std::uint32_t low,
+                                                           const std::uint32_t high) noexcept
 {
-    const uint32_t state = ++_state;
+    const std::uint32_t state = ++_state;
 
     return random_int_range(state, low, high);
 }

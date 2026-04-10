@@ -98,6 +98,7 @@ void tolower(char* str, std::size_t length) noexcept
 {
     switch(simd_get_vectorization_mode())
     {
+        default:
         case VectorizationMode_Scalar:
             return tolower_scalar_kernel(str, length);
         case VectorizationMode_SSE:
@@ -206,7 +207,7 @@ bool strcmp_avx_kernel_case_sensitive(const char* __restrict lhs,
         const __m256i _rhs = _mm256_load_si256(reinterpret_cast<const __m256i*>(std::addressof(rhs[i])));
         const __m256i res = _mm256_cmpeq_epi8(_lhs, _rhs);
 
-        if(_mm256_movemask_epi8(res) != 0xFFFFFFFF)
+        if(_mm256_movemask_epi8(res) != -1)
             return false;
     }
 
@@ -229,7 +230,7 @@ bool strcmp_avx_kernel_case_insensitive(const char* __restrict lhs,
         const __m256i _rhs = tolower32(_mm256_load_si256(reinterpret_cast<const __m256i*>(std::addressof(rhs[i]))));
         const __m256i res = _mm256_cmpeq_epi8(_lhs, _rhs);
 
-        if(_mm256_movemask_epi8(res) != 0xFFFFFFFF)
+        if(_mm256_movemask_epi8(res) != -1)
             return false;
     }
 
@@ -245,7 +246,7 @@ bool strcmp_avx_kernel_case_insensitive(const char* __restrict lhs,
 
     const __m256i _res = _mm256_cmpeq_epi8(___lhs, ___rhs);
 
-    return _mm256_movemask_epi8(_res) == 0xFFFFFFFF;
+    return _mm256_movemask_epi8(_res) == -1;
 }
 
 DETAIL_NAMESPACE_BEGIN
