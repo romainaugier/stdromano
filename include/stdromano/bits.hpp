@@ -181,15 +181,14 @@ STDROMANO_FORCE_INLINE constexpr To bit_cast(From x) noexcept
     return __builtin_bit_cast(To, x);
 #else
     static_assert(sizeof(To) == sizeof(From));
-    
-    union {
+
+    union U {
         From f;
         To t;
-    } u;
+        constexpr U(const From& src) : f(src) {}
+    };
 
-    u.f = src;
-    
-    return u.t;
+    return U(src).t;
 #endif // defined(STDROMANO_GCC) || defined(STDROMANO_CLANG)
 }
 
