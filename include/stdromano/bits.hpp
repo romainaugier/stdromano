@@ -188,7 +188,7 @@ STDROMANO_FORCE_INLINE constexpr To bit_cast(From x) noexcept
         constexpr U(const From& src) : f(src) {}
     };
 
-    return U(src).t;
+    return U(x).t;
 #endif // defined(STDROMANO_GCC) || defined(STDROMANO_CLANG)
 }
 
