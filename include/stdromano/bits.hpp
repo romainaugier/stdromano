@@ -174,6 +174,25 @@ STDROMANO_FORCE_INLINE uint64_t clsb_u64(const uint64_t x) noexcept
     return x & (x - 1ULL);
 }
 
+template<typename From, typename To>
+STDROMANO_FORCE_INLINE constexpr To bit_cast(From x) noexcept
+{
+#if defined(STDROMANO_GCC) || defined(STDROMANO_CLANG)
+    return __builtin_bit_cast(To, x);
+#else
+    static_assert(sizeof(To) == sizeof(From));
+    
+    union {
+        From f;
+        To t;
+    } u;
+
+    u.f = src;
+    
+    return u.t;
+#endif // defined(STDROMANO_GCC) || defined(STDROMANO_CLANG)
+}
+
 STDROMANO_NAMESPACE_END
 
 #endif // !defined(__STDROMANO_BITS)
