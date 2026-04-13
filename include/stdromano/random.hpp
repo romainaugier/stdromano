@@ -20,7 +20,7 @@ STDROMANO_API std::uint32_t random_seed() noexcept;
 
 STDROMANO_FORCE_INLINE float pcg_float(std::uint32_t state) noexcept
 {
-    constexpr float tofloat = bit_cast<std::uint32_t, float>(0x2f800004u);
+    const float tofloat = bit_cast<std::uint32_t, float>(0x2f800004u);
 
     const std::uint32_t state2 = state * 747796405u + 2891336453u;
     const std::uint32_t word = ((state2 >> ((state2 >> 28u) + 4u)) ^ state2) * 277803737u;
@@ -49,7 +49,7 @@ STDROMANO_FORCE_INLINE std::uint32_t xorshift32(std::uint32_t state) noexcept
 
 STDROMANO_FORCE_INLINE float wang_hash_float(std::uint32_t state) noexcept
 {
-    constexpr float tofloat = bit_cast<std::uint32_t, float>(0x2f800004u);
+    const float tofloat = bit_cast<std::uint32_t, float>(0x2f800004u);
 
     const std::uint32_t x = xorshift32(wang_hash(state));
 

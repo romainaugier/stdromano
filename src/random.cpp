@@ -46,8 +46,7 @@ STDROMANO_FORCE_INLINE std::uint64_t rotl(const std::uint64_t x, std::int32_t k)
     return (x << k) | (x >> (64 - k));
 }
 
-constexpr float tofloat32 = bit_cast<std::uint32_t, float>(0x2f800004UL);
-
+const float tofloat32 = bit_cast<std::uint32_t, float>(0x2f800004UL);
 
 std::uint64_t xoshiro_random_uint64(const std::uint64_t seed) noexcept
 {

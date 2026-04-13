@@ -7,7 +7,7 @@
 #if !defined(__STDROMANO_BITS)
 #define __STDROMANO_BITS
 
-#include "stdromano/stdromano.hpp"
+#include "stdromano/memory.hpp"
 
 #include <immintrin.h>
 
@@ -175,20 +175,19 @@ STDROMANO_FORCE_INLINE uint64_t clsb_u64(const uint64_t x) noexcept
 }
 
 template<typename From, typename To>
-STDROMANO_FORCE_INLINE constexpr To bit_cast(From x) noexcept
+#if defined(STDROMANO_GCC) || defined(STDROMANO_CLANG)
+constexpr
+#endif
+STDROMANO_FORCE_INLINE To bit_cast(From x) noexcept
 {
+    static_assert(sizeof(To) == sizeof(From), "size mismatch");
+
 #if defined(STDROMANO_GCC) || defined(STDROMANO_CLANG)
     return __builtin_bit_cast(To, x);
 #else
-    static_assert(sizeof(To) == sizeof(From));
-
-    union U {
-        From f;
-        To t;
-        constexpr U(const From& src) : f(src) {}
-    };
-
-    return U(x).t;
+    To to;
+    std::memcpy(&to, &x, sizeof(To));
+    return to;
 #endif // defined(STDROMANO_GCC) || defined(STDROMANO_CLANG)
 }
 
