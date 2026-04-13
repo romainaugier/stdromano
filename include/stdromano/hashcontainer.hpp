@@ -499,6 +499,41 @@ protected:
         this->update_grow_threshold();
     }
 
+    HashContainer(const HashContainer& other) = default;
+
+    HashContainer& operator=(const HashContainer& other) = default;
+
+    HashContainer(HashContainer&& other) noexcept : _hash_func(std::move(other._hash_func)),
+                                                    _buckets(std::move(other._buckets)),
+                                                    _items_count(other._items_count),
+                                                    _grow_threshold(other._grow_threshold),
+                                                    _hash_key(other._hash_key),
+                                                    _max_probes(other._max_probes),
+                                                    _key_select(std::move(other._key_select))
+    {
+        other._items_count = 0;
+        other._grow_threshold = 0;
+    }
+
+    HashContainer& operator=(HashContainer&& other) noexcept
+    {
+        if(this != &other)
+        {
+            this->_hash_func = std::move(other._hash_func);
+            this->_buckets = std::move(other._buckets);
+            this->_items_count = other._items_count;
+            this->_grow_threshold = other._grow_threshold;
+            this->_hash_key = other._hash_key;
+            this->_max_probes = other._max_probes;
+            this->_key_select = std::move(other._key_select);
+
+            other._items_count = 0;
+            other._grow_threshold = 0;
+        }
+
+        return *this;
+    }
+
 public:
     iterator begin() { return iterator(this, 0); }
     iterator end() { return iterator(this, this->_buckets.size()); }

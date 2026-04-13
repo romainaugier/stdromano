@@ -51,6 +51,11 @@ public:
         }
     }
 
+    HashMap(const HashMap&) = default;
+    HashMap(HashMap&&) noexcept = default;
+    HashMap& operator=(const HashMap&) = default;
+    HashMap& operator=(HashMap&&) noexcept = default;
+
     template <typename P>
     void insert(P&& value)
     {

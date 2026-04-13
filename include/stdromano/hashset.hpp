@@ -50,6 +50,11 @@ public:
         }
     }
 
+    HashSet(const HashSet&) = default;
+    HashSet(HashSet&&) noexcept = default;
+    HashSet& operator=(const HashSet&) = default;
+    HashSet& operator=(HashSet&&) noexcept = default;
+
     iterator begin() const { return this->cbegin(); }
     iterator end() const { return this->cend(); }
 
