@@ -26,7 +26,13 @@ struct Error
 
     Error() = default;
 
-    Error(StringD msg) : message(std::move(msg)) {}
+    explicit Error(StringD msg) : message(std::move(msg)) {}
+
+    template<typename...Args>
+    Error(fmt::format_string<Args...> fmt, Args... args)
+    {
+        this->message = std::move(stdromano::StringD::make_fmt(fmt, std::forward<Args>(args)...));
+    }
 
     static Error from_win32_last_error()
     {

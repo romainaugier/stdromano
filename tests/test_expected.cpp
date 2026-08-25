@@ -78,6 +78,12 @@ TEST_CASE(test_error_with_message)
     ASSERT(err.message == stdromano::StringD("bad input"));
 }
 
+TEST_CASE(test_fmt_error_message)
+{
+    stdromano::Error err("Error with num {}", 1);
+    ASSERT(err.message == stdromano::StringD("Error with num 1"));
+}
+
 /* ---------- Expected<T> with value ---------- */
 
 TEST_CASE(test_expected_int_value)
@@ -214,6 +220,7 @@ int main()
     runner.add_test("test_expected_void_on_error_chaining", test_expected_void_on_error_chaining);
     runner.add_test("test_error_default_construct", test_error_default_construct);
     runner.add_test("test_error_with_message", test_error_with_message);
+    runner.add_test("test_fmt_error_message", test_fmt_error_message);
     runner.add_test("test_expected_int_value", test_expected_int_value);
     runner.add_test("test_expected_int_error", test_expected_int_error);
     runner.add_test("test_expected_int_error_message", test_expected_int_error_message);
