@@ -17,50 +17,50 @@
 
 STDROMANO_NAMESPACE_BEGIN
 
-template <typename T>
+template<typename T>
 class Span;
 
 namespace detail
 {
 
 // Detects containers exposing data() and size()
-template <typename C, typename = void>
+template<typename C, typename = void>
 struct has_data_and_size : std::false_type {};
 
-template <typename C>
+template<typename C>
 struct has_data_and_size<C,
                          std::void_t<decltype(std::declval<C&>().data()),
                                      decltype(std::declval<C&>().size())>> : std::true_type {};
 
 // Element type yielded by C::data() (with references and cv stripped from the
 // pointer itself but not from the pointee)
-template <typename C>
+template<typename C>
 using container_element_t = std::remove_pointer_t<decltype(std::declval<C&>().data())>;
 
-template <typename C>
+template<typename C>
 struct is_span : std::false_type {};
 
-template <typename T>
+template<typename T>
 struct is_span<Span<T>> : std::true_type {};
 
-template <typename C>
+template<typename C>
 struct is_std_array : std::false_type {};
 
-template <typename U, std::size_t N>
+template<typename U, std::size_t N>
 struct is_std_array<std::array<U, N>> : std::true_type {};
 
 // U(*)[] -> T(*)[] is convertible exactly when U and T are the same type up to added cv-qualification, 
 // and it also rejects derived-to-base
-template <typename U, typename T>
+template<typename U, typename T>
 using is_qualification_convertible = std::is_convertible<U (*)[], T (*)[]>;
 
 /* A container is viewable as Span<T> when it is not itself a Span (that would
    fight the copy constructor), not a raw array or std::array (handled by their
    own constructors), and its element type is qualification-convertible to T. */
-template <typename C, typename T, typename = void>
+template<typename C, typename T, typename = void>
 struct is_viewable_container : std::false_type {};
 
-template <typename C, typename T>
+template<typename C, typename T>
 struct is_viewable_container<
     C,
     T,
@@ -70,17 +70,17 @@ struct is_viewable_container<
                      !std::is_array<std::remove_cv_t<std::remove_reference_t<C>>>::value>>
     : is_qualification_convertible<container_element_t<C>, T> {};
 
-template <typename It>
+template<typename It>
 using iterator_category_t = typename std::iterator_traits<It>::iterator_category;
 
 template <typename It, typename = void>
 struct is_random_access_iterator : std::false_type {};
 
-template <typename It>
+template<typename It>
 struct is_random_access_iterator<It, std::void_t<iterator_category_t<It>>>
     : std::is_base_of<std::random_access_iterator_tag, iterator_category_t<It>> {};
 
-template <typename It, typename T>
+template<typename It, typename T>
 using is_viewable_iterator =
     std::conjunction<is_random_access_iterator<It>,
                      is_qualification_convertible<
@@ -96,7 +96,7 @@ using is_viewable_iterator =
 
    Two words, trivially copyable. Constness belongs to the element type, so a
    const Span<T> is a const handle to mutable elements, like T* const. */
-template <typename T>
+template<typename T>
 class Span
 {
     T* _data;
@@ -310,45 +310,45 @@ public:
 };
 
 // Deduction guides
-template <typename T>
+template<typename T>
 Span(T*, std::size_t) -> Span<T>;
 
-template <typename T>
+template<typename T>
 Span(T*, T*) -> Span<T>;
 
-template <typename It>
+template<typename It>
 Span(It, It) -> Span<std::remove_reference_t<typename std::iterator_traits<It>::reference>>;
 
-template <typename T, std::size_t N>
+template<typename T, std::size_t N>
 Span(T (&)[N]) -> Span<T>;
 
-template <typename T, std::size_t N>
+template<typename T, std::size_t N>
 Span(std::array<T, N>&) -> Span<T>;
 
-template <typename T, std::size_t N>
+template<typename T, std::size_t N>
 Span(const std::array<T, N>&) -> Span<const T>;
 
-template <typename C>
+template<typename C>
 Span(C&) -> Span<detail::container_element_t<C>>;
 
-template <typename C>
+template<typename C>
 Span(const C&) -> Span<const detail::container_element_t<C>>;
 
 // Helpers for when CTAD is not available or wanting to force constness
 
-template <typename C>
+template<typename C>
 constexpr Span<detail::container_element_t<C>> make_span(C& c) noexcept
 {
     return Span<detail::container_element_t<C>>(c.data(), c.size());
 }
 
-template <typename C>
+template<typename C>
 constexpr Span<const detail::container_element_t<const C>> make_cspan(const C& c) noexcept
 {
     return Span<const detail::container_element_t<const C>>(c.data(), c.size());
 }
 
-template <typename T>
+template<typename T>
 constexpr Span<T> make_span(T* data, const std::size_t size) noexcept
 {
     return Span<T>(data, size);
