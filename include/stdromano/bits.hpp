@@ -9,7 +9,11 @@
 
 #include "stdromano/memory.hpp"
 
+#if defined(STDROMANO_MSVC)
+#include <intrin.h>
+#elif defined(STDROMANO_INTEL)
 #include <immintrin.h>
+#endif /* defined(STDROMANO_MSVC) */
 
 STDROMANO_NAMESPACE_BEGIN
 
@@ -109,7 +113,7 @@ STDROMANO_FORCE_INLINE uint32_t clz_u64(const uint64_t x) noexcept
     }
 
     return 32UL;
-#elif defined(STDROMANO_GCC)
+#elif defined(STDROMANO_GCC) || defined(STDROMANO_CLANG)
     return __builtin_clzll(x);
 #endif /* defined(STDROMANO_MSVC) */
 }
@@ -125,19 +129,65 @@ STDROMANO_FORCE_INLINE uint32_t ctz_u64(const uint64_t x) noexcept
     }
 
     return 63UL;
-#elif defined(STDROMANO_GCC)
+#elif defined(STDROMANO_GCC) || defined(STDROMANO_CLANG)
     return __builtin_ctzll(x);
 #endif /* defined(STDROMANO_MSVC) */
 }
 
+/*
+    pext is a bmi2 instruction, there is no aarch64 equivalent so we fallback on the
+    classic bit gathering loop (also used on x86 when the target has no bmi2)
+*/
+#if defined(STDROMANO_INTEL) && (defined(__BMI2__) || defined(STDROMANO_MSVC))
+#define STDROMANO_HAS_PEXT
+#endif /* defined(STDROMANO_INTEL) && (defined(__BMI2__) || defined(STDROMANO_MSVC)) */
+
 STDROMANO_FORCE_INLINE uint32_t pext_u32(const uint32_t x, const uint32_t y) noexcept
 {
+#if defined(STDROMANO_HAS_PEXT)
     return _pext_u32(x, y);
+#else
+    uint32_t res = 0;
+    uint32_t mask = y;
+    uint32_t bit = 1;
+
+    while(mask != 0)
+    {
+        const uint32_t lsb = mask & (~mask + 1);
+
+        if((x & lsb) != 0)
+            res |= bit;
+
+        mask ^= lsb;
+        bit <<= 1;
+    }
+
+    return res;
+#endif /* defined(STDROMANO_HAS_PEXT) */
 }
 
 STDROMANO_FORCE_INLINE uint64_t pext_u64(const uint64_t x, const uint64_t y) noexcept
 {
+#if defined(STDROMANO_HAS_PEXT)
     return _pext_u64(x, y);
+#else
+    uint64_t res = 0;
+    uint64_t mask = y;
+    uint64_t bit = 1;
+
+    while(mask != 0)
+    {
+        const uint64_t lsb = mask & (~mask + 1);
+
+        if((x & lsb) != 0)
+            res |= bit;
+
+        mask ^= lsb;
+        bit <<= 1;
+    }
+
+    return res;
+#endif /* defined(STDROMANO_HAS_PEXT) */
 }
 
 STDROMANO_FORCE_INLINE uint8_t abs_u8(const int8_t x) noexcept

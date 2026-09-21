@@ -5,6 +5,14 @@
 #include "stdromano/string.hpp"
 #include "stdromano/simd.hpp"
 
+/*
+    The hand written strcmp kernels are nasm/masm x86-64, and are only assembled on windows
+    and linux (the object format and the symbol decoration differ everywhere else).
+    STDROMANO_ASM_STRCMP must be kept in sync with src/CMakeLists.txt.
+*/
+#if defined(STDROMANO_X86_64) && (defined(STDROMANO_WIN) || defined(STDROMANO_LINUX))
+#define STDROMANO_ASM_STRCMP
+
 extern "C" bool asm__detail_strcmp_cs(const char* lhs,
                                       const char* rhs,
                                       std::size_t length) noexcept;
@@ -17,12 +25,22 @@ extern "C" bool asm__detail_strcmp_avx_cs(const char* lhs,
                                           const char* rhs,
                                           size_t length) noexcept;
 
+#endif /* defined(STDROMANO_X86_64) && (defined(STDROMANO_WIN) || defined(STDROMANO_LINUX)) */
+
 STDROMANO_NAMESPACE_BEGIN
 
 /*
     tolower with simd kernels for fast conversion. based on
     https://lemire.me/blog/2024/08/03/converting-ascii-strings-to-lower-case-at-crazy-speeds-with-avx-512/
 */
+
+void tolower_scalar_kernel(char* str, std::size_t length) noexcept
+{
+    for(std::size_t i = 0; i < length; ++i)
+        str[i] = to_lower(static_cast<unsigned int>(str[i]));
+}
+
+#if defined(STDROMANO_INTEL)
 
 STDROMANO_FORCE_INLINE __m128i tolower16(const __m128i c) noexcept
 {
@@ -48,12 +66,6 @@ STDROMANO_FORCE_INLINE __m256i tolower32(const __m256i c) noexcept
     const __m256i mask = _mm256_and_si256(to_lower, is_upper);
 
     return _mm256_or_si256(c, mask);
-}
-
-void tolower_scalar_kernel(char* str, std::size_t length) noexcept
-{
-    for(std::size_t i = 0; i < length; ++i)
-        str[i] = to_lower(static_cast<unsigned int>(str[i]));
 }
 
 void tolower_sse_kernel(char* str, std::size_t length) noexcept
@@ -92,23 +104,60 @@ void tolower_avx_kernel(char* str, std::size_t length) noexcept
         str[i] = to_lower(static_cast<unsigned int>(str[i]));
 }
 
+#elif defined(STDROMANO_AARCH64)
+
+STDROMANO_FORCE_INLINE uint8x16_t tolower16(const uint8x16_t c) noexcept
+{
+    const uint8x16_t A = vdupq_n_u8('A');
+    const uint8x16_t range = vdupq_n_u8('Z' - 'A');
+    const uint8x16_t to_lower = vdupq_n_u8('a' - 'A');
+
+    /* unsigned wrap around makes a single compare enough to isolate [A-Z] */
+    const uint8x16_t is_upper = vcleq_u8(vsubq_u8(c, A), range);
+
+    return vorrq_u8(c, vandq_u8(to_lower, is_upper));
+}
+
+void tolower_neon_kernel(char* str, std::size_t length) noexcept
+{
+    constexpr std::size_t simd_width = 16;
+    const std::size_t simd_loop_size = length - length % simd_width;
+
+    std::size_t i = 0;
+
+    for(; i < simd_loop_size; i += simd_width)
+    {
+        const uint8x16_t res = tolower16(vld1q_u8(reinterpret_cast<const std::uint8_t*>(std::addressof(str[i]))));
+
+        vst1q_u8(reinterpret_cast<std::uint8_t*>(std::addressof(str[i])), res);
+    }
+
+    for(; i < length; ++i)
+        str[i] = to_lower(static_cast<unsigned int>(str[i]));
+}
+
+#endif /* defined(STDROMANO_INTEL) */
+
 DETAIL_NAMESPACE_BEGIN
 
 void tolower(char* str, std::size_t length) noexcept
 {
     switch(simd_get_vectorization_mode())
     {
-        default:
-        case VectorizationMode_Scalar:
-            return tolower_scalar_kernel(str, length);
+#if defined(STDROMANO_INTEL)
         case VectorizationMode_SSE:
             return tolower_sse_kernel(str, length);
         case VectorizationMode_AVX:
         case VectorizationMode_AVX2:
             return tolower_avx_kernel(str, length);
+#elif defined(STDROMANO_AARCH64)
+        case VectorizationMode_NEON:
+            return tolower_neon_kernel(str, length);
+#endif /* defined(STDROMANO_INTEL) */
+        default:
+        case VectorizationMode_Scalar:
+            return tolower_scalar_kernel(str, length);
     }
-
-    STDROMANO_ASSERT(false, "Should be unreachable");
 }
 
 DETAIL_NAMESPACE_END
@@ -121,7 +170,13 @@ bool strcmp_scalar_kernel(const char* __restrict lhs,
                           const bool case_sensitive) noexcept
 {
     if(case_sensitive)
+    {
+#if defined(STDROMANO_ASM_STRCMP)
         return asm__detail_strcmp_cs(lhs, rhs, length);
+#else
+        return std::memcmp(lhs, rhs, length) == 0;
+#endif /* defined(STDROMANO_ASM_STRCMP) */
+    }
 
     for(std::size_t i = 0; i < length; ++i)
         if(to_lower(lhs[i]) != to_lower(rhs[i]))
@@ -129,6 +184,8 @@ bool strcmp_scalar_kernel(const char* __restrict lhs,
 
     return true;
 }
+
+#if defined(STDROMANO_INTEL)
 
 bool strcmp_sse_kernel_case_sensitive(const char* __restrict lhs,
                                       const char* __restrict rhs,
@@ -249,6 +306,60 @@ bool strcmp_avx_kernel_case_insensitive(const char* __restrict lhs,
     return _mm256_movemask_epi8(_res) == -1;
 }
 
+#elif defined(STDROMANO_AARCH64)
+
+bool strcmp_neon_kernel_case_sensitive(const char* __restrict lhs,
+                                       const char* __restrict rhs,
+                                       const std::size_t length) noexcept
+{
+    constexpr std::size_t simd_width = 16;
+    const std::size_t simd_loop_size = length - length % simd_width;
+    const std::size_t remaining_size = length - simd_loop_size;
+
+    std::size_t i = 0;
+
+    for(; i < simd_loop_size; i += simd_width)
+    {
+        const uint8x16_t _lhs = vld1q_u8(reinterpret_cast<const std::uint8_t*>(std::addressof(lhs[i])));
+        const uint8x16_t _rhs = vld1q_u8(reinterpret_cast<const std::uint8_t*>(std::addressof(rhs[i])));
+
+        if(!vall_true_u8(vceqq_u8(_lhs, _rhs)))
+            return false;
+    }
+
+    return std::memcmp(std::addressof(lhs[i]), std::addressof(rhs[i]), remaining_size) == 0;
+}
+
+bool strcmp_neon_kernel_case_insensitive(const char* __restrict lhs,
+                                         const char* __restrict rhs,
+                                         const std::size_t length) noexcept
+{
+    constexpr std::size_t simd_width = 16;
+    const std::size_t simd_loop_size = length - length % simd_width;
+    const std::size_t remaining_size = length - simd_loop_size;
+
+    std::size_t i = 0;
+
+    for(; i < simd_loop_size; i += simd_width)
+    {
+        const uint8x16_t _lhs = tolower16(vld1q_u8(reinterpret_cast<const std::uint8_t*>(std::addressof(lhs[i]))));
+        const uint8x16_t _rhs = tolower16(vld1q_u8(reinterpret_cast<const std::uint8_t*>(std::addressof(rhs[i]))));
+
+        if(!vall_true_u8(vceqq_u8(_lhs, _rhs)))
+            return false;
+    }
+
+    for(; i < length; ++i)
+        if(to_lower(lhs[i]) != to_lower(rhs[i]))
+            return false;
+
+    STDROMANO_UNUSED(remaining_size);
+
+    return true;
+}
+
+#endif /* defined(STDROMANO_INTEL) */
+
 DETAIL_NAMESPACE_BEGIN
 
 bool strcmp(const char* __restrict lhs,
@@ -258,13 +369,29 @@ bool strcmp(const char* __restrict lhs,
 {
     switch(simd_get_vectorization_mode())
     {
+#if defined(STDROMANO_INTEL)
         case VectorizationMode_SSE:
+#if defined(STDROMANO_ASM_STRCMP)
             return case_sensitive ? asm__detail_strcmp_sse_cs(lhs, rhs, length) :
                                     strcmp_sse_kernel_case_insensitive(lhs, rhs, length);
+#else
+            return case_sensitive ? strcmp_sse_kernel_case_sensitive(lhs, rhs, length) :
+                                    strcmp_sse_kernel_case_insensitive(lhs, rhs, length);
+#endif /* defined(STDROMANO_ASM_STRCMP) */
         case VectorizationMode_AVX:
         case VectorizationMode_AVX2:
+#if defined(STDROMANO_ASM_STRCMP)
             return case_sensitive ? asm__detail_strcmp_avx_cs(lhs, rhs, length) :
                                     strcmp_avx_kernel_case_insensitive(lhs, rhs, length);
+#else
+            return case_sensitive ? strcmp_avx_kernel_case_sensitive(lhs, rhs, length) :
+                                    strcmp_avx_kernel_case_insensitive(lhs, rhs, length);
+#endif /* defined(STDROMANO_ASM_STRCMP) */
+#elif defined(STDROMANO_AARCH64)
+        case VectorizationMode_NEON:
+            return case_sensitive ? strcmp_neon_kernel_case_sensitive(lhs, rhs, length) :
+                                    strcmp_neon_kernel_case_insensitive(lhs, rhs, length);
+#endif /* defined(STDROMANO_INTEL) */
         default:
             return strcmp_scalar_kernel(lhs, rhs, length, case_sensitive);
     }
@@ -276,19 +403,81 @@ DETAIL_NAMESPACE_END
 
 bool validate_utf8_scalar(const char* str, std::size_t size) noexcept
 {
-    // TODO
-
-    STDROMANO_UNUSED(str);
+    const std::uint8_t* data = reinterpret_cast<const std::uint8_t*>(str);
 
     std::size_t i = 0;
 
     while(i < size)
     {
+        const std::uint8_t byte = data[i];
 
+        if(byte < 0x80)
+        {
+            /* ascii */
+            i++;
+            continue;
+        }
+
+        std::size_t length;
+        std::uint32_t code_point;
+
+        if((byte & 0xE0) == 0xC0)
+        {
+            length = 2;
+            code_point = byte & 0x1F;
+        }
+        else if((byte & 0xF0) == 0xE0)
+        {
+            length = 3;
+            code_point = byte & 0x0F;
+        }
+        else if((byte & 0xF8) == 0xF0)
+        {
+            length = 4;
+            code_point = byte & 0x07;
+        }
+        else
+        {
+            /* continuation byte in leading position, or 5+ bytes sequence */
+            return false;
+        }
+
+        if(i + length > size)
+            return false;
+
+        for(std::size_t j = 1; j < length; ++j)
+        {
+            const std::uint8_t continuation = data[i + j];
+
+            if((continuation & 0xC0) != 0x80)
+                return false;
+
+            code_point = (code_point << 6) | (continuation & 0x3F);
+        }
+
+        /* Overlong encodings, utf-16 surrogates and code points above U+10FFFF are invalid */
+        if(length == 2 && code_point < 0x80)
+            return false;
+
+        if(length == 3 && code_point < 0x800)
+            return false;
+
+        if(length == 4 && code_point < 0x10000)
+            return false;
+
+        if(code_point > 0x10FFFF)
+            return false;
+
+        if(code_point >= 0xD800 && code_point <= 0xDFFF)
+            return false;
+
+        i += length;
     }
 
     return true;
 }
+
+#if defined(STDROMANO_INTEL)
 
 constexpr std::uint8_t TOO_SHORT = 1 << 0;
 constexpr std::uint8_t TOO_LONG = 1 << 1;
@@ -550,16 +739,20 @@ bool validate_utf8_avx(const char* str, std::size_t size) noexcept
     return _mm256_testz_si256(err, err) == 1;
 }
 
+#endif /* defined(STDROMANO_INTEL) */
 
 bool validate_utf8(const char* str, std::size_t size) noexcept
 {
     switch(simd_get_vectorization_mode())
     {
+#if defined(STDROMANO_INTEL)
         case VectorizationMode_SSE:
             return validate_utf8_sse(str, size);
         case VectorizationMode_AVX:
         case VectorizationMode_AVX2:
             return validate_utf8_avx(str, size);
+#endif /* defined(STDROMANO_INTEL) */
+        /* TODO: neon kernel */
         default:
             return validate_utf8_scalar(str, size);
     }

@@ -8,7 +8,7 @@
 
 #if defined(STDROMANO_WIN)
 void t1_func()
-#elif defined(STDROMANO_LINUX)
+#elif defined(STDROMANO_UNIX)
 void* t1_func()
 #endif /* defined(STDROMANO_WIN) */
 {
@@ -23,7 +23,7 @@ void* t1_func()
 
 #if defined(STDROMANO_WIN)
 void t2_func()
-#elif defined(STDROMANO_LINUX)
+#elif defined(STDROMANO_UNIX)
 void* t2_func()
 #endif /* defined(STDROMANO_WIN) */
 {

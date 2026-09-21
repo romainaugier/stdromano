@@ -13,18 +13,17 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
-#include <immintrin.h>
 #include <limits>
 #include <new>
 #include <type_traits>
 
-#if defined(STDROMANO_GCC)
+#if defined(STDROMANO_UNIX)
 #include <alloca.h>
-#endif /* defined(STDROMANO_GCC) */
+#endif /* defined(STDROMANO_UNIX) */
 
 STDROMANO_NAMESPACE_BEGIN
 
-/* jemalloc wrappers */
+/* mimalloc wrappers */
 
 DETAIL_NAMESPACE_BEGIN
 
@@ -90,7 +89,7 @@ STDROMANO_FORCE_INLINE void mem_aligned_free(T* ptr) noexcept
 
 #if defined(STDROMANO_MSVC)
 #define mem_alloca(size) _malloca(size)
-#elif defined(STDROMANO_GCC)
+#elif defined(STDROMANO_GCC) || defined(STDROMANO_CLANG)
 #define mem_alloca(size) __builtin_alloca(size)
 #endif /* defined(STDROMANO_MSVC) */
 
@@ -101,7 +100,7 @@ STDROMANO_FORCE_INLINE void mem_aligned_free(T* ptr) noexcept
         (ptrname##_raw + sizeof(void*) + (alignment) - 1) & ~((std::uintptr_t)(alignment) - 1);    \
     void* ptrname = reinterpret_cast<void*>(ptrname##_aligned)
 
-// STL-like allocator that allocates memory using jemalloc wrappers declared above
+// STL-like allocator that allocates memory using the mimalloc wrappers declared above
 template <typename T>
 class STDROMANO_API Allocator
 {
@@ -143,7 +142,7 @@ public:
     }
 };
 
-// STL-like allocator that allocates aligned memory using jemalloc wrappers declared above
+// STL-like allocator that allocates aligned memory using the mimalloc wrappers declared above
 template <typename T, std::size_t Alignment>
 class STDROMANO_API AlignedAllocator
 {

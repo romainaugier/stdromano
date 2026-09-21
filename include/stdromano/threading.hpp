@@ -15,9 +15,12 @@
 
 #if defined(STDROMANO_WIN)
 #include "Windows.h"
-#elif defined(STDROMANO_LINUX)
-#include <syscall.h>
+#elif defined(STDROMANO_UNIX)
+#include <pthread.h>
 #include <unistd.h>
+#if defined(STDROMANO_LINUX)
+#include <syscall.h>
+#endif /* defined(STDROMANO_LINUX) */
 #endif /* defined(STDROMANO_WIN) */
 
 STDROMANO_NAMESPACE_BEGIN
@@ -28,7 +31,7 @@ STDROMANO_FORCE_INLINE size_t get_num_procs() noexcept
     SYSTEM_INFO sys_info;
     GetSystemInfo(&sys_info);
     return static_cast<size_t>(sys_info.dwNumberOfProcessors);
-#elif defined(STDROMANO_LINUX)
+#elif defined(STDROMANO_UNIX)
     return static_cast<size_t>(sysconf(_SC_NPROCESSORS_ONLN));
 #endif /* defined(STDROMANO_WIN) */
 }
@@ -36,7 +39,7 @@ STDROMANO_FORCE_INLINE size_t get_num_procs() noexcept
 #if defined(STDROMANO_WIN)
 using thread_handle = HANDLE;
 using thread_func = void (*)(void*);
-#elif defined(STDROMANO_LINUX)
+#elif defined(STDROMANO_UNIX)
 using thread_handle = pthread_t;
 using thread_func = void* (*)(void*);
 #endif /* defined(STDROMANO_WIN) */
@@ -56,7 +59,7 @@ private:
         thread->_task();
         return 0;
     }
-#elif defined(STDROMANO_LINUX)
+#elif defined(STDROMANO_UNIX)
     int _id;
 
     static void* ThreadProc(void* param)
@@ -77,7 +80,7 @@ public:
 
 #if defined(STDROMANO_WIN)
         this->_handle = CreateThread(NULL, 0, ThreadProc, this, CREATE_SUSPENDED, &this->_id);
-#elif defined(STDROMANO_LINUX)
+#elif defined(STDROMANO_UNIX)
         this->_handle = 0;
 #endif /* defined(STDROMANO_WIN) */
 
@@ -85,24 +88,20 @@ public:
         this->_running = false;
 
         if(detached)
-        {
             this->detach();
-        }
     }
 
     ~Thread()
     {
         if(this->_running)
-        {
             this->join();
-        }
     }
 
     void start() noexcept
     {
     #if defined(STDROMANO_WIN)
         ResumeThread(this->_handle);
-    #elif defined(STDROMANO_LINUX)
+    #elif defined(STDROMANO_UNIX)
         pthread_create(&this->_handle, NULL, ThreadProc, this);
     #endif /* defined(STDROMANO_WIN) */
 
@@ -117,7 +116,7 @@ public:
             CloseHandle(this->_handle);
             this->_handle = nullptr;
         }
-    #elif defined(STDROMANO_LINUX)
+    #elif defined(STDROMANO_UNIX)
         if(this->_handle)
         {
             pthread_detach(this->_handle);
@@ -129,15 +128,13 @@ public:
     void join() noexcept
     {
         if(!this->_running)
-        {
             return;
-        }
 
     #if defined(STDROMANO_WIN)
         WaitForSingleObject(this->_handle, INFINITE);
         CloseHandle(this->_handle);
         this->_handle = nullptr;
-    #elif defined(STDROMANO_LINUX)
+    #elif defined(STDROMANO_UNIX)
         pthread_join(this->_handle, NULL);
         this->_handle = 0;
     #endif /* defined(STDROMANO_WIN) */
@@ -149,7 +146,7 @@ public:
     {
 #if defined(STDROMANO_WIN)
         return this->_handle != nullptr;
-#elif defined(STDROMANO_LINUX)
+#elif defined(STDROMANO_UNIX)
         return this->_handle == 0;
 #endif /* defined(STDROMANO_WIN) */
     }
@@ -161,14 +158,22 @@ STDROMANO_FORCE_INLINE size_t thread_get_id() noexcept
     return static_cast<size_t>(GetCurrentThreadId());
 #elif defined(STDROMANO_LINUX)
     return static_cast<size_t>(syscall(SYS_gettid));
+#elif defined(STDROMANO_APPLE)
+    std::uint64_t tid = 0;
+    pthread_threadid_np(nullptr, &tid);
+    return static_cast<size_t>(tid);
+#elif defined(STDROMANO_FREEBSD)
+    return static_cast<size_t>(pthread_getthreadid_np());
+#elif defined(STDROMANO_UNIX)
+    return static_cast<size_t>(reinterpret_cast<std::uintptr_t>(pthread_self()));
 #endif /* defined(STDROMANO_WIN) */
 }
 
-STDROMANO_FORCE_INLINE void thread_sleep(const size_t sleep_duration_ms) noexcept
+STDROMANO_FORCE_INLINE void thread_sleep(const std::size_t sleep_duration_ms) noexcept
 {
 #if defined(STDROMANO_WIN)
     Sleep(static_cast<DWORD>(sleep_duration_ms));
-#elif defined(STDROMANO_LINUX)
+#elif defined(STDROMANO_UNIX)
     struct timespec wait_duration;
     wait_duration.tv_sec = sleep_duration_ms / 1000;
     wait_duration.tv_nsec = (sleep_duration_ms % 1000) * 1000000;
@@ -204,9 +209,7 @@ public:
     void wait() noexcept
     {
         while(this->_done.load() != this->_expected.load())
-        {
             thread_yield();
-        }
     }
 };
 

@@ -16,7 +16,16 @@
 #include "stdromano/atomic.hpp"
 #include "stdromano/filesystem.hpp"
 
+#if defined(STDROMANO_APPLE)
+/* The OpenCL framework headers live under OpenCL/ and are deprecated since macOS 10.14 */
+#if !defined(CL_SILENCE_DEPRECATION)
+#define CL_SILENCE_DEPRECATION
+#endif /* !defined(CL_SILENCE_DEPRECATION) */
+#include <OpenCL/opencl.h>
 #include <CL/opencl.hpp>
+#else
+#include <CL/opencl.hpp>
+#endif /* defined(STDROMANO_APPLE) */
 
 STDROMANO_NAMESPACE_BEGIN
 

@@ -2,13 +2,54 @@
 # Copyright (c) 2025 - Present Romain Augier 
 # All rights reserved. 
 
-function(set_target_options target_name)
-    if(CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
-        set(ROMANO_CLANG 1)
-        set(CMAKE_CXX_FLAGS "-Wall -pedantic-errors")
+include(CheckCXXCompilerFlag)
 
-        target_compile_options(${target_name} PRIVATE $<$<CONFIG:Debug,RelWithDebInfo>:-fsanitize=leak -fsanitize=address>)
-        target_compile_options(${target_name} PRIVATE $<$<CONFIG:Release,RelWithDebInfo>:-O3 -mavx2 -mfma)
+# Architecture specific optimization flags, shared by gcc and clang
+function(get_arch_compile_options out_var)
+    set(arch_options)
+
+    if(STDROMANO_ARCH_X86_64 OR STDROMANO_ARCH_X86)
+        list(APPEND arch_options -mavx2 -mfma)
+    elseif(STDROMANO_ARCH_AARCH64)
+        if(APPLE)
+            # -mcpu=apple-m1 is the lowest common denominator of the apple silicon cpus,
+            # newer ones (apple-m3, apple-m4) need a recent clang
+            check_cxx_compiler_flag("-mcpu=apple-m1" HAS_MCPU_APPLE_M1)
+
+            if(HAS_MCPU_APPLE_M1)
+                list(APPEND arch_options -mcpu=apple-m1)
+            endif()
+        else()
+            # NEON is mandatory in armv8-a, nothing to enable, but let the compiler use
+            # the extensions of the machine we are building on when it can
+            check_cxx_compiler_flag("-mcpu=native" HAS_MCPU_NATIVE)
+
+            if(HAS_MCPU_NATIVE AND NOT CMAKE_CROSSCOMPILING)
+                list(APPEND arch_options -mcpu=native)
+            endif()
+        endif()
+    endif()
+
+    set(${out_var} ${arch_options} PARENT_SCOPE)
+endfunction()
+
+function(set_target_options target_name)
+    get_arch_compile_options(ARCH_COMPILE_OPTIONS)
+
+    # AppleClang is a distinct compiler id, MATCHES catches both
+    if(CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+        set(ROMANO_CLANG 1)
+
+        # -fsanitize=leak is not implemented on darwin (asan has its own leak detector)
+        if(APPLE)
+            target_compile_options(${target_name} PRIVATE $<$<CONFIG:Debug,RelWithDebInfo>:-fsanitize=address>)
+        else()
+            target_compile_options(${target_name} PRIVATE $<$<CONFIG:Debug,RelWithDebInfo>:-fsanitize=leak -fsanitize=address>)
+        endif()
+
+        target_compile_options(${target_name} PRIVATE -Wall -pedantic-errors)
+        target_compile_options(${target_name} PRIVATE ${ARCH_COMPILE_OPTIONS})
+        target_compile_options(${target_name} PRIVATE $<$<CONFIG:Release,RelWithDebInfo>:-O3>)
 
         target_link_options(${target_name} PRIVATE $<$<CONFIG:Debug,RelWithDebInfo>:-fsanitize=address>)
     elseif (CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
@@ -36,14 +77,25 @@ function(set_target_options target_name)
             target_link_options(${target_name} PRIVATE $<$<CONFIG:Debug,RelWithDebInfo>:-fsanitize=thread>)
         endif()
 
-        set(COMPILE_OPTIONS -D_FORTIFY_SOURCES=2 -pipe -Wall -pedantic-errors $<$<CONFIG:Release,RelWithDebInfo>:-O3 -ftree-vectorizer-verbose=2> -mveclibabi=svml -mavx2 -mfma)
+        set(COMPILE_OPTIONS -D_FORTIFY_SOURCES=2 -pipe -Wall -pedantic-errors $<$<CONFIG:Release,RelWithDebInfo>:-O3 -ftree-vectorizer-verbose=2> ${ARCH_COMPILE_OPTIONS})
+
+        # -mveclibabi=svml is x86 only
+        if(STDROMANO_ARCH_X86_64 OR STDROMANO_ARCH_X86)
+            list(APPEND COMPILE_OPTIONS -mveclibabi=svml)
+        endif()
 
         target_compile_options(${target_name} PRIVATE ${COMPILE_OPTIONS})
     elseif (CMAKE_CXX_COMPILER_ID STREQUAL "Intel")
         set(ROMANO_INTEL 1)
     elseif (CMAKE_CXX_COMPILER_ID STREQUAL "MSVC")
         set(ROMANO_MSVC 1)
-        include(find_avx)
+
+        if(STDROMANO_ARCH_X86_64 OR STDROMANO_ARCH_X86)
+            include(find_avx)
+        else()
+            # msvc has no /arch: flag for arm64, neon is always available
+            set(AVX_FLAGS)
+        endif()
 
         if(${ADDRSAN})
             target_compile_options(${target_name} PRIVATE $<$<CONFIG:Debug,RelWithDebInfo>:/fsanitize=address>)

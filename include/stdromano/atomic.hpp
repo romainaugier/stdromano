@@ -28,7 +28,7 @@ enum class MemoryOrder
     SeqCst
 };
 
-#if defined(STDROMANO_LINUX)
+#if defined(STDROMANO_UNIX)
 constexpr int to_gcc_memory_order(MemoryOrder order)
 {
     switch (order) {
@@ -47,7 +47,7 @@ constexpr int to_gcc_memory_order(MemoryOrder order)
             return __ATOMIC_SEQ_CST;
     }
 }
-#endif /* defined(STDROMANO_LINUX) */
+#endif /* defined(STDROMANO_UNIX) */
 
 template<typename T>
 using is_valid_for_atomic = std::conjunction<std::is_integral<T>,
@@ -80,7 +80,7 @@ public:
         {
             return _InterlockedOr64(const_cast<volatile __int64*>(reinterpret_cast<const volatile __int64*>(&this->_value)), 0);
         }
-#elif defined(STDROMANO_LINUX)
+#elif defined(STDROMANO_UNIX)
         return __atomic_load_n(&this->_value, to_gcc_memory_order(order));
 #endif /* defined(STDROMANO_WIN) */
     }
@@ -96,7 +96,7 @@ public:
         {
             _InterlockedExchange64(reinterpret_cast<volatile __int64*>(&this->_value), value);
         }
-#elif defined(STDROMANO_LINUX)
+#elif defined(STDROMANO_UNIX)
         __atomic_store_n(&this->_value, value, to_gcc_memory_order(order));
 #endif /* defined(STDROMANO_WIN) */
     }
@@ -118,7 +118,7 @@ public:
         {
             return _InterlockedExchange64(reinterpret_cast<volatile __int64*>(&this->_value), value);
         }
-#elif defined(STDROMANO_LINUX)
+#elif defined(STDROMANO_UNIX)
         return __atomic_exchange_n(&this->_value, value, to_gcc_memory_order(order));
 #endif /* defined(STDROMANO_WIN) */
     }
@@ -135,7 +135,7 @@ public:
         {
             return _InterlockedExchangeAdd64(reinterpret_cast<volatile __int64*>(&this->_value), arg);
         }
-#elif defined(STDROMANO_LINUX)
+#elif defined(STDROMANO_UNIX)
         return __atomic_fetch_add(&this->_value, arg, to_gcc_memory_order(order));
 #endif /* defined(STDROMANO_WIN) */
     }
@@ -152,7 +152,7 @@ public:
         {
             return _InterlockedExchangeAdd64(reinterpret_cast<volatile __int64*>(&this->_value), -arg);
         }
-#elif defined(STDROMANO_LINUX)
+#elif defined(STDROMANO_UNIX)
         return __atomic_fetch_sub(&this->_value, arg, to_gcc_memory_order(order));
 #endif /* defined(STDROMANO_WIN) */
     }
@@ -191,7 +191,7 @@ public:
 
             return ok;
         }
-#elif defined(STDROMANO_LINUX)
+#elif defined(STDROMANO_UNIX)
         return __atomic_compare_exchange_n(&value,
                                            &expected,
                                            value,
@@ -244,7 +244,7 @@ public:
             MemoryBarrier();
 
         return val != 0;
-#elif defined(STDROMANO_LINUX)
+#elif defined(STDROMANO_UNIX)
         int v = __atomic_load_n(&this->_value, to_gcc_memory_order(order));
         return v != 0;
 #endif
@@ -259,7 +259,7 @@ public:
         }
 
         _InterlockedExchange(const_cast<volatile long*>(&this->_value), value ? 1 : 0);
-#elif defined(STDROMANO_LINUX)
+#elif defined(STDROMANO_UNIX)
         __atomic_store_n(&this->_value, value ? 1 : 0, to_gcc_memory_order(order));
 #endif
     }
@@ -276,7 +276,7 @@ public:
 #if defined(STDROMANO_WIN)
         long old = _InterlockedExchange(const_cast<volatile long*>(&this->_value), value ? 1 : 0);
         return old != 0;
-#elif defined(STDROMANO_LINUX)
+#elif defined(STDROMANO_UNIX)
         int old = __atomic_exchange_n(&this->_value, value ? 1 : 0, to_gcc_memory_order(order));
         return old != 0;
 #endif
@@ -298,13 +298,20 @@ public:
         }
 
         return success_flag;
-#elif defined(STDROMANO_LINUX)
-        int expected_val = expected ? 1 : 0;
-        int value_val = value ? 1 : 0;
-        bool success_flag = __atomic_compare_exchange_n(
-            &this->_value, &expected_val, value_val, false,
-            to_gcc_memory_order(success), to_gcc_memory_order(failure));
-        if (!success_flag) expected = (expected_val != 0);
+#elif defined(STDROMANO_UNIX)
+        long expected_val = expected ? 1 : 0;
+        long value_val = value ? 1 : 0;
+
+        bool success_flag = __atomic_compare_exchange_n(&this->_value,
+                                                        &expected_val,
+                                                        value_val,
+                                                        false,
+                                                        to_gcc_memory_order(success),
+                                                        to_gcc_memory_order(failure));
+
+        if(!success_flag)
+            expected = (expected_val != 0);
+
         return success_flag;
 #endif
     }

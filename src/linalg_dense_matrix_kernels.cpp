@@ -6,6 +6,16 @@
 #include "stdromano/simd.hpp"
 #include "stdromano/threading.hpp"
 
+/*
+    On Apple platforms we route the float and double gemm to Accelerate: its sgemm/dgemm run
+    on the AMX/matrix co-processor and are far faster than anything we could write with NEON.
+    ACCELERATE_NEW_LAPACK selects the modern (non deprecated) LAPACK/BLAS headers.
+*/
+#if defined(STDROMANO_APPLE)
+#define ACCELERATE_NEW_LAPACK 1
+#include <Accelerate/Accelerate.h>
+#endif /* defined(STDROMANO_APPLE) */
+
 STDROMANO_NAMESPACE_BEGIN
 
 /********************************/
@@ -19,23 +29,26 @@ void matmat_mulf_scalar_kernel(const float* __restrict A,
                                std::size_t K,
                                std::size_t N) noexcept
 {
-    for(std::size_t i = 0; i < M; i++)
+    /* A is M x K (lda = M), B is K x N (ldb = K) and C is M x N (ldc = M), all column major */
+    for(std::size_t j = 0; j < N; j++)
     {
-        for(std::size_t j = 0; j < K; j++)
+        for(std::size_t i = 0; i < M; i++)
         {
             float sum = 0.0f;
 
-            for(std::size_t k = 0; k < N; k++)
+            for(std::size_t k = 0; k < K; k++)
             {
                 sum += A[i + k * M] * B[k + j * K];
             }
 
-            C[i * j * M] = sum;
+            C[i + j * M] = sum;
         }
     }
 }
 
 /* AVX2 optimized version borrowed from https://github.com/salykova/sgemm.c */
+
+#if defined(STDROMANO_INTEL)
 
 alignas(32) static const std::int8_t mask[32] = {-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
                                                  -1, -1, -1, -1, -1, 0,  0,  0,  0,  0,  0,
@@ -1748,6 +1761,8 @@ void matmat_mulf_avx2_kernel(const float* __restrict A,
     mem_aligned_free(blockB_packed);
 }
 
+#endif /* defined(STDROMANO_INTEL) */
+
 /* Dispatcher */
 
 void detail::matmat_mulf(const float* __restrict A,
@@ -1757,22 +1772,36 @@ void detail::matmat_mulf(const float* __restrict A,
                          std::size_t K,
                          std::size_t N) noexcept
 {
+#if defined(STDROMANO_APPLE)
+    cblas_sgemm(CblasColMajor,
+                CblasNoTrans,
+                CblasNoTrans,
+                static_cast<int>(M),
+                static_cast<int>(N),
+                static_cast<int>(K),
+                1.0f,
+                A,
+                static_cast<int>(M),
+                B,
+                static_cast<int>(K),
+                0.0f,
+                C,
+                static_cast<int>(M));
+#else
     switch(simd_get_vectorization_mode())
     {
-        case VectorizationMode_Scalar:
-        case VectorizationMode_SSE:
-        case VectorizationMode_AVX:
-            matmat_mulf_scalar_kernel(A, B, C, M, K, N);
-            break;
-
+#if defined(STDROMANO_INTEL)
         case VectorizationMode_AVX2:
             matmat_mulf_avx2_kernel(A, B, C, M, K, N);
             break;
+#endif /* defined(STDROMANO_INTEL) */
 
+        /* TODO: neon kernel for non apple aarch64 platforms */
         default:
             matmat_mulf_scalar_kernel(A, B, C, M, K, N);
             break;
     }
+#endif /* defined(STDROMANO_APPLE) */
 }
 
 /********************************/
@@ -1788,18 +1817,19 @@ void matmat_muld_scalar_kernel(const double* __restrict A,
                                std::size_t K,
                                std::size_t N) noexcept
 {
-    for(std::size_t i = 0; i < M; i++)
+    /* A is M x K (lda = M), B is K x N (ldb = K) and C is M x N (ldc = M), all column major */
+    for(std::size_t j = 0; j < N; j++)
     {
-        for(std::size_t j = 0; j < K; j++)
+        for(std::size_t i = 0; i < M; i++)
         {
             double sum = 0.0;
 
-            for(std::size_t k = 0; k < N; k++)
+            for(std::size_t k = 0; k < K; k++)
             {
                 sum += A[i + k * M] * B[k + j * K];
             }
 
-            C[i * j * M] = sum;
+            C[i + j * M] = sum;
         }
     }
 }
@@ -1813,17 +1843,25 @@ void detail::matmat_muld(const double* __restrict A,
                          std::size_t K,
                          std::size_t N) noexcept
 {
-    switch(simd_get_vectorization_mode())
-    {
-        case VectorizationMode_Scalar:
-        case VectorizationMode_SSE:
-        case VectorizationMode_AVX:
-        case VectorizationMode_AVX2:
-
-        default:
-            matmat_muld_scalar_kernel(A, B, C, M, K, N);
-            break;
-    }
+#if defined(STDROMANO_APPLE)
+    cblas_dgemm(CblasColMajor,
+                CblasNoTrans,
+                CblasNoTrans,
+                static_cast<int>(M),
+                static_cast<int>(N),
+                static_cast<int>(K),
+                1.0,
+                A,
+                static_cast<int>(M),
+                B,
+                static_cast<int>(K),
+                0.0,
+                C,
+                static_cast<int>(M));
+#else
+    /* TODO: avx2 and neon kernels */
+    matmat_muld_scalar_kernel(A, B, C, M, K, N);
+#endif /* defined(STDROMANO_APPLE) */
 }
 
 /********************************/
@@ -1839,19 +1877,20 @@ void matmat_muli_scalar_kernel(const std::int32_t* __restrict A,
                                std::size_t K,
                                std::size_t N) noexcept
 {
-    for(std::size_t i = 0; i < M; i++)
+    /* A is M x K (lda = M), B is K x N (ldb = K) and C is M x N (ldc = M), all column major */
+    for(std::size_t j = 0; j < N; j++)
     {
-        for(std::size_t j = 0; j < K; j++)
+        for(std::size_t i = 0; i < M; i++)
         {
             std::int32_t sum = 0;
 
-            for(std::size_t k = 0; k < N; k++)
+            for(std::size_t k = 0; k < K; k++)
             {
                 /* Should we care about overflow ? */
                 sum += A[i + k * M] * B[k + j * K];
             }
 
-            C[i * j * M] = sum;
+            C[i + j * M] = sum;
         }
     }
 }
@@ -1865,17 +1904,8 @@ void detail::matmat_muli(const std::int32_t* __restrict A,
                          std::size_t K,
                          std::size_t N) noexcept
 {
-    switch(simd_get_vectorization_mode())
-    {
-        case VectorizationMode_Scalar:
-        case VectorizationMode_SSE:
-        case VectorizationMode_AVX:
-        case VectorizationMode_AVX2:
-
-        default:
-            matmat_muli_scalar_kernel(A, B, C, M, K, N);
-            break;
-    }
+    /* TODO: avx2 and neon kernels, there is no blas integer gemm */
+    matmat_muli_scalar_kernel(A, B, C, M, K, N);
 }
 
 STDROMANO_NAMESPACE_END

@@ -9,13 +9,26 @@
 
 #include "stdromano/stdromano.hpp"
 
+#if defined(STDROMANO_INTEL)
 #include <immintrin.h>
+#elif defined(STDROMANO_AARCH64)
+#include <arm_neon.h>
+#endif /* defined(STDROMANO_INTEL) */
+
 #include <limits>
 #include <cmath>
 
 #if defined(STDROMANO_GCC) || defined(STDROMANO_CLANG)
 #include <math.h>
 #endif
+
+/*
+    __AVX2__ was used as a proxy for the fma3 intrinsics, but the right macro is __FMA__
+    (gcc and clang define it with -mfma, msvc only defines __AVX2__)
+*/
+#if defined(STDROMANO_INTEL) && (defined(__FMA__) || defined(__AVX2__))
+#define STDROMANO_HAS_FMA_INTRINSICS
+#endif /* defined(STDROMANO_INTEL) && (defined(__FMA__) || defined(__AVX2__)) */
 
 #define MATHS_NAMESPACE_BEGIN namespace maths {
 #define MATHS_NAMESPACE_END }
@@ -171,14 +184,24 @@ STDROMANO_FORCE_INLINE T rcp(const T x) noexcept;
 template<>
 STDROMANO_FORCE_INLINE float rcp(const float x) noexcept
 {
+#if defined(STDROMANO_INTEL)
     const __m128 a = _mm_set_ss(x);
     const __m128 r = _mm_rcp_ss(a);
 
-#if defined(__AVX2__)
+#if defined(STDROMANO_HAS_FMA_INTRINSICS)
     return _mm_cvtss_f32(_mm_mul_ss(r, _mm_fnmadd_ss(r, a, _mm_set_ss(2.0f))));
 #else
     return _mm_cvtss_f32(_mm_mul_ss(r, _mm_sub_ss(_mm_set_ss(2.0f), _mm_mul_ss(r, a))));
-#endif /* defined(__AVX2__) */
+#endif /* defined(STDROMANO_HAS_FMA_INTRINSICS) */
+#elif defined(STDROMANO_AARCH64)
+    /* frecpe only gives ~8 bits, two Newton-Raphson steps (frecps) to match the x86 accuracy */
+    float r = vrecpes_f32(x);
+    r = r * vrecpss_f32(x, r);
+    r = r * vrecpss_f32(x, r);
+    return r;
+#else
+    return 1.0f / x;
+#endif /* defined(STDROMANO_INTEL) */
 }
 
 template<>
@@ -288,11 +311,20 @@ STDROMANO_FORCE_INLINE T rsqrt(T x) noexcept;
 template<>
 STDROMANO_FORCE_INLINE float rsqrt(float x) noexcept
 {
+#if defined(STDROMANO_INTEL)
     const __m128 a = _mm_set_ss(x);
     __m128 r = _mm_rsqrt_ss(a);
     r = _mm_add_ss(_mm_mul_ss(_mm_set_ss(1.5f), r),
                    _mm_mul_ss(_mm_mul_ss(_mm_mul_ss(a, _mm_set_ss(-0.5f)), r), _mm_mul_ss(r, r)));
     return _mm_cvtss_f32(r);
+#elif defined(STDROMANO_AARCH64)
+    float r = vrsqrtes_f32(x);
+    r = r * vrsqrtss_f32(x, r * r);
+    r = r * vrsqrtss_f32(x, r * r);
+    return r;
+#else
+    return 1.0f / ::sqrtf(x);
+#endif /* defined(STDROMANO_INTEL) */
 }
 
 template<>
@@ -492,18 +524,18 @@ STDROMANO_FORCE_INLINE void sincos(T theta, T* s, T* c) noexcept;
 template<>
 STDROMANO_FORCE_INLINE void sincos(float theta, float* s, float* c) noexcept
 {
-#if defined(STDROMANO_GCC)
+#if defined(STDROMANO_GCC) || defined(STDROMANO_CLANG)
     __builtin_sincosf(theta, s, c);
 #else
     *s = sin(theta);
     *c = cos(theta);
-#endif /* defined(STDROMANO_GCC) */
+#endif /* defined(STDROMANO_GCC) || defined(STDROMANO_CLANG) */
 }
 
 template<>
 STDROMANO_FORCE_INLINE void sincos(double theta, double* s, double* c) noexcept
 {
-#if defined(STDROMANO_GCC)
+#if defined(STDROMANO_GCC) || defined(STDROMANO_CLANG)
     __builtin_sincos(theta, s, c);
 #else
     *s = sin(theta);
@@ -518,21 +550,25 @@ STDROMANO_FORCE_INLINE T fma(T a, T b, T c) noexcept;
 template<>
 STDROMANO_FORCE_INLINE float fma(float a, float b, float c) noexcept
 {
-#if defined(__AVX2__)
+#if defined(STDROMANO_HAS_FMA_INTRINSICS)
     return _mm_cvtss_f32(_mm_fmadd_ss(_mm_set_ss(a), _mm_set_ss(b), _mm_set_ss(c)));
+#elif defined(STDROMANO_AARCH64)
+    return __builtin_fmaf(a, b, c);
 #else
     return a * b + c;
-#endif /* defined(__AVX2__) */
+#endif /* defined(STDROMANO_HAS_FMA_INTRINSICS) */
 }
 
 template<>
 STDROMANO_FORCE_INLINE double fma(double a, double b, double c) noexcept
 {
-#if defined(__AVX2__)
+#if defined(STDROMANO_HAS_FMA_INTRINSICS)
     return _mm_cvtsd_f64(_mm_fmadd_sd(_mm_set_sd(a), _mm_set_sd(b), _mm_set_sd(c)));
+#elif defined(STDROMANO_AARCH64)
+    return __builtin_fma(a, b, c);
 #else
     return a * b + c;
-#endif /* defined(__AVX2__) */
+#endif /* defined(STDROMANO_HAS_FMA_INTRINSICS) */
 }
 
 /******************************************/
@@ -542,21 +578,25 @@ STDROMANO_FORCE_INLINE T fms(T a, T b, T c) noexcept;
 template<>
 STDROMANO_FORCE_INLINE float fms(float a, float b, float c) noexcept
 {
-#if defined(__AVX2__)
+#if defined(STDROMANO_HAS_FMA_INTRINSICS)
     return _mm_cvtss_f32(_mm_fmsub_ss(_mm_set_ss(a), _mm_set_ss(b), _mm_set_ss(c)));
+#elif defined(STDROMANO_AARCH64)
+    return __builtin_fmaf(a, b, -c);
 #else
     return a * b - c;
-#endif /* defined(__AVX2__) */
+#endif /* defined(STDROMANO_HAS_FMA_INTRINSICS) */
 }
 
 template<>
 STDROMANO_FORCE_INLINE double fms(double a, double b, double c) noexcept
 {
-#if defined(__AVX2__)
+#if defined(STDROMANO_HAS_FMA_INTRINSICS)
     return _mm_cvtsd_f64(_mm_fmsub_sd(_mm_set_sd(a), _mm_set_sd(b), _mm_set_sd(c)));
+#elif defined(STDROMANO_AARCH64)
+    return __builtin_fma(a, b, -c);
 #else
     return a * b - c;
-#endif /* defined(__AVX2__) */
+#endif /* defined(STDROMANO_HAS_FMA_INTRINSICS) */
 }
 
 /******************************************/
@@ -566,21 +606,25 @@ STDROMANO_FORCE_INLINE T nfma(T a, T b, T c) noexcept;
 template<>
 STDROMANO_FORCE_INLINE float nfma(float a, float b, float c) noexcept
 {
-#if defined(__AVX2__)
+#if defined(STDROMANO_HAS_FMA_INTRINSICS)
     return _mm_cvtss_f32(_mm_fnmadd_ss(_mm_set_ss(a), _mm_set_ss(b), _mm_set_ss(c)));
+#elif defined(STDROMANO_AARCH64)
+    return __builtin_fmaf(-a, b, c);
 #else
     return -a * b + c;
-#endif /* defined(__AVX2__) */
+#endif /* defined(STDROMANO_HAS_FMA_INTRINSICS) */
 }
 
 template<>
 STDROMANO_FORCE_INLINE double nfma(double a, double b, double c) noexcept
 {
-#if defined(__AVX2__)
+#if defined(STDROMANO_HAS_FMA_INTRINSICS)
     return _mm_cvtsd_f64(_mm_fnmadd_sd(_mm_set_sd(a), _mm_set_sd(b), _mm_set_sd(c)));
+#elif defined(STDROMANO_AARCH64)
+    return __builtin_fma(-a, b, c);
 #else
     return -a * b + c;
-#endif /* defined(__AVX2__) */
+#endif /* defined(STDROMANO_HAS_FMA_INTRINSICS) */
 }
 
 /******************************************/
@@ -590,21 +634,25 @@ STDROMANO_FORCE_INLINE T nfms(T a, T b, T c) noexcept;
 template<>
 STDROMANO_FORCE_INLINE float nfms(float a, float b, float c) noexcept
 {
-#if defined(__AVX2__)
+#if defined(STDROMANO_HAS_FMA_INTRINSICS)
     return _mm_cvtss_f32(_mm_fnmsub_ss(_mm_set_ss(a), _mm_set_ss(b), _mm_set_ss(c)));
+#elif defined(STDROMANO_AARCH64)
+    return -__builtin_fmaf(a, b, c);
 #else
     return -a * b - c;
-#endif /* defined(__AVX2__) */
+#endif /* defined(STDROMANO_HAS_FMA_INTRINSICS) */
 }
 
 template<>
 STDROMANO_FORCE_INLINE double nfms(double a, double b, double c) noexcept
 {
-#if defined(__AVX2__)
+#if defined(STDROMANO_HAS_FMA_INTRINSICS)
     return _mm_cvtsd_f64(_mm_fnmsub_sd(_mm_set_sd(a), _mm_set_sd(b), _mm_set_sd(c)));
+#elif defined(STDROMANO_AARCH64)
+    return -__builtin_fma(a, b, c);
 #else
     return -a * b - c;
-#endif /* defined(__AVX2__) */
+#endif /* defined(STDROMANO_HAS_FMA_INTRINSICS) */
 }
 
 /******************************************/

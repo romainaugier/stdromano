@@ -64,7 +64,7 @@ struct Error
 
     static Error from_unix_errno()
     {
-#if defined(STDROMANO_LINUX)
+#if defined(STDROMANO_UNIX)
         int last_err = errno;
 
         char* last_err_str = strerror(last_err);
@@ -72,7 +72,7 @@ struct Error
         return Error(StringD::make_fmt("{} ({})", last_err_str, last_err));
 #else
         return Error("unix errno is not available on this platform");
-#endif // defined(STDROMANO_LINUX)
+#endif // defined(STDROMANO_UNIX)
     }
 };
 

@@ -14,7 +14,7 @@
 
 #if defined(STDROMANO_WIN)
 #include <Windows.h>
-#elif defined(STDROMANO_LINUX)
+#elif defined(STDROMANO_UNIX)
 #include <dirent.h>
 #endif /* defined(STDROMANO_WIN) */
 
@@ -116,7 +116,7 @@ private:
 #if defined(STDROMANO_WIN)
     WIN32_FIND_DATAA _find_data;
     HANDLE _h_find = INVALID_HANDLE_VALUE;
-#elif defined(STDROMANO_LINUX)
+#elif defined(STDROMANO_UNIX)
     DIR* _dir = nullptr;
     struct dirent* _entry = nullptr;
 #endif /* defined(STDROMANO_WIN) */
@@ -134,7 +134,7 @@ public:
 
         other._h_find = INVALID_HANDLE_VALUE;
         std::memset(&other._find_data, 0, sizeof(WIN32_FIND_DATAA));
-#elif defined(STDROMANO_LINUX)
+#elif defined(STDROMANO_UNIX)
         this->_dir = other._dir;
         this->_entry = other._entry;
 
@@ -155,7 +155,7 @@ public:
 
             other._h_find = INVALID_HANDLE_VALUE;
             std::memset(&other._find_data, 0, sizeof(WIN32_FIND_DATAA));
-#elif defined(STDROMANO_LINUX)
+#elif defined(STDROMANO_UNIX)
             this->_dir = other._dir;
             this->_entry = other._entry;
 
@@ -247,7 +247,7 @@ private:
 
 #if defined(STDROMANO_WIN)
     HANDLE _h_find = INVALID_HANDLE_VALUE;
-#elif defined(STDROMANO_LINUX)
+#elif defined(STDROMANO_UNIX)
     DIR* _dir = nullptr;
 #endif /* defined(STDROMANO_WIN) */
 
@@ -269,7 +269,7 @@ public:
 #if defined(STDROMANO_WIN)
         if(this->_h_find != INVALID_HANDLE_VALUE)
             FindClose(this->_h_find);
-#elif defined(STDROMANO_LINUX)
+#elif defined(STDROMANO_UNIX)
         if(this->_dir != nullptr)
             closedir(this->_dir);
 #endif /* defined(STDROMANO_WIN) */

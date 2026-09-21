@@ -54,7 +54,7 @@
 #elif defined(STDROMANO_WIN)
 
 #include <winsock2.h>
-#if defined(STDROMANO_GCC)
+#if defined(STDROMANO_GCC) || defined(STDROMANO_CLANG)
 #include <sys/param.h>
 #endif
 

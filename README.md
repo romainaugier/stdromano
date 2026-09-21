@@ -37,6 +37,10 @@ Using the buildscript on Linux:
 ./build.sh ...
 ```
 
+nasm is required on Linux to assemble the code written in assembly (on Windows, it is automatically detected). Assembly code can be found in src/asm.
+
+Sanitizers are mutually exclusive because they cannot all be used at the same time as they require different instrumentation of the code. --ubsan and --threadsan are only available with Clang and GCC.
+
 ## CMake
 
 To use as a CMake package, you can use the following lines in your CMake configuration:
@@ -65,3 +69,7 @@ install(
     DESTINATION ${CMAKE_INSTALL_BINDIR}
 )
 ```
+
+## Tests
+
+Tests cover every functions and module of stdromano. They are a great way to see how to use the functions/classes, you can treat them as examples, and live in /tests.

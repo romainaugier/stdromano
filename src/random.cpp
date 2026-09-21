@@ -9,6 +9,8 @@
 #include <bcrypt.h>
 #elif defined(STDROMANO_LINUX)
 #include <sys/random.h>
+#elif defined(STDROMANO_UNIX)
+#include <stdlib.h>
 #endif // defined(STDROMANO_WIN)
 
 #include <limits>
@@ -33,6 +35,10 @@ std::uint32_t random_seed() noexcept
 
     if(res != sizeof(value))
         return std::numeric_limits<std::uint32_t>::max();
+
+#elif defined(STDROMANO_UNIX)
+    /* arc4random_buf is available on macOS and on every bsd, and cannot fail */
+    arc4random_buf(&value, sizeof(value));
 
 #else
 #error "random_seed not implemented on this platform"

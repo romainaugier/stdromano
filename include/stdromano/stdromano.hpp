@@ -7,15 +7,21 @@
 #if !defined(__STDROMANO)
 #define __STDROMANO
 
-#if defined(_MSC_VER)
+/* Clang defines __GNUC__ (and clang-cl defines _MSC_VER), so it must be tested first */
+#if defined(__clang__)
+#define STDROMANO_CLANG
+#elif defined(_MSC_VER)
 #define STDROMANO_MSVC
+#elif defined(__GNUC__)
+#define STDROMANO_GCC
+#else
+#error "Unsupported compiler"
+#endif /* defined(__clang__) */
+
+#if defined(_MSC_VER)
 #pragma warning(disable : 4711) /* function selected for automatic inline expansion */
 #define _SILENCE_ALL_MS_EXT_DEPRECATION_WARNINGS
 #define _CRT_SECURE_NO_WARNINGS
-#elif defined(__GNUC__)
-#define STDROMANO_GCC
-#elif defined(__clang__)
-#define STDROMANO_CLANG
 #endif /* defined(_MSC_VER) */
 
 #define STDROMANO_STRIFY(x) #x
@@ -47,14 +53,43 @@
 #include <cstdint>
 #include <cstdio>
 
-#if INTPTR_MAX == INT64_MAX || defined(__x86_64__)
-#define STDROMANO_X64
+/* Architecture detection */
+/* https://github.com/cpredef/predef/blob/master/Architectures.md */
+#if defined(__x86_64__) || defined(_M_X64) || defined(_M_AMD64)
+#define STDROMANO_X86_64
 #define STDROMANO_SIZEOF_PTR 8
-#elif INTPTR_MAX == INT32_MAX
+#define STDROMANO_ARCH_STR "X86_64"
+#elif defined(__i386__) || defined(_M_IX86)
 #define STDROMANO_X86
 #define STDROMANO_SIZEOF_PTR 4
-#endif /* INTPTR_MAX == INT64_MAX || defined(__x86_64__) */
+#define STDROMANO_ARCH_STR "X86"
+#elif defined(__aarch64__) || defined(_M_ARM64) || defined(_M_ARM64EC)
+#define STDROMANO_AARCH64
+#define STDROMANO_SIZEOF_PTR 8
+#define STDROMANO_ARCH_STR "AARCH64"
+#elif defined(__arm__) || defined(_M_ARM)
+#define STDROMANO_AARCH32
+#define STDROMANO_SIZEOF_PTR 4
+#define STDROMANO_ARCH_STR "AARCH32"
+#else
+#error "Unsupported architecture"
+#endif /* defined(__x86_64__) || defined(_M_X64) || defined(_M_AMD64) */
 
+/* Umbrella architecture macros */
+#if defined(STDROMANO_X86_64) || defined(STDROMANO_X86)
+#define STDROMANO_INTEL
+#elif defined(STDROMANO_AARCH64) || defined(STDROMANO_AARCH32)
+#define STDROMANO_ARM
+#endif /* defined(STDROMANO_X86_64) || defined(STDROMANO_X86) */
+
+#if STDROMANO_SIZEOF_PTR == 8
+#define STDROMANO_64BITS
+#else
+#define STDROMANO_32BITS
+#endif /* STDROMANO_SIZEOF_PTR == 8 */
+
+/* Operating system detection */
+/* https://sourceforge.net/p/predef/wiki/OperatingSystems */
 #if defined(_WIN32)
 #define STDROMANO_WIN
 #if !defined(WIN32_LEAN_AND_MEAN)
@@ -63,19 +98,40 @@
 #if !defined(NOMINMAX)
 #define NOMINMAX
 #endif /* !defined(NOMINMAX) */
-#if defined(STDROMANO_X64)
-#define STDROMANO_PLATFORM_STR "WIN64"
-#else
-#define STDROMANO_PLATFORM_STR "WIN32"
-#endif /* defined(STDROMANO_x64) */
+#define STDROMANO_OS_STR "WIN"
 #elif defined(__linux__)
 #define STDROMANO_LINUX
-#if defined(STDROMANO_X64)
-#define STDROMANO_PLATFORM_STR "LINUX64"
+#define STDROMANO_UNIX
+#define STDROMANO_OS_STR "LINUX"
+#elif defined(__APPLE__)
+#define STDROMANO_APPLE
+#define STDROMANO_UNIX
+#define STDROMANO_OS_STR "APPLE"
+#elif defined(__FreeBSD__)
+#define STDROMANO_FREEBSD
+#define STDROMANO_BSD
+#define STDROMANO_UNIX
+#define STDROMANO_OS_STR "FREEBSD"
+#elif defined(__OpenBSD__)
+#define STDROMANO_OPENBSD
+#define STDROMANO_BSD
+#define STDROMANO_UNIX
+#define STDROMANO_OS_STR "OPENBSD"
+#elif defined(__NetBSD__)
+#define STDROMANO_NETBSD
+#define STDROMANO_BSD
+#define STDROMANO_UNIX
+#define STDROMANO_OS_STR "NETBSD"
+#elif defined(__DragonFly__)
+#define STDROMANO_DRAGONFLY
+#define STDROMANO_BSD
+#define STDROMANO_UNIX
+#define STDROMANO_OS_STR "DRAGONFLY"
 #else
-#define STDROMANO_PLATFORM_STR "LINUX32"
-#endif /* defined(STDROMANO_X64) */
+#error "Unsupported platform"
 #endif /* defined(_WIN32) */
+
+#define STDROMANO_PLATFORM_STR STDROMANO_OS_STR "_" STDROMANO_ARCH_STR
 
 #if defined(STDROMANO_WIN)
 #if defined(STDROMANO_MSVC)
@@ -85,7 +141,7 @@
 #define STDROMANO_EXPORT __attribute__((dllexport))
 #define STDROMANO_IMPORT __attribute__((dllimport))
 #endif /* defined(STDROMANO_MSVC) */
-#elif defined(STDROMANO_LINUX)
+#elif defined(STDROMANO_UNIX)
 #define STDROMANO_EXPORT __attribute__((visibility("default")))
 #define STDROMANO_IMPORT
 #endif /* defined(STDROMANO_WIN) */
@@ -99,7 +155,7 @@
 #define STDROMANO_LIB_ENTRY __attribute__((constructor))
 #define STDROMANO_LIB_EXIT __attribute__((destructor))
 #elif defined(STDROMANO_CLANG)
-#define STDROMANO_FORCE_INLINE __attribute__((always_inline))
+#define STDROMANO_FORCE_INLINE inline __attribute__((always_inline))
 #define STDROMANO_LIB_ENTRY __attribute__((constructor))
 #define STDROMANO_LIB_EXIT __attribute__((destructor))
 #endif /* defined(STDROMANO_MSVC) */

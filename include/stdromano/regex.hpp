@@ -14,9 +14,9 @@
 
 STDROMANO_NAMESPACE_BEGIN
 
-#if defined(STDROMANO_GCC)
+#if defined(STDROMANO_GCC) || defined(STDROMANO_CLANG)
 #pragma GCC diagnostic ignored "-Warray-bounds"
-#endif // defined(STDROMANO_GCC)
+#endif // defined(STDROMANO_GCC) || defined(STDROMANO_CLANG)
 
 enum RegexFlags_ : std::uint32_t
 {
@@ -78,8 +78,8 @@ public:
     StringD group_str(std::uint32_t index) const noexcept
     {
         if(index < this->_group_count && this->_groups[index].matched())
-            return StringD::make_ref(this->_source.data() + this->_groups[index].start,
-                                     this->_groups[index].length());
+            return StringD::make_from_c_str(this->_source.data() + this->_groups[index].start,
+                                            this->_groups[index].length());
 
         return StringD();
     }

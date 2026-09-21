@@ -12,21 +12,33 @@
 #include "shellapi.h"
 #include "Shlwapi.h"
 #include "commdlg.h"
-#elif defined(STDROMANO_LINUX)
-#if defined(STDROMANO_GCC)
+#elif defined(STDROMANO_UNIX)
+#if defined(STDROMANO_ENABLE_GTK)
+#if defined(STDROMANO_GCC) || defined(STDROMANO_CLANG)
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wdeprecated-declarations"
+#endif /* defined(STDROMANO_GCC) || defined(STDROMANO_CLANG) */
 #include <gtk/gtk.h>
+#if defined(STDROMANO_GCC) || defined(STDROMANO_CLANG)
 #pragma GCC diagnostic pop
-#endif /* defined(STDROMANO_GCC) */
+#endif /* defined(STDROMANO_GCC) || defined(STDROMANO_CLANG) */
+#endif /* defined(STDROMANO_ENABLE_GTK) */
 #include <limits.h>
 #include <pwd.h>
 #include <sys/stat.h>
 #include <sys/types.h>
-#include <sys/sendfile.h>
 #include <unistd.h>
 #include <fcntl.h>
 #include <ftw.h>
+
+#if defined(STDROMANO_LINUX)
+#include <sys/sendfile.h>
+#elif defined(STDROMANO_APPLE)
+#include <copyfile.h>
+#include <mach-o/dyld.h>
+#elif defined(STDROMANO_BSD)
+#include <sys/sysctl.h>
+#endif /* defined(STDROMANO_UNIX) */
 #endif // defined(STDROMANO_WIN)
 
 #include <stack>
@@ -43,7 +55,7 @@ bool path_exists(const StringD& path) noexcept
 
 #if defined(STDROMANO_WIN)
     return PathFileExistsA(p.c_str());
-#elif defined(STDROMANO_LINUX)
+#elif defined(STDROMANO_UNIX)
     struct stat sb;
     std::memset(&sb, 0, sizeof(struct stat));
     return stat(p.c_str(), &sb) == 0 && (S_ISDIR(sb.st_mode & 0xFFFF) || S_ISREG(sb.st_mode & 0xFFFF));
@@ -123,7 +135,7 @@ Expected<std::size_t> filesize(const StringD& path) noexcept
     CloseHandle(file);
 
     return static_cast<std::size_t>(file_size.QuadPart);
-#elif defined(STDROMANO_LINUX)
+#elif defined(STDROMANO_UNIX)
     struct stat file_stat;
 
     if(stat(path.c_str(), &file_stat) != 0)
@@ -166,7 +178,7 @@ StringD current_dir() noexcept
     }
 
     return res;
-#elif defined(STDROMANO_LINUX)
+#elif defined(STDROMANO_UNIX)
     std::array<char, PATH_MAX> res;
 
     getcwd(res.data(), res.size());
@@ -211,7 +223,7 @@ Expected<void> makedir(const StringD& dir_path) noexcept
 #if defined(STDROMANO_WIN)
         if(!CreateDirectoryA(dir.c_str(), NULL))
             return Error::from_win32_last_error();
-#elif defined(STDROMANO_LINUX)
+#elif defined(STDROMANO_UNIX)
         if(mkdir(dir.c_str(), 0755) != 0)
             return Error::from_unix_errno();
 #else
@@ -248,7 +260,7 @@ Expected<void> removedir(const StringD& dir_path, const bool recursive) noexcept
 
     if(ret != 0)
         return Error(StringD::make_fmt("SHFileOperationA failed (error: {})", ret));
-#elif defined(STDROMANO_LINUX)
+#elif defined(STDROMANO_UNIX)
     static thread_local StringD last_error;
 
     auto callback = [](const char* fpath, const struct stat* sb, int typeflag, struct FTW* ftw) -> int {
@@ -365,7 +377,7 @@ Expected<void> removefile(const StringD& file_path) noexcept
                                        fmt::string_view(buffer, res),
                                        last_err));
     }
-#elif defined(STDROMANO_LINUX)
+#elif defined(STDROMANO_UNIX)
     int res = remove(file_path.is_ref() ? file_path.copy().c_str() : file_path.c_str());
 
     if(res != 0)
@@ -405,30 +417,72 @@ Expected<void> copyfile(const StringD& src, const StringD& dst) noexcept
                                        fmt::string_view(buffer, res),
                                        last_err));
     }
-#elif defined(STDROMANO_LINUX)
+#elif defined(STDROMANO_UNIX)
     int input, output;
 
     if((input = open(src.is_ref() ? src.copy().c_str() : src.c_str(), O_RDONLY)) == -1)
         return Error(StringD::make_fmt("Cannot open src file \"{}\" for copy", src));
 
     if((output = creat(dst.is_ref() ? dst.copy().c_str() : dst.c_str(), 0660)) == -1)
+    {
+        close(input);
         return Error(StringD::make_fmt("Cannot create dst file \"{}\" for copy", dst));
+    }
 
     struct stat file_stat;
     std::memset(&file_stat, 0, sizeof(struct stat));
 
     int res = fstat(input, &file_stat);
 
+#if defined(STDROMANO_LINUX)
     off_t copied = 0;
 
     while(res == 0 && copied < file_stat.st_size)
     {
         ssize_t written = sendfile(output, input, &copied, SSIZE_MAX);
-        copied += written;
 
         if(written == -1)
+        {
+            res = -1;
+            break;
+        }
+    }
+#elif defined(STDROMANO_APPLE)
+    /* fcopyfile also carries the metadata over, and uses copy-on-write on apfs */
+    if(res == 0)
+        res = fcopyfile(input, output, nullptr, COPYFILE_ALL) == 0 ? 0 : -1;
+#else
+    /* No zero copy primitive available, fallback on a plain read/write loop */
+    if(res == 0)
+    {
+        char buffer[65536];
+        ssize_t read_size;
+
+        while((read_size = read(input, buffer, sizeof(buffer))) > 0)
+        {
+            ssize_t offset = 0;
+
+            while(offset < read_size)
+            {
+                const ssize_t written = write(output, buffer + offset, read_size - offset);
+
+                if(written <= 0)
+                {
+                    res = -1;
+                    break;
+                }
+
+                offset += written;
+            }
+
+            if(res == -1)
+                break;
+        }
+
+        if(read_size < 0)
             res = -1;
     }
+#endif /* defined(STDROMANO_UNIX) */
 
     close(input);
     close(output);
@@ -455,14 +509,37 @@ Expected<StringD> expand_from_executable_dir(const StringD& path_to_expand) noex
     while(size > 0 && sz_path[size] != '\\')
         size--;
 
-#elif defined(STDROMANO_LINUX)
+#elif defined(STDROMANO_UNIX)
     char sz_path[PATH_MAX];
+
+#if defined(STDROMANO_APPLE)
+    std::uint32_t path_size = PATH_MAX;
+
+    if(_NSGetExecutablePath(sz_path, &path_size) != 0)
+        return Error(StringD("Error during _NSGetExecutablePath: path too long"));
+
+    ssize_t count = static_cast<ssize_t>(std::strlen(sz_path));
+#elif defined(STDROMANO_FREEBSD)
+    int mib[4] = { CTL_KERN, KERN_PROC, KERN_PROC_PATHNAME, -1 };
+    std::size_t path_size = PATH_MAX;
+
+    if(sysctl(mib, 4, sz_path, &path_size, nullptr, 0) != 0)
+        return Error(StringD::make_fmt("Error during sysctl(KERN_PROC_PATHNAME): {}", errno));
+
+    ssize_t count = static_cast<ssize_t>(std::strlen(sz_path));
+#else
+    /* /proc/self/exe on linux, /proc/curproc/exe on netbsd */
+#if defined(STDROMANO_NETBSD)
+    ssize_t count = readlink("/proc/curproc/exe", sz_path, PATH_MAX);
+#else
     ssize_t count = readlink("/proc/self/exe", sz_path, PATH_MAX);
+#endif /* defined(STDROMANO_NETBSD) */
 
     if(count < 0 || count >= PATH_MAX)
         return Error(StringD::make_fmt("Error during readlink: {}", errno));
 
     sz_path[count] = '\0';
+#endif /* defined(STDROMANO_APPLE) */
 
     size = count - 1;
 
@@ -497,14 +574,37 @@ Expected<StringD> expand_from_lib_dir(const StringD& path_to_expand) noexcept
     while(size > 0 && sz_path[size] != '\\')
         size--;
 
-#elif defined(STDROMANO_LINUX)
+#elif defined(STDROMANO_UNIX)
     char sz_path[PATH_MAX];
+
+#if defined(STDROMANO_APPLE)
+    std::uint32_t path_size = PATH_MAX;
+
+    if(_NSGetExecutablePath(sz_path, &path_size) != 0)
+        return Error(StringD("Error during _NSGetExecutablePath: path too long"));
+
+    ssize_t count = static_cast<ssize_t>(std::strlen(sz_path));
+#elif defined(STDROMANO_FREEBSD)
+    int mib[4] = { CTL_KERN, KERN_PROC, KERN_PROC_PATHNAME, -1 };
+    std::size_t path_size = PATH_MAX;
+
+    if(sysctl(mib, 4, sz_path, &path_size, nullptr, 0) != 0)
+        return Error(StringD::make_fmt("Error during sysctl(KERN_PROC_PATHNAME): {}", errno));
+
+    ssize_t count = static_cast<ssize_t>(std::strlen(sz_path));
+#else
+    /* /proc/self/exe on linux, /proc/curproc/exe on netbsd */
+#if defined(STDROMANO_NETBSD)
+    ssize_t count = readlink("/proc/curproc/exe", sz_path, PATH_MAX);
+#else
     ssize_t count = readlink("/proc/self/exe", sz_path, PATH_MAX);
+#endif /* defined(STDROMANO_NETBSD) */
 
     if(count < 0 || count >= PATH_MAX)
         return Error(StringD::make_fmt("Error during readlink: {}", errno));
 
     sz_path[count] = '\0';
+#endif /* defined(STDROMANO_APPLE) */
 
     size = count - 1;
 
@@ -530,7 +630,7 @@ Expected<StringD> tmp_dir() noexcept
     buf.erase(static_cast<std::size_t>(sz - static_cast<std::size_t>(buf[sz - 1] == '\\')));
 
     return buf;
-#elif defined(STDROMANO_LINUX)
+#elif defined(STDROMANO_UNIX)
     return StringD::make_ref("/tmp");
 #endif // defined(STDROMANO_WIN)
 }
@@ -584,7 +684,7 @@ Expected<StringD> home_dir(bool use_env) noexcept
     {
         return Error();
     }
-#elif defined(STDROMANO_LINUX)
+#elif defined(STDROMANO_UNIX)
     const char* homedir;
 
     if((homedir = std::getenv("HOME")) == nullptr)
@@ -664,7 +764,7 @@ ListDirIterator::~ListDirIterator()
     if(this->_h_find != INVALID_HANDLE_VALUE)
         FindClose(this->_h_find);
 
-#elif defined(STDROMANO_LINUX)
+#elif defined(STDROMANO_UNIX)
     if(this->_dir != nullptr)
         closedir(this->_dir);
 
@@ -677,7 +777,7 @@ StringD ListDirIterator::get_current_path() const noexcept
     return StringD("{}{}",
                    fmt::string_view(this->_directory_path.c_str(), this->_directory_path.size() - 1),
                    this->_find_data.cFileName);
-#elif defined(STDROMANO_LINUX)
+#elif defined(STDROMANO_UNIX)
     return StringD("{}/{}",
                    fmt::string_view(this->_directory_path.c_str(), this->_directory_path.size()),
                    this->_entry->d_name);
@@ -690,7 +790,7 @@ bool ListDirIterator::is_file() const noexcept
 {
 #if defined(STDROMANO_WIN)
     return this->_find_data.dwFileAttributes & ~FILE_ATTRIBUTE_DIRECTORY;
-#elif defined(STDROMANO_LINUX)
+#elif defined(STDROMANO_UNIX)
     return this->_entry->d_type == DT_REG;
 #else
     return false;
@@ -701,7 +801,7 @@ bool ListDirIterator::is_directory() const noexcept
 {
 #if defined(STDROMANO_WIN)
     return this->_find_data.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY;
-#elif defined(STDROMANO_LINUX)
+#elif defined(STDROMANO_UNIX)
     return this->_entry->d_type == DT_DIR;
 #else
     return false;
@@ -778,7 +878,7 @@ bool list_dir(ListDirIterator& it, const StringD& directory_path, const std::uin
     }
 
     return false;
-#elif defined(STDROMANO_LINUX)
+#elif defined(STDROMANO_UNIX)
     if(it._dir == nullptr)
     {
         it._directory_path = directory_path.copy();
@@ -911,7 +1011,7 @@ StringD open_file_dialog(FileDialogMode_ mode,
     }
 
     return StringD();
-#elif defined(STDROMANO_LINUX)
+#elif defined(STDROMANO_UNIX) && defined(STDROMANO_ENABLE_GTK)
     gtk_init(nullptr, nullptr);
 
     GtkWidget* dialog = nullptr;
@@ -986,6 +1086,14 @@ StringD open_file_dialog(FileDialogMode_ mode,
         gtk_main_iteration();
 
     return result;
+#else
+    /* TODO: native file dialogs on macOS (NSOpenPanel, needs an objective-c++ source file) */
+    STDROMANO_UNUSED(mode);
+    STDROMANO_UNUSED(title);
+    STDROMANO_UNUSED(initial_path);
+    STDROMANO_UNUSED(filter);
+
+    return StringD();
 #endif // defined(STDROMANO_WIN)
 }
 
@@ -1062,7 +1170,7 @@ bool WalkIterator::process_current_directory() noexcept
     FindClose(this->_h_find);
     this->_h_find = INVALID_HANDLE_VALUE;
 
-#elif defined(STDROMANO_LINUX)
+#elif defined(STDROMANO_UNIX)
     if(this->_dir == nullptr)
     {
         if(this->_pending_dirs.empty())

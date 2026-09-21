@@ -7,22 +7,24 @@ include(target_options)
 
 file(GLOB_RECURSE src_files *.cpp)
 
-if(WIN32)
-    enable_language(ASM_MASM)
-    file(GLOB_RECURSE asm_files asm/x64_windows/*.asm)
-elseif(UNIX)
-    enable_language(ASM_NASM)
-    file(GLOB_RECURSE asm_files asm/x64_linux/*.asm)
-    set(CMAKE_ASM_NASM_OBJECT_FORMAT "elf64")
-else()
-    message(FATAL_ERROR "Platform not supported")
-endif()
+# The assembly kernels only exist for x86-64 windows and linux (see STDROMANO_BUILD_ASM)
+if(STDROMANO_BUILD_ASM)
+    if(WIN32)
+        file(GLOB_RECURSE asm_files asm/x64_windows/*.asm)
+    else()
+        file(GLOB_RECURSE asm_files asm/x64_linux/*.asm)
+    endif()
 
-add_library(asm_objects OBJECT ${asm_files})
+    add_library(asm_objects OBJECT ${asm_files})
+endif()
 
 add_definitions(-DSTDROMANO_BUILD_SHARED)
 
-add_library(${PROJECT_NAME} SHARED ${src_files} $<TARGET_OBJECTS:asm_objects>)
+if(STDROMANO_BUILD_ASM)
+    add_library(${PROJECT_NAME} SHARED ${src_files} $<TARGET_OBJECTS:asm_objects>)
+else()
+    add_library(${PROJECT_NAME} SHARED ${src_files})
+endif()
 
 set_target_properties(${PROJECT_NAME} PROPERTIES PREFIX "")
 set_target_properties(${PROJECT_NAME} PROPERTIES CXX_STANDARD 17)
@@ -39,12 +41,27 @@ endif()
 if(UNIX)
     target_compile_options(${PROJECT_NAME} PUBLIC "-pthread")
     target_link_libraries(${PROJECT_NAME} PUBLIC ${MATH_LIBRARY})
-    target_link_libraries(${PROJECT_NAME} PUBLIC ${GTK_LIBRARIES})
+
+    if(STDROMANO_ENABLE_GTK)
+        target_link_libraries(${PROJECT_NAME} PUBLIC ${GTK_LIBRARIES})
+    endif()
 elseif(WIN32)
     target_link_libraries(${PROJECT_NAME} PUBLIC wsock32 ws2_32 Shlwapi Pathcch PowrProf bcrypt)
 endif()
 
-target_link_libraries(${PROJECT_NAME} PRIVATE jemalloc)
+if(APPLE)
+    # sgemm/dgemm go through Accelerate (see src/linalg_dense_matrix_kernels.cpp)
+    find_library(ACCELERATE_FRAMEWORK Accelerate REQUIRED)
+    target_link_libraries(${PROJECT_NAME} PUBLIC ${ACCELERATE_FRAMEWORK})
+
+    set_target_properties(${PROJECT_NAME} PROPERTIES
+        MACOSX_RPATH ON
+        INSTALL_RPATH "@loader_path;@loader_path/../lib"
+        BUILD_WITH_INSTALL_RPATH OFF
+    )
+endif()
+
+target_link_libraries(${PROJECT_NAME} PRIVATE ${MIMALLOC_TARGET})
 
 if(ENABLE_OPENCL)
     target_link_libraries(${PROJECT_NAME} PUBLIC OpenCL::OpenCL)

@@ -68,7 +68,7 @@ private:
   #else
         __asm__ volatile("int $3"); // x86 fallback
   #endif
-#elif defined(STDROMANO_GCC) && defined(STDROMANO_X86)
+#elif defined(STDROMANO_GCC) && defined(STDROMANO_INTEL)
         __asm__ volatile("int $3"); // GCC on x86
 #elif defined(STDROMANO_GCC) && defined(STDROMANO_AARCH64)
         __asm__ volatile("brk #0xF000"); // GCC on ARM64

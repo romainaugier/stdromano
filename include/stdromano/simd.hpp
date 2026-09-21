@@ -10,16 +10,27 @@
 #include "stdromano/stdromano.hpp"
 
 #include <limits>
+
+#if defined(STDROMANO_INTEL)
 #include <immintrin.h>
+#elif defined(STDROMANO_AARCH64)
+#include <arm_neon.h>
+#endif /* defined(STDROMANO_INTEL) */
 
 STDROMANO_NAMESPACE_BEGIN
 
+/*
+    All the modes are declared on every platform so that code switching on them stays portable,
+    but only the ones of the current architecture can ever be returned or forced. Use
+    simd_mode_is_available() to know which ones are usable.
+*/
 enum VectorizationMode : uint32_t
 {
     VectorizationMode_Scalar = 0,
     VectorizationMode_SSE,
     VectorizationMode_AVX,
     VectorizationMode_AVX2,
+    VectorizationMode_NEON,
     VectorizationMode_Max,
 };
 
@@ -31,9 +42,14 @@ STDROMANO_API bool simd_has_avx() noexcept;
 
 STDROMANO_API bool simd_has_avx2() noexcept;
 
+STDROMANO_API bool simd_has_neon() noexcept;
+
 STDROMANO_API bool simd_has_fma() noexcept;
 
 STDROMANO_API bool simd_has_f16c() noexcept;
+
+/* Returns true if the mode exists on this architecture and is supported by the current cpu */
+STDROMANO_API bool simd_mode_is_available(std::uint32_t mode) noexcept;
 
 STDROMANO_API VectorizationMode simd_get_vectorization_mode() noexcept;
 
@@ -42,6 +58,8 @@ STDROMANO_API const char* simd_get_vectorization_mode_as_string() noexcept;
 STDROMANO_API bool simd_force_vectorization_mode(std::uint32_t mode) noexcept;
 
 /* SIMD helper functions */
+
+#if defined(STDROMANO_INTEL)
 
 STDROMANO_FORCE_INLINE __m128 _mm_abs_ps(const __m128& x) noexcept
 {
@@ -118,6 +136,44 @@ STDROMANO_FORCE_INLINE __m256i _mm256_cmpge_epi8(const __m256i a, const __m256i 
 {
     return _mm256_xor_si256(_mm256_cmpgt_epi8(b, a), _mm256_set1_epi8(-1));
 }
+
+#elif defined(STDROMANO_AARCH64)
+
+/* NEON counterparts of the helpers above */
+
+STDROMANO_FORCE_INLINE float32x4_t vabsq_f32_(const float32x4_t x) noexcept
+{
+    return vabsq_f32(x);
+}
+
+STDROMANO_FORCE_INLINE float32x4_t vcvtq_f32_u32_(const uint32x4_t x) noexcept
+{
+    return vcvtq_f32_u32(x);
+}
+
+/* Horizontal sum of the whole vector */
+STDROMANO_FORCE_INLINE float vhsum_f32(const float32x4_t x) noexcept
+{
+    return vaddvq_f32(x);
+}
+
+STDROMANO_FORCE_INLINE float vhmin_f32(const float32x4_t x) noexcept
+{
+    return vminvq_f32(x);
+}
+
+STDROMANO_FORCE_INLINE float vhmax_f32(const float32x4_t x) noexcept
+{
+    return vmaxvq_f32(x);
+}
+
+/* Returns true if every lane of the comparison mask is set */
+STDROMANO_FORCE_INLINE bool vall_true_u8(const uint8x16_t mask) noexcept
+{
+    return vminvq_u8(mask) == 0xFF;
+}
+
+#endif /* defined(STDROMANO_INTEL) */
 
 STDROMANO_NAMESPACE_END
 

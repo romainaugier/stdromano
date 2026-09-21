@@ -13,22 +13,56 @@ if(POLICY CMP0194)
     cmake_policy(SET CMP0194 NEW)
 endif()
 
-if(WIN32)
-    project(stdromano VERSION ${VERSION} LANGUAGES CXX ASM_MASM)
-elseif(UNIX)
-    find_program(NASM_EXEC "nasm")
-
-    if(NASM_EXEC)
-        set(CMAKE_ASM_COMPILER nasm)
-        project(stdromano VERSION ${VERSION} LANGUAGES CXX ASM)
-    else()
-        message(FATAL "Could not find an assembler, install nasm and try again")
-    endif()
-else()
-    message(FATAL "Could not find an assembler for the current platform")
-endif()
+project(stdromano VERSION ${VERSION} LANGUAGES CXX)
 
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/cmake")
+
+# Target architecture detection (CMAKE_OSX_ARCHITECTURES wins when cross building on apple)
+if(CMAKE_OSX_ARCHITECTURES)
+    list(GET CMAKE_OSX_ARCHITECTURES 0 STDROMANO_TARGET_ARCH)
+else()
+    set(STDROMANO_TARGET_ARCH "${CMAKE_SYSTEM_PROCESSOR}")
+endif()
+
+string(TOLOWER "${STDROMANO_TARGET_ARCH}" STDROMANO_TARGET_ARCH)
+
+if(STDROMANO_TARGET_ARCH MATCHES "^(x86_64|amd64|x64)$")
+    set(STDROMANO_ARCH_X86_64 ON)
+elseif(STDROMANO_TARGET_ARCH MATCHES "^(aarch64|arm64|armv8.*)$")
+    set(STDROMANO_ARCH_AARCH64 ON)
+elseif(STDROMANO_TARGET_ARCH MATCHES "^(i.86|x86)$")
+    set(STDROMANO_ARCH_X86 ON)
+elseif(STDROMANO_TARGET_ARCH MATCHES "^(arm.*)$")
+    set(STDROMANO_ARCH_AARCH32 ON)
+else()
+    message(WARNING "Unknown target architecture \"${STDROMANO_TARGET_ARCH}\", building without any architecture specific code")
+endif()
+
+message(STATUS "stdromano target architecture: ${STDROMANO_TARGET_ARCH}")
+
+# The hand written strcmp kernels are x86-64 nasm (elf64) and masm, they are only assembled
+# on windows and linux. Keep in sync with STDROMANO_ASM_STRCMP in src/string.cpp
+if(STDROMANO_ARCH_X86_64 AND (WIN32 OR (UNIX AND NOT APPLE AND NOT CMAKE_SYSTEM_NAME MATCHES "BSD")))
+    set(STDROMANO_BUILD_ASM ON)
+endif()
+
+if(STDROMANO_BUILD_ASM)
+    if(WIN32)
+        enable_language(ASM_MASM)
+    else()
+        find_program(NASM_EXEC "nasm")
+
+        if(NASM_EXEC)
+            enable_language(ASM_NASM)
+            set(CMAKE_ASM_NASM_OBJECT_FORMAT "elf64")
+        else()
+            message(STATUS "nasm not found, falling back on the C++ strcmp kernels")
+            set(STDROMANO_BUILD_ASM OFF)
+        endif()
+    endif()
+else()
+    message(STATUS "No assembly kernels on this platform, using the C++ ones")
+endif()
 
 set(CMAKE_VERBOSE_MAKEFILE ON)
 
@@ -51,92 +85,91 @@ include_directories(${concurrentqueue_INCLUDE_DIRS})
 set(spdlog_INCLUDE_DIRS "${CMAKE_SOURCE_DIR}/ext/spdlog/include")
 include_directories(${spdlog_INCLUDE_DIRS})
 
-# gtk
-if(UNIX)
+# gtk (file dialogs on linux and the bsds, macOS needs its own NSOpenPanel implementation)
+if(UNIX AND NOT APPLE)
     find_package(PkgConfig REQUIRED)
-    pkg_check_modules(GTK REQUIRED IMPORTED_TARGET "gtk+-2.0")
+    pkg_check_modules(GTK QUIET IMPORTED_TARGET "gtk+-2.0")
 
-    include_directories(${GTK_INCLUDE_DIRS})
+    if(GTK_FOUND)
+        set(STDROMANO_ENABLE_GTK ON)
+        include_directories(${GTK_INCLUDE_DIRS})
+        add_definitions(-DSTDROMANO_ENABLE_GTK)
+    else()
+        message(WARNING "gtk+-2.0 not found, the file dialogs will not be available")
+    endif()
 endif()
 
-# jemalloc
-if(UNIX)
-    find_package(PkgConfig QUIET)
+# mimalloc
+find_package(mimalloc CONFIG QUIET)
 
-    pkg_search_module(JEMALLOC REQUIRED jemalloc)
+if(mimalloc_FOUND)
+    if(TARGET mimalloc)
+        set(MIMALLOC_TARGET mimalloc)
+    elseif(TARGET mimalloc-static)
+        set(MIMALLOC_TARGET mimalloc-static)
+    endif()
+
+    message(STATUS "Found mimalloc (target: ${MIMALLOC_TARGET})")
 else()
-    set(JEMALLOC_FOUND 0)
-endif()
+    message(STATUS "mimalloc cmake config not found, looking for the headers and the library")
 
-if(JEMALLOC_FOUND)
-    find_library(JEMALLOC_LIB jemalloc
-        HINTS ${JEMALLOC_LIBRARY_DIRS}
-        PATH_SUFFIXES lib
-    )
-
-    message(STATUS "Found jemalloc via pkg-config")
-    message(STATUS "jemalloc include dirs: ${JEMALLOC_INCLUDE_DIRS}")
-    message(STATUS "jemalloc library dirs: ${JEMALLOC_LIBRARY_DIRS}")
-    message(STATUS "jemalloc libraries: ${JEMALLOC_LIB}")
-
-    add_library(jemalloc SHARED IMPORTED GLOBAL)
-
-    set_target_properties(jemalloc PROPERTIES
-        IMPORTED_LOCATION ${JEMALLOC_LIB}
-        INTERFACE_INCLUDE_DIRECTORIES ${JEMALLOC_INCLUDE_DIRS}
-    )
-else()
-    message(STATUS "Looking for jemalloc in vcpkg directories")
-
-    find_path(JEMALLOC_INCLUDE_DIR jemalloc/jemalloc.h
+    find_path(MIMALLOC_INCLUDE_DIR mimalloc.h
         PATHS
         ${CMAKE_PREFIX_PATH}/include
         ${CMAKE_INSTALL_PREFIX}/include
-        $ENV{PROGRAMFILES}/jemalloc/include
+        /opt/homebrew/include
+        /usr/local/include
         $ENV{VCPKG_ROOT}/installed/x64-windows/include
-        $ENV{VCPKG_ROOT}/installed/x64-windows-static/include
+        $ENV{VCPKG_ROOT}/installed/arm64-osx/include
+        PATH_SUFFIXES mimalloc mimalloc-2.1
     )
 
-    find_library(JEMALLOC_LIBRARY
-        NAMES jemalloc jemalloc_s
+    find_library(MIMALLOC_LIBRARY
+        NAMES mimalloc mimalloc-static libmimalloc
         PATHS
         ${CMAKE_PREFIX_PATH}/lib
         ${CMAKE_INSTALL_PREFIX}/lib
-        $ENV{PROGRAMFILES}/jemalloc/lib
+        /opt/homebrew/lib
+        /usr/local/lib
         $ENV{VCPKG_ROOT}/installed/x64-windows/lib
-        $ENV{VCPKG_ROOT}/installed/x64-windows-static/lib
+        $ENV{VCPKG_ROOT}/installed/arm64-osx/lib
     )
 
-    find_file(JEMALLOC_DLL jemalloc.dll
-        PATHS
-        ${CMAKE_PREFIX_PATH}/bin
-        ${CMAKE_INSTALL_PREFIX}/bin
-        $ENV{PROGRAMFILES}/jemalloc/bin
-        $ENV{VCPKG_ROOT}/installed/x64-windows/bin
-        $ENV{VCPKG_ROOT}/installed/x64-windows/debug/bin
-    )
+    if(MIMALLOC_INCLUDE_DIR AND MIMALLOC_LIBRARY)
+        message(STATUS "mimalloc include dir: ${MIMALLOC_INCLUDE_DIR}")
+        message(STATUS "mimalloc library: ${MIMALLOC_LIBRARY}")
 
-    if(JEMALLOC_INCLUDE_DIR AND JEMALLOC_LIBRARY AND JEMALLOC_DLL)
-        message(STATUS "Found jemalloc")
-        message(STATUS "jemalloc include dir: ${JEMALLOC_INCLUDE_DIR}")
-        message(STATUS "jemalloc library: ${JEMALLOC_LIBRARY}")
-        message(STATUS "jemalloc dll: ${JEMALLOC_DLL}")
+        add_library(mimalloc_imported UNKNOWN IMPORTED GLOBAL)
 
-        add_library(jemalloc SHARED IMPORTED GLOBAL)
-
-        set_target_properties(jemalloc PROPERTIES
-            IMPORTED_IMPLIB ${JEMALLOC_LIBRARY}
-            IMPORTED_LOCATION ${JEMALLOC_DLL}
-            INTERFACE_INCLUDE_DIRECTORIES ${JEMALLOC_INCLUDE_DIR}
+        set_target_properties(mimalloc_imported PROPERTIES
+            IMPORTED_LOCATION ${MIMALLOC_LIBRARY}
+            INTERFACE_INCLUDE_DIRECTORIES ${MIMALLOC_INCLUDE_DIR}
         )
+
+        set(MIMALLOC_TARGET mimalloc_imported)
     else()
-        message(FATAL_ERROR "Cannot find jemalloc, exiting")
+        message(FATAL_ERROR "Cannot find mimalloc (brew install mimalloc / vcpkg install mimalloc), exiting")
     endif()
 endif()
 
 # OpenCL
 if(ENABLE_OPENCL)
-    if(UNIX)
+    if(APPLE)
+        # macOS ships OpenCL as a (deprecated) system framework, there is nothing to install
+        find_library(OPENCL_FRAMEWORK OpenCL REQUIRED)
+
+        message(STATUS "Found the OpenCL framework: ${OPENCL_FRAMEWORK}")
+
+        if(NOT TARGET OpenCL::OpenCL)
+            add_library(OpenCL::OpenCL INTERFACE IMPORTED GLOBAL)
+
+            set_target_properties(OpenCL::OpenCL PROPERTIES
+                INTERFACE_LINK_LIBRARIES "${OPENCL_FRAMEWORK}"
+            )
+        endif()
+
+        set(OpenCL_INCLUDE_DIR "${CMAKE_SOURCE_DIR}/ext/opencl_hpp/include")
+    elseif(UNIX)
         find_package(PkgConfig QUIET)
 
         if(PkgConfig_FOUND)

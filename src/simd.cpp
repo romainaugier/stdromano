@@ -10,83 +10,112 @@
 
 STDROMANO_NAMESPACE_BEGIN
 
-static uint32_t g_max_vectorization_mode = VectorizationMode_Scalar;
-static uint32_t g_vectorization_mode = VectorizationMode_Scalar;
+static std::uint32_t g_max_vectorization_mode = VectorizationMode_Scalar;
+static std::uint32_t g_vectorization_mode = VectorizationMode_Scalar;
 
 static bool g_has_fma = false;
 static bool g_has_f16c = false;
 
+static std::uint32_t simd_mode_from_string(const char* name) noexcept
+{
+    if(std::strcmp(name, "SCALAR") == 0)
+        return VectorizationMode_Scalar;
+    if(std::strcmp(name, "SSE") == 0)
+        return VectorizationMode_SSE;
+    if(std::strcmp(name, "AVX") == 0)
+        return VectorizationMode_AVX;
+    if(std::strcmp(name, "AVX2") == 0)
+        return VectorizationMode_AVX2;
+    if(std::strcmp(name, "NEON") == 0)
+        return VectorizationMode_NEON;
+
+    return VectorizationMode_Max;
+}
+
+/*
+    cpu_check() fills the cpu features table and must have run before this function
+    (both are called from lib_entry, in that order)
+*/
 void simd_check_vectorization() noexcept
 {
-    int regs[4];
+#if defined(STDROMANO_INTEL)
+    g_has_fma = cpu_has_feature(CPUFeature_FMA3);
+    g_has_f16c = cpu_has_feature(CPUFeature_F16C);
 
-    cpuid(regs, 1);
-
-    const bool has_sse = (regs[3] & (1 << 25)) != 0;
-    const bool has_avx = (regs[2] & (1 << 28)) != 0;
-
-    g_has_fma = (regs[2] & (1 << 12)) != 0;
-    g_has_f16c = (regs[2] & (1 << 29)) != 0;
-
-    bool has_avx2 = false;
-
-    if(has_avx)
-    {
-        cpuidex(regs, 7, 0);
-        has_avx2 = (regs[1] & (1 << 5)) != 0;
-    }
-
-    if(has_avx2)
+    if(cpu_has_feature(CPUFeature_AVX2))
     {
         g_max_vectorization_mode = VectorizationMode_AVX2;
     }
-    else if(has_avx)
+    else if(cpu_has_feature(CPUFeature_AVX))
     {
         g_max_vectorization_mode = VectorizationMode_AVX;
     }
-    else if(has_sse)
+    else if(cpu_has_feature(CPUFeature_SSE))
     {
         g_max_vectorization_mode = VectorizationMode_SSE;
     }
+#elif defined(STDROMANO_AARCH64)
+    /* fmla and fp16 conversions are part of the mandatory armv8-a FP/AdvSIMD set */
+    g_has_fma = cpu_has_feature(CPUFeature_AdvSIMD);
+    g_has_f16c = cpu_has_feature(CPUFeature_AdvSIMD);
+
+    if(cpu_has_feature(CPUFeature_NEON))
+    {
+        g_max_vectorization_mode = VectorizationMode_NEON;
+    }
+#endif /* defined(STDROMANO_INTEL) */
 
     g_vectorization_mode = g_max_vectorization_mode;
 
-    if(std::getenv("STDROMANO_VECTORIZATION") != nullptr)
-    {
-        const char* env_val = getenv("STDROMANO_VECTORIZATION");
+    const char* env_val = std::getenv("STDROMANO_VECTORIZATION");
 
-        if(std::strcmp(env_val, "SCALAR") == 0)
+    if(env_val != nullptr)
+    {
+        const std::uint32_t mode = simd_mode_from_string(env_val);
+
+        if(mode != VectorizationMode_Max && simd_mode_is_available(mode))
         {
-            return;
-        }
-        else if(std::strcmp(env_val, "SSE") == 0 && has_sse)
-        {
-            g_vectorization_mode = VectorizationMode_SSE;
-        }
-        else if(std::strcmp(env_val, "AVX") == 0 && has_avx)
-        {
-            g_vectorization_mode = VectorizationMode_AVX;
-        }
-        else if(std::strcmp(env_val, "AVX2") == 0 && has_avx2)
-        {
-            g_vectorization_mode = VectorizationMode_AVX2;
+            g_vectorization_mode = mode;
         }
     }
 }
 
 bool simd_has_sse() noexcept
 {
-    return g_max_vectorization_mode >= 1;
+#if defined(STDROMANO_INTEL)
+    return g_max_vectorization_mode >= VectorizationMode_SSE &&
+           g_max_vectorization_mode <= VectorizationMode_AVX2;
+#else
+    return false;
+#endif /* defined(STDROMANO_INTEL) */
 }
 
 bool simd_has_avx() noexcept
 {
-    return g_max_vectorization_mode >= 2;
+#if defined(STDROMANO_INTEL)
+    return g_max_vectorization_mode >= VectorizationMode_AVX &&
+           g_max_vectorization_mode <= VectorizationMode_AVX2;
+#else
+    return false;
+#endif /* defined(STDROMANO_INTEL) */
 }
 
 bool simd_has_avx2() noexcept
 {
-    return g_max_vectorization_mode >= 3;
+#if defined(STDROMANO_INTEL)
+    return g_max_vectorization_mode == VectorizationMode_AVX2;
+#else
+    return false;
+#endif /* defined(STDROMANO_INTEL) */
+}
+
+bool simd_has_neon() noexcept
+{
+#if defined(STDROMANO_AARCH64)
+    return g_max_vectorization_mode == VectorizationMode_NEON;
+#else
+    return false;
+#endif /* defined(STDROMANO_AARCH64) */
 }
 
 bool simd_has_fma() noexcept
@@ -97,6 +126,24 @@ bool simd_has_fma() noexcept
 bool simd_has_f16c() noexcept
 {
     return g_has_f16c;
+}
+
+bool simd_mode_is_available(std::uint32_t mode) noexcept
+{
+    if(mode == VectorizationMode_Scalar)
+        return true;
+
+#if defined(STDROMANO_INTEL)
+    if(mode == VectorizationMode_NEON)
+        return false;
+#elif defined(STDROMANO_AARCH64)
+    if(mode != VectorizationMode_NEON)
+        return false;
+#else
+    return false;
+#endif /* defined(STDROMANO_INTEL) */
+
+    return mode <= g_max_vectorization_mode;
 }
 
 VectorizationMode simd_get_vectorization_mode() noexcept
@@ -116,6 +163,8 @@ const char* simd_get_vectorization_mode_as_string() noexcept
             return "AVX";
         case VectorizationMode_AVX2:
             return "AVX2";
+        case VectorizationMode_NEON:
+            return "NEON";
         default:
             /* Should never happen */
             return "Unknown";
@@ -124,7 +173,7 @@ const char* simd_get_vectorization_mode_as_string() noexcept
 
 bool simd_force_vectorization_mode(std::uint32_t mode) noexcept
 {
-    if(mode > g_max_vectorization_mode)
+    if(!simd_mode_is_available(mode))
     {
         return false;
     }

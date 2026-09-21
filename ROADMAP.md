@@ -24,7 +24,7 @@ This document tracks the feature set, progress, and future plans for the `stdrom
 - :white_check_mark: Cross-platform environment variables manipulation
 - :white_check_mark: Profiling
 - :white_check_mark: Logger (based on spdlog)
-- :white_check_mark: ThreadPool (lockfree, based on concurrentqueue), with a global threadpool provided, per-job waiter, easy job submission via lambda functions
+- :white_check_mark: ThreadPool (lockfree, stealing, based on concurrentqueue), with a global threadpool provided, per-job waiter, easy job submission via lambda functions
 - :white_check_mark: Threading primitives (Thread, Locks)
 - :clock9: Regular Expressions matching (needs backtracking, not done yet, for now only matches greedily)
 - :white_check_mark: OpenCL (kernel management, execution, resource caching)

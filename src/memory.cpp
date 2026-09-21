@@ -4,7 +4,7 @@
 
 #include "stdromano/memory.hpp"
 
-#include "jemalloc/jemalloc.h"
+#include "mimalloc.h"
 
 #include <algorithm>
 
@@ -14,22 +14,22 @@ DETAIL_NAMESPACE_BEGIN
 
 void* mem_alloc(const size_t size) noexcept
 {
-    return je_malloc(size);
+    return mi_malloc(size);
 }
 
 void* mem_calloc(const size_t count, const size_t size) noexcept
 {
-    return je_calloc(count, size);
+    return mi_calloc(count, size);
 }
 
 void* mem_realloc(void* ptr, const size_t size) noexcept
 {
-    return je_realloc(ptr, size);
+    return mi_realloc(ptr, size);
 }
 
 void* mem_crealloc(void* ptr, const size_t size) noexcept
 {
-    void* new_ptr = je_realloc(ptr, size);
+    void* new_ptr = mi_realloc(ptr, size);
 
     if(new_ptr != nullptr)
     {
@@ -41,18 +41,18 @@ void* mem_crealloc(void* ptr, const size_t size) noexcept
 
 void mem_free(void* ptr) noexcept
 {
-    je_free(ptr);
+    mi_free(ptr);
 }
 
 void* mem_aligned_alloc(const size_t size, const size_t alignment) noexcept
 {
     const size_t correct_size = (size + (alignment - 1)) & ~(alignment - 1);
-    return je_aligned_alloc(alignment, correct_size);
+    return mi_malloc_aligned(correct_size, alignment);
 }
 
 void mem_aligned_free(void* ptr) noexcept
 {
-    je_free(ptr);
+    mi_free(ptr);
 }
 
 DETAIL_NAMESPACE_END
