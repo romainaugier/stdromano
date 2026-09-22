@@ -124,3 +124,7 @@ _mismatch_avx:
     ret
 
 ; end asm__detail_strcmp_avx_cs
+
+; Marks the stack as non-executable. Without it the linker assumes the object
+; needs an executable stack and warns (newer binutils will make it an error).
+section .note.GNU-stack noalloc noexec nowrite progbits

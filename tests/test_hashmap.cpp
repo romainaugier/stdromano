@@ -12,6 +12,7 @@
 #include <numeric>
 #include <random>
 #include <string>
+#include <unordered_map>
 #include <vector>
 
 struct ComplexKey
@@ -307,6 +308,95 @@ TEST_CASE(test_initializer_list)
     ASSERT(!map.contains(6));
 }
 
+TEST_CASE(test_operator_bracket_assignment_after_displacement)
+{
+    for(int trial = 0; trial < 200; ++trial)
+    {
+        stdromano::HashMap<int, int> map;
+
+        for(int i = 0; i < 256; ++i)
+        {
+            map[i] = i * 7 + 1;
+        }
+
+        ASSERT_EQUAL(256u, map.size());
+
+        for(int i = 0; i < 256; ++i)
+        {
+            auto it = map.find(i);
+            ASSERT(it != map.end());
+            ASSERT_EQUAL(i * 7 + 1, it->second);
+        }
+    }
+}
+
+TEST_CASE(test_emplace_returns_inserted_element)
+{
+    for(int trial = 0; trial < 200; ++trial)
+    {
+        stdromano::HashMap<int, int> map;
+
+        for(int i = 0; i < 256; ++i)
+        {
+            auto result = map.emplace(i, i + 1000);
+
+            ASSERT(result.second);
+            ASSERT_EQUAL(i, result.first->first);
+            ASSERT_EQUAL(i + 1000, result.first->second);
+        }
+    }
+}
+
+TEST_CASE(test_randomized_against_unordered_map)
+{
+    std::mt19937 rng(0xC0FFEE);
+
+    for(int trial = 0; trial < 50; ++trial)
+    {
+        stdromano::HashMap<stdromano::StringD, int> map;
+        std::unordered_map<std::string, int> reference;
+
+        std::uniform_int_distribution<int> key_dist(0, 2000);
+        std::uniform_int_distribution<int> op_dist(0, 2);
+
+        for(int step = 0; step < 3000; ++step)
+        {
+            const std::string key = "k" + std::to_string(key_dist(rng));
+            const stdromano::StringD skey = stdromano::StringD::make_from_c_str(key.c_str());
+
+            switch(op_dist(rng))
+            {
+                case 0:
+                    map[skey] = step;
+                    reference[key] = step;
+                    break;
+                case 1:
+                {
+                    auto result = map.emplace(skey.copy(), step);
+                    auto ref_result = reference.emplace(key, step);
+                    ASSERT_EQUAL(ref_result.second, result.second);
+                    ASSERT(result.first->first == skey);
+                    ASSERT_EQUAL(ref_result.first->second, result.first->second);
+                    break;
+                }
+                default:
+                    map.erase(skey);
+                    reference.erase(key);
+                    break;
+            }
+        }
+
+        ASSERT_EQUAL(reference.size(), map.size());
+
+        for(const auto& entry : reference)
+        {
+            auto it = map.find(stdromano::StringD::make_from_c_str(entry.first.c_str()));
+            ASSERT(it != map.end());
+            ASSERT_EQUAL(entry.second, it->second);
+        }
+    }
+}
+
 int main()
 {
     TestRunner runner("hashmap");
@@ -322,6 +412,9 @@ int main()
     runner.add_test("Stress Test", test_stress);
     runner.add_test("Stress Emplace vs Find Existing", test_stress_emplace_vs_find_existing);
     runner.add_test("Test Initializer list construction", test_initializer_list);
+    runner.add_test("Operator [] assignment after displacement", test_operator_bracket_assignment_after_displacement);
+    runner.add_test("Emplace returns inserted element", test_emplace_returns_inserted_element);
+    runner.add_test("Randomized against std::unordered_map", test_randomized_against_unordered_map);
 
     runner.run_all();
 

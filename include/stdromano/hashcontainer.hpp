@@ -289,6 +289,11 @@ protected:
         size_type index = this->get_index(hash);
         std::int16_t probe_length = 0;
 
+        bool displaced = false;
+        bool grew_after_displacement = false;
+        size_type inserted_index = 0;
+        key_type inserted_key = key;
+
         while(true)
         {
             Bucket& bucket = this->_buckets[index];
@@ -297,14 +302,35 @@ protected:
             {
                 bucket.set_bucket_content(hash, probe_length, std::move(value_to_insert));
                 this->_items_count++;
-                return {Iterator(this, index), true};
+
+                if(!displaced)
+                {
+                    return {Iterator(this, index), true};
+                }
+
+                if(!grew_after_displacement)
+                {
+                    return {Iterator(this, inserted_index), true};
+                }
+
+                return {this->find_iterator(inserted_key, Iterator(this, 0)), true};
             }
 
             if(bucket.hash() == hash && this->_key_select(bucket.value()) == key)
+            {
+                /* Only reachable before any displacement: a displaced element
+                   is already unique in the table. */
                 return {Iterator(this, index), false};
+            }
 
             if(probe_length > bucket.probe_length())
             {
+                if(!displaced)
+                {
+                    displaced = true;
+                    inserted_index = index;
+                }
+
                 bucket.swap_bucket_content(value_to_insert, hash, probe_length);
                 key = this->_key_select(value_to_insert);
             }
@@ -316,11 +342,38 @@ protected:
             {
                 this->grow(this->get_new_capacity(), false);
 
+                if(displaced)
+                {
+                    grew_after_displacement = true;
+                }
+
                 hash = this->get_hash(key);
                 index = this->get_index(hash);
                 probe_length = 0;
             }
         }
+    }
+
+    template <class Iterator>
+    Iterator find_iterator(const key_type& key, Iterator /*tag*/)
+    {
+        const std::uint32_t hash = this->get_hash(key);
+        size_type index = this->get_index(hash);
+
+        for(std::size_t i = 0; i < this->_buckets.size(); ++i)
+        {
+            const Bucket& bucket = this->_buckets[index];
+
+            if(bucket.is_empty())
+                break;
+
+            if(bucket.hash() == hash && this->_key_select(bucket.value()) == key)
+                return Iterator(this, index);
+
+            index = this->get_next_index(index);
+        }
+
+        return Iterator(this, this->_buckets.size());
     }
 
     void grow(const std::size_t new_capacity, bool rehash)
