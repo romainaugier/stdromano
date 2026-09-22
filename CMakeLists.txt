@@ -13,6 +13,8 @@ if(POLICY CMP0194)
     cmake_policy(SET CMP0194 NEW)
 endif()
 
+list(APPEND VCPKG_OVERLAY_TRIPLETS "${CMAKE_CURRENT_SOURCE_DIR}/cmake/triplets")
+
 project(stdromano VERSION ${VERSION} LANGUAGES CXX)
 
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/cmake")
