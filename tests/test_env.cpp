@@ -541,7 +541,8 @@ int main()
     runner.add_test("env long value", test_env_long_value);
     runner.add_test("env special characters", test_env_special_characters);
 
-    runner.run_all();
+    if(runner.run_all() != 0)
+        return 1;
 
     return 0;
 }

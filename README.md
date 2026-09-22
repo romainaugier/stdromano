@@ -73,3 +73,45 @@ install(
 ## Tests
 
 Tests cover every functions and module of stdromano. They are a great way to see how to use the functions/classes, you can treat them as examples, and live in /tests.
+
+### Writing tests and fuzzers
+
+The test harness and the fuzzer are part of the library (`stdromano/test.hpp`, `stdromano/fuzz.hpp`),
+so any project linking stdromano can use them.
+
+```cpp
+#include "stdromano/test.hpp"
+
+STDROMANO_TEST_CASE(addition)
+{
+    STDROMANO_CHECK_EQ(1 + 1, 2);      // non fatal: the case goes on
+    STDROMANO_REQUIRE(ptr != nullptr); // fatal: ends the case, the others still run
+}
+
+STDROMANO_TEST_MAIN()
+```
+
+A test binary takes substrings to select cases, `--list` to list them and `-v` to log at debug
+level. `STDROMANO_TEST_FILTER` selects cases when no argument can be passed (ctest).
+
+The fuzzer draws values from a `Source` backed either by a seeded PRNG or by a byte buffer, so the
+same property runs under the built-in runner, a single seed replay, or libFuzzer:
+
+```cpp
+const auto report = stdromano::fuzz::run_property(options, [](stdromano::fuzz::Source& source) {
+    const int a = source.integer<int>();          // biased towards 0, +-1, limits, powers of two
+    const double d = source.floating<double>();   // NaN, +-inf, -0, subnormals...
+    STDROMANO_FUZZ_CHECK_EQ(my_round_trip(a, d), std::make_pair(a, d));
+    return true;
+});
+
+STDROMANO_REQUIRE_MSG(report.passed(), report.describe());
+```
+
+`run_input` fuzzes raw bytes instead, from a corpus and a dictionary, and minimizes the input that
+fails. Runs are reproducible: the seed is fixed unless overridden, and every failure (crashes
+included) prints the seed that replays it.
+
+Environment overrides:
+`ROMANO_FUZZ_SEED`, `ROMANO_FUZZ_ITERATIONS`, `ROMANO_FUZZ_SCALE`, `ROMANO_FUZZ_SECONDS`,
+`ROMANO_FUZZ_REPLAY`.

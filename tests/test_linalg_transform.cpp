@@ -1189,7 +1189,8 @@ int main()
     runner.add_test("T44 Double Precision", test_transform44_double_precision);
     runner.add_test("T44 Double Precision TRS Roundtrip", test_transform44_double_precision_trs_roundtrip);
 
-    runner.run_all();
+    if(runner.run_all() != 0)
+        return 1;
 
     return 0;
 }

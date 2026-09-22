@@ -2,6 +2,7 @@
 // Copyright (c) 2025 - Present Romain Augier
 // All rights reserved.
 
+#include "stdromano/fuzz.hpp"
 #include "stdromano/hashmap.hpp"
 
 #define STDROMANO_ENABLE_PROFILING
@@ -397,6 +398,75 @@ TEST_CASE(test_randomized_against_unordered_map)
     }
 }
 
+TEST_CASE(test_fuzz_against_unordered_map)
+{
+    stdromano::fuzz::Options options;
+    options.name = "hashmap_vs_unordered_map";
+    options.iterations = 300;
+
+    const stdromano::fuzz::Report report =
+        stdromano::fuzz::run_property(options, [](stdromano::fuzz::Source& source) -> bool {
+            stdromano::HashMap<int, int> map;
+            std::unordered_map<int, int> reference;
+
+            const std::size_t steps = source.range<std::size_t>(1, 400);
+
+            for(std::size_t i = 0; i < steps; ++i)
+            {
+                // A small key space, so insertions displace each other often
+                const int key = source.range<int>(0, 96);
+                const int value = static_cast<int>(i) * 7 + 1;
+
+                switch(source.index(4))
+                {
+                    case 0:
+                        map[key] = value;
+                        reference[key] = value;
+                        break;
+                    case 1:
+                    {
+                        const auto inserted = map.emplace(key, value);
+                        const auto expected = reference.emplace(key, value);
+
+                        STDROMANO_FUZZ_CHECK_EQ(inserted.second, expected.second);
+                        STDROMANO_FUZZ_CHECK_EQ(inserted.first->first, key);
+                        STDROMANO_FUZZ_CHECK_EQ(inserted.first->second, expected.first->second);
+                        break;
+                    }
+                    case 2:
+                        map.erase(key);
+                        reference.erase(key);
+                        break;
+                    default:
+                    {
+                        const auto it = map.find(key);
+                        const bool found = it != map.end();
+
+                        STDROMANO_FUZZ_CHECK_EQ(found, reference.find(key) != reference.end());
+
+                        if(found)
+                            STDROMANO_FUZZ_CHECK_EQ(it->second, reference[key]);
+                        break;
+                    }
+                }
+
+                STDROMANO_FUZZ_CHECK_EQ(map.size(), reference.size());
+            }
+
+            for(const auto& entry : reference)
+            {
+                const auto it = map.find(entry.first);
+
+                STDROMANO_FUZZ_CHECK(it != map.end());
+                STDROMANO_FUZZ_CHECK_EQ(it->second, entry.second);
+            }
+
+            return true;
+        });
+
+    STDROMANO_REQUIRE_MSG(report.passed(), report.describe());
+}
+
 int main()
 {
     TestRunner runner("hashmap");
@@ -415,8 +485,10 @@ int main()
     runner.add_test("Operator [] assignment after displacement", test_operator_bracket_assignment_after_displacement);
     runner.add_test("Emplace returns inserted element", test_emplace_returns_inserted_element);
     runner.add_test("Randomized against std::unordered_map", test_randomized_against_unordered_map);
+    runner.add_test("Fuzzed against std::unordered_map", test_fuzz_against_unordered_map);
 
-    runner.run_all();
+    if(runner.run_all() != 0)
+        return 1;
 
     return 0;
 }

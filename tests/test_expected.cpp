@@ -234,7 +234,8 @@ int main()
     runner.add_test("test_expected_double_value", test_expected_double_value);
     runner.add_test("test_expected_move_construct", test_expected_move_construct);
     runner.add_test("test_expected_void_default_construct", test_expected_void_default_construct);
-    runner.run_all();
+    if(runner.run_all() != 0)
+        return 1;
 
     spdlog::info("Finished expected test");
 

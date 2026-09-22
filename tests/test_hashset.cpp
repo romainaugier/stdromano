@@ -413,7 +413,8 @@ int main()
     runner.add_test("HashSet Stress Lookup/Failed Insert",
                     test_set_stress_lookup_and_failed_insert);
 
-    runner.run_all();
+    if(runner.run_all() != 0)
+        return 1;
 
     return 0;
 }

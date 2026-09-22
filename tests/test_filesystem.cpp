@@ -751,7 +751,8 @@ int main()
     runner.add_test("WalkIterator_End", test_walk_iterator_end);
     runner.add_test("WalkIterator_Arrow", test_walk_iterator_arrow);
 
-    runner.run_all();
+    if(runner.run_all() != 0)
+        return 1;
 
     return 0;
 }

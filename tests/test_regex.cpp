@@ -565,7 +565,8 @@ int main()
     runner.add_test("Edge Quantifier On Group", test_edge_quantifier_on_group);
     runner.add_test("Edge Email Like Pattern", test_edge_email_like_pattern);
     runner.add_test("Edge Multiple Groups And Quantifiers", test_edge_multiple_groups_and_quantifiers);
-    runner.run_all();
+    if(runner.run_all() != 0)
+        return 1;
 
     spdlog::info("Finished Regex tests");
 

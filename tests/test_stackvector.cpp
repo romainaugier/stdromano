@@ -117,7 +117,8 @@ int main()
     runner.add_test("Element Access", test_element_access);
     runner.add_test("Capacity", test_capacity);
 
-    runner.run_all();
+    if(runner.run_all() != 0)
+        return 1;
 
     return 0;
 }

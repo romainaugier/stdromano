@@ -549,6 +549,7 @@ int main()
     runner.add_test("Constructor Zero Count", test_constructor_with_zero_count);
     runner.add_test("Pop Back Returns Value", test_pop_back_returns_value);
 
-    runner.run_all();
+    if(runner.run_all() != 0)
+        return 1;
     return 0;
 }

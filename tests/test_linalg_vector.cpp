@@ -553,7 +553,8 @@ int main()
     runner.add_test("Zero Vectors", test_zero_vectors);
     runner.add_test("Constexpr Evaluation", test_constexpr_evaluation);
 
-    runner.run_all();
+    if(runner.run_all() != 0)
+        return 1;
 
     return 0;
 }

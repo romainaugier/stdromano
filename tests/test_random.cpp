@@ -380,7 +380,8 @@ int main()
     runner.add_test("next_random_int_range_bounds", test_next_random_int_range_bounds);
     runner.add_test("thread_safety", test_thread_safety);
 
-    runner.run_all();
+    if(runner.run_all() != 0)
+        return 1;
 
     return 0;
 }

@@ -5,7 +5,14 @@
 #if !defined(__STDROMANO_TEST)
 #define __STDROMANO_TEST
 
+// stdromano's own tests, on top of the library harness (stdromano/test.hpp). The old macro names
+// are kept so the tests did not have to be rewritten; new tests can use the STDROMANO_ ones.
+//
+// Unlike before, a failed ASSERT ends the current case instead of the process: the other cases
+// still run, and run_all() returns 1, so main has to return it for ctest to see the failure
+
 #include "stdromano/string.hpp"
+#include "stdromano/test.hpp"
 #include "stdromano/vector.hpp"
 
 #include "spdlog/spdlog.h"
@@ -14,111 +21,18 @@
 
 #define TEST_CASE(name) void name()
 
-#define ASSERT(condition)                                                                          \
-    do                                                                                             \
-    {                                                                                              \
-        if(!(condition))                                                                           \
-        {                                                                                          \
-            spdlog::error("Assertion failed: {}\nFile: {}\nLine: {}",                              \
-                          #condition,                                                              \
-                          __FILE__,                                                                \
-                          __LINE__);                                                               \
-            std::abort();                                                                          \
-        }                                                                                          \
-    } while(0)
+#define ASSERT(condition) STDROMANO_REQUIRE(condition)
 
-#define ASSERT_THROWS(expression, exception_type)                                                  \
-    do                                                                                             \
-    {                                                                                              \
-        bool caught = false;                                                                       \
-        try                                                                                        \
-        {                                                                                          \
-            expression;                                                                            \
-        }                                                                                          \
-        catch(const exception_type&)                                                               \
-        {                                                                                          \
-            caught = true;                                                                         \
-        }                                                                                          \
-        catch(...)                                                                                 \
-        {                                                                                          \
-            throw std::runtime_error("Wrong exception type caught");                               \
-        }                                                                                          \
-        if(!caught)                                                                                \
-        {                                                                                          \
-            throw std::runtime_error("Expected exception not thrown");                             \
-        }                                                                                          \
-    } while(0)
+#define ASSERT_EQUAL(expected, actual) STDROMANO_REQUIRE_EQ(expected, actual)
 
-#define ASSERT_EQUAL(expected, actual)                                                             \
-do                                                                                                 \
-    {                                                                                              \
-        if(!((expected) == (actual)))                                                              \
-        {                                                                                          \
-            spdlog::error("Assertion failed\nExpected: {}\nActual: "                                 \
-                          "{}\nFile: {}\nLine: {}",                                                \
-                          #expected,                                                               \
-                          #actual,                                                                 \
-                          __FILE__,                                                                \
-                          __LINE__);                                                               \
-            std::abort();                                                                          \
-        }                                                                                          \
-    } while(0)
+#define ASSERT_THROWS(expression, exception_type) STDROMANO_REQUIRE_THROWS(expression, exception_type)
 
-class TestRunner
+class TestRunner : public stdromano::test::TestRunner
 {
-    struct TestCase
-    {
-        const char* name;
-        std::function<void()> func;
-    };
-
-    stdromano::Vector<TestCase> tests;
-
-    int passed = 0;
-    int failed = 0;
-
-    const char* name = nullptr;
-
 public:
-    TestRunner(const char* name = nullptr) : name(name)
+    explicit TestRunner(const char* name = nullptr) : stdromano::test::TestRunner(name)
     {
         spdlog::set_level(spdlog::level::trace);
-    }
-
-    void add_test(const char* test_name, std::function<void()> test)
-    {
-        tests.push_back({test_name, test});
-    }
-
-    void run_all()
-    {
-        if(this->name != nullptr)
-            spdlog::info("Starting {} test", this->name);
-
-        for(const auto& test : this->tests)
-        {
-            spdlog::info("Running {} ...", test.name);
-
-            try
-            {
-                test.func();
-                spdlog::info("PASSED");
-                ++passed;
-            }
-            catch(const std::exception& e)
-            {
-                spdlog::error("FAILED: {}", e.what());
-                ++failed;
-            }
-        }
-
-        spdlog::info("Test Summary:\nPassed: {}\nFailed: {}\nTotal: {}",
-                     passed,
-                     failed,
-                     tests.size());
-
-        if(this->name != nullptr)
-            spdlog::info("Finished {} test", this->name);
     }
 };
 

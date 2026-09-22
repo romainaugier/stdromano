@@ -802,7 +802,8 @@ int main()
     runner.add_test("UTF-8 Validation", test_utf8_validation);
     runner.add_test("UTF-8 Iterator", test_utf8_iterator);
 
-    runner.run_all();
+    if(runner.run_all() != 0)
+        return 1;
 
     return 0;
 }

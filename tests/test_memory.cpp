@@ -67,7 +67,8 @@ int main()
 
     runner.add_test("Memory Arena", test_memory_arena);
 
-    runner.run_all();
+    if(runner.run_all() != 0)
+        return 1;
 
     return 0;
 }

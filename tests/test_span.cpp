@@ -509,7 +509,8 @@ int main()
     runner.add_test("Empty Span Operations", test_empty_span_operations);
     runner.add_test("Compile-time Constraints", test_compile_time_constraints);
 
-    runner.run_all();
+    if(runner.run_all() != 0)
+        return 1;
 
     return 0;
 }
