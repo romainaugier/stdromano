@@ -390,23 +390,29 @@ static void abort_handler(int sig)
 
 #else
 
-static constexpr int CRASH_SIGNALS[] = {SIGSEGV, SIGBUS, SIGILL, SIGFPE, SIGABRT};
+static constexpr int CRASH_SIGNALS[] = { SIGSEGV, SIGBUS, SIGILL, SIGFPE, SIGABRT };
 static constexpr std::size_t NUM_CRASH_SIGNALS = sizeof(CRASH_SIGNALS) / sizeof(CRASH_SIGNALS[0]);
 static struct sigaction g_previous_actions[NUM_CRASH_SIGNALS];
 
 static void crash_handler(int sig, siginfo_t* info, void*)
 {
+    STDROMANO_UNUSED(info);
+
     write_crash_message();
 
     for(std::size_t i = 0; i < NUM_CRASH_SIGNALS; ++i)
+    {
         if(CRASH_SIGNALS[i] == sig)
+        {
             sigaction(sig, &g_previous_actions[i], nullptr);
+            break;
+        }
+    }
 
-    // A hardware fault happens again when the faulting instruction is retried, now under the
-    // previous handler (ASan or the default action) with the original context. A sent signal
-    // (raise, abort, kill) would not, so it is sent again
-    if(info == nullptr || info->si_code <= 0 || sig == SIGABRT)
-        std::raise(sig);
+    std::raise(sig);
+
+    // Protect against a previous handler that unexpectedly returns.
+    _exit(128 + sig);
 }
 
 #endif // defined(STDROMANO_WIN)
