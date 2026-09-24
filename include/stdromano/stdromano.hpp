@@ -239,6 +239,8 @@
 #define dump_struct(s)
 #endif /* defined(STDROMANO_MSVC) */
 
+#define STDROMANO_HAS_BUILTIN(name) defined(__has_builtin) && __has_builtin(name)
+
 #if defined(DEBUG_BUILD)
 #define STDROMANO_DEBUG 1
 #else

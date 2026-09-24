@@ -564,14 +564,10 @@ public:
     /* constexpr */ bool operator==(const String<>& other) const
     {
         if(this->size() != other.size())
-        {
             return false;
-        }
 
         if(this->empty())
-        {
             return true;
-        }
 
         /*
             TODO: when switching to C++20 use std::is_constant_evaluated()

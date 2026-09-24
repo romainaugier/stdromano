@@ -276,6 +276,27 @@ STDROMANO_TEST_CASE(parses_strings_with_escapes)
     STDROMANO_REQUIRE(reparsed.loads(dumped.c_str(), dumped.size()));
     STDROMANO_CHECK_EQ(string_of(reparsed.root()), "\xF0\x9F\x98\x80 \x01");
 }
+STDROMANO_TEST_CASE(parses_strings_with_escapes)
+{
+    Json json;
+
+    STDROMANO_REQUIRE(parse(json, "\"a\\\"b\\\\c\\/d\\n\\t\""));
+    STDROMANO_REQUIRE(json.root()->is_str());
+    STDROMANO_CHECK_EQ(string_of(json.root()), "a\"b\\c/d\n\t");
+
+    STDROMANO_REQUIRE(parse(json, "\"caf\\u00e9 \\u20ac\""));
+    STDROMANO_CHECK_EQ(string_of(json.root()), "caf\xC3\xA9 \xE2\x82\xAC");
+
+    // Keep the JSON Unicode escapes as literal backslash-u sequences.
+    STDROMANO_REQUIRE(parse(json, "\"\\ud83d\\ude00 \\u0001\""));
+    STDROMANO_CHECK_EQ(string_of(json.root()), "\xF0\x9F\x98\x80 \x01");
+
+    const StringD dumped = json.dumps();
+
+    Json reparsed;
+    STDROMANO_REQUIRE(reparsed.loads(dumped.c_str(), dumped.size()));
+    STDROMANO_CHECK_EQ(string_of(reparsed.root()), "\xF0\x9F\x98\x80 \x01");
+}
 
 STDROMANO_TEST_CASE(parses_nested_containers)
 {

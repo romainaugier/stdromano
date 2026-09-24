@@ -524,7 +524,7 @@ STDROMANO_FORCE_INLINE void sincos(T theta, T* s, T* c) noexcept;
 template<>
 STDROMANO_FORCE_INLINE void sincos(float theta, float* s, float* c) noexcept
 {
-#if defined(STDROMANO_GCC) || defined(STDROMANO_CLANG)
+#if STDROMANO_HAS_BUILTIN(__builtin_sincosf)
     __builtin_sincosf(theta, s, c);
 #else
     *s = sin(theta);
@@ -535,7 +535,7 @@ STDROMANO_FORCE_INLINE void sincos(float theta, float* s, float* c) noexcept
 template<>
 STDROMANO_FORCE_INLINE void sincos(double theta, double* s, double* c) noexcept
 {
-#if defined(STDROMANO_GCC) || defined(STDROMANO_CLANG)
+#if STDROMANO_HAS_BUILTIN(__builtin_sincos)
     __builtin_sincos(theta, s, c);
 #else
     *s = sin(theta);
