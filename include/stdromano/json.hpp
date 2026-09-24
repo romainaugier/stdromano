@@ -108,7 +108,7 @@ public:
         bool operator!=(const DictIterator& other) const noexcept;
     };
 
-    class ArrayRange
+    class STDROMANO_API ArrayRange
     {
         void* _head;
 
@@ -119,7 +119,7 @@ public:
         ArrayIterator end() const noexcept;
     };
 
-    class DictRange
+    class STDROMANO_API DictRange
     {
         void* _head;
 
