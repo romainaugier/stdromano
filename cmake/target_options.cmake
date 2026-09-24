@@ -68,8 +68,8 @@ function(set_target_options target_name)
         endif()
 
         if(${UBSAN})
-            target_compile_options(${target_name} PRIVATE $<$<CONFIG:Debug,RelWithDebInfo>:-fsanitize=undefined>)
-            target_link_options(${target_name} PRIVATE $<$<CONFIG:Debug,RelWithDebInfo>:-fsanitize=undefined>)
+            target_compile_options(${target_name} PRIVATE $<$<CONFIG:Debug,RelWithDebInfo>:-fsanitize=undefined -fno-sanitize-recover=undefined>)
+            target_link_options(${target_name} PRIVATE $<$<CONFIG:Debug,RelWithDebInfo>:-fsanitize=undefined -fno-sanitize-recover=undefined>)
         endif()
 
         if(${THREADSAN})
@@ -98,14 +98,24 @@ function(set_target_options target_name)
         endif()
 
         if(${ADDRSAN})
-            target_compile_options(${target_name} PRIVATE $<$<CONFIG:Debug,RelWithDebInfo>:/fsanitize=address>)
+            if(STDROMANO_ARCH_X86_64 OR STDROMANO_ARCH_X86)
+                target_compile_options(${target_name} PRIVATE $<$<CONFIG:Debug,RelWithDebInfo>:/fsanitize=address>)
+            else()
+                message(WARNING "MSVC AddressSanitizer is only available on x86 and x64, ignoring ADDRSAN for ${target_name}")
+            endif()
+        endif()
+
+        if(STDROMANO_ARCH_X86)
+            set(FRAME_POINTER_OPTION /Oy)
+        else()
+            set(FRAME_POINTER_OPTION)
         endif()
 
         # 4710 is "Function not inlined", we don't care it pollutes more than tells useful information about the code
         # 5045 is "Compiler will insert Spectre mitigation for memory load if /Qspectre switch specified", again we don't care
         # 4324 is " structure was padded due to alignment specifier", again we don't care (it appears only in HashSet::Bucket for now)
         # 4146 is " unary minus operator applied to unsigned type", again we don't care (it appears only in lsb_u64)
-        set(COMPILE_OPTIONS /W4 /wd4710 /wd5045 /wd4324 /wd4146 /utf-8 ${AVX_FLAGS} $<$<CONFIG:Release,RelWithDebInfo>:/O2 /GF /Ot /Oy /GT /GL /Oi /Zi /Gm- /Zc:inline>)
+        set(COMPILE_OPTIONS /W4 /wd4710 /wd5045 /wd4324 /wd4146 /utf-8 ${AVX_FLAGS} $<$<CONFIG:Release,RelWithDebInfo>:/O2 /GF /Ot ${FRAME_POINTER_OPTION} /GT /GL /Oi /Zi /Gm- /Zc:inline>)
 
         target_compile_options(${target_name} PRIVATE ${COMPILE_OPTIONS})
 

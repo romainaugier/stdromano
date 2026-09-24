@@ -3,17 +3,18 @@
 // All rights reserved.
 
 #include "stdromano/string.hpp"
-#include "stdromano/simd.hpp"
-#include "test.hpp"
 
-#define STDROMANO_ENABLE_PROFILING
-#include "stdromano/profiling.hpp"
+#include "fixtures.hpp"
 
-#include "spdlog/spdlog.h"
+#include <algorithm>
+#include <cctype>
+#include <cstring>
+#include <string>
+#include <vector>
 
 using namespace stdromano;
 
-String<> create_large_string(std::size_t size)
+static String<> create_large_string(const std::size_t size)
 {
     String<> result;
 
@@ -23,787 +24,1042 @@ String<> create_large_string(std::size_t size)
     return result;
 }
 
-TEST_CASE(test_construction)
+static std::string to_std(const StringD& str)
 {
-    String<> empty_str;
-    ASSERT_EQUAL(0, empty_str.size());
-    ASSERT(empty_str.empty());
-    ASSERT_EQUAL(0, std::strcmp(empty_str.c_str(), ""));
-
-    String<> str("Test");
-    ASSERT_EQUAL(4, str.size());
-    ASSERT(!str.empty());
-    ASSERT_EQUAL(0, std::strcmp(str.c_str(), "Test"));
-
-    String<> fmt_str("{} World", "Hello");
-    ASSERT_EQUAL(0, std::strcmp(fmt_str.c_str(), "Hello World"));
+    return std::string(str.data(), str.size());
 }
 
-TEST_CASE(test_make_ref)
+static StringD from_std(const std::string& str)
 {
-    const char* raw = "Reference";
-    String<> ref = String<>::make_ref(raw, std::strlen(raw));
-    ASSERT(ref.is_ref());
-    ASSERT_EQUAL(0, std::strcmp(ref.c_str(), "Reference"));
-    ASSERT_EQUAL(std::strlen(raw), ref.size());
-
-    String<> str("Hello");
-    String<> ref_from_str = String<>::make_ref(str);
-    ASSERT(ref_from_str.is_ref());
-    ASSERT_EQUAL(0, std::strcmp(ref_from_str.c_str(), "Hello"));
-    ASSERT_EQUAL(str.size(), ref_from_str.size());
+    return StringD::make_from_c_str(str.c_str(), str.size());
 }
 
-TEST_CASE(test_comparison)
+static bool reference_validate_utf8(const std::uint8_t* data, const std::size_t size)
 {
-    String<> str1("Hello");
-    String<> str2("Hello");
-    String<> str3("World");
+    std::size_t i = 0;
 
-    ASSERT(str1 == str2);
-    ASSERT(!(str1 == str3));
-    ASSERT(!(str1 != str2));
-    ASSERT(str1 != str3);
-
-    String<> empty_str;
-    ASSERT(!(empty_str == str1));
-    ASSERT(empty_str == empty_str);
-
-    StringD large = create_large_string(4096);
-    StringD large_copy = large.copy();
-
-    StringD large2 = large.copy();
-    large2[2048] = ' ';
-
-    for(std::uint32_t mode = VectorizationMode_Scalar; mode < VectorizationMode_Max; ++mode)
+    while(i < size)
     {
-        simd_force_vectorization_mode(mode);
+        const std::uint8_t lead = data[i];
 
-        spdlog::debug("strcmp vectorization mode: {}", simd_get_vectorization_mode_as_string());
+        std::size_t length = 0;
+        std::uint32_t code_point = 0;
 
-        for(std::size_t i = 0; i < 10; ++i)
+        if(lead < 0x80)
         {
-            SCOPED_PROFILE_START(ProfileUnit::Cycles, large_str_cmp_impl);
-            ASSERT(large == large_copy);
-            ASSERT(large != large2);
-            SCOPED_PROFILE_STOP(large_str_cmp_impl);
-
-            SCOPED_PROFILE_START(ProfileUnit::Cycles, large_str_cmp_memcmp);
-            ASSERT(std::memcmp(large.c_str(), large_copy.c_str(), large.size()) == 0);
-            ASSERT(std::memcmp(large.c_str(), large2.c_str(), large.size()) != 0);
-            SCOPED_PROFILE_STOP(large_str_cmp_memcmp);
+            ++i;
+            continue;
         }
+        else if(lead >= 0xC2 && lead <= 0xDF)
+        {
+            length = 2;
+            code_point = lead & 0x1F;
+        }
+        else if(lead >= 0xE0 && lead <= 0xEF)
+        {
+            length = 3;
+            code_point = lead & 0x0F;
+        }
+        else if(lead >= 0xF0 && lead <= 0xF4)
+        {
+            length = 4;
+            code_point = lead & 0x07;
+        }
+        else
+        {
+            return false;
+        }
+
+        if(i + length > size)
+            return false;
+
+        for(std::size_t j = 1; j < length; ++j)
+        {
+            if((data[i + j] & 0xC0) != 0x80)
+                return false;
+
+            code_point = (code_point << 6) | (data[i + j] & 0x3F);
+        }
+
+        if((length == 3 && code_point < 0x800) || (length == 4 && code_point < 0x10000))
+            return false;
+
+        if(code_point > 0x10FFFF || (code_point >= 0xD800 && code_point <= 0xDFFF))
+            return false;
+
+        i += length;
+    }
+
+    return true;
+}
+
+static void encode_utf8(const char32_t code_point, std::string& out)
+{
+    if(code_point < 0x80)
+    {
+        out.push_back(static_cast<char>(code_point));
+    }
+    else if(code_point < 0x800)
+    {
+        out.push_back(static_cast<char>(0xC0 | (code_point >> 6)));
+        out.push_back(static_cast<char>(0x80 | (code_point & 0x3F)));
+    }
+    else if(code_point < 0x10000)
+    {
+        out.push_back(static_cast<char>(0xE0 | (code_point >> 12)));
+        out.push_back(static_cast<char>(0x80 | ((code_point >> 6) & 0x3F)));
+        out.push_back(static_cast<char>(0x80 | (code_point & 0x3F)));
+    }
+    else
+    {
+        out.push_back(static_cast<char>(0xF0 | (code_point >> 18)));
+        out.push_back(static_cast<char>(0x80 | ((code_point >> 12) & 0x3F)));
+        out.push_back(static_cast<char>(0x80 | ((code_point >> 6) & 0x3F)));
+        out.push_back(static_cast<char>(0x80 | (code_point & 0x3F)));
     }
 }
 
-TEST_CASE(test_pushback)
+static char32_t valid_code_point(fuzz::Source& source)
+{
+    switch(source.index(4))
+    {
+        case 0:
+            return static_cast<char32_t>(source.range<std::uint32_t>(0x01, 0x7F));
+        case 1:
+            return static_cast<char32_t>(source.range<std::uint32_t>(0x80, 0x7FF));
+        case 2:
+        {
+            const std::uint32_t value = source.range<std::uint32_t>(0x800, 0xFFFF - 0x800);
+            return static_cast<char32_t>(value >= 0xD800 ? value + 0x800 : value);
+        }
+        default:
+            return static_cast<char32_t>(source.range<std::uint32_t>(0x10000, 0x10FFFF));
+    }
+}
+
+static std::string random_utf8_bytes(fuzz::Source& source, const std::size_t max_size)
+{
+    std::string out;
+
+    const std::size_t count = source.size(max_size);
+
+    for(std::size_t i = 0; i < count; ++i)
+    {
+        switch(source.index(3))
+        {
+            case 0:
+                encode_utf8(valid_code_point(source), out);
+                break;
+            case 1:
+                out.push_back(static_cast<char>(source.pick<int>({0x80, 0xBF, 0xC0, 0xC1, 0xC2, 0xDF, 0xE0,
+                                                                  0xED, 0xEF, 0xF0, 0xF4, 0xF5, 0xFF})));
+                break;
+            default:
+                out.push_back(static_cast<char>(source.range<int>(0x20, 0x7E)));
+                break;
+        }
+    }
+
+    return out;
+}
+
+STDROMANO_TEST_CASE(construction)
+{
+    const String<> empty;
+    STDROMANO_CHECK_EQ(empty.size(), 0u);
+    STDROMANO_CHECK(empty.empty());
+    STDROMANO_CHECK_EQ(std::strcmp(empty.c_str(), ""), 0);
+
+    const String<> str("Test");
+    STDROMANO_CHECK_EQ(str.size(), 4u);
+    STDROMANO_CHECK(!str.empty());
+    STDROMANO_CHECK_EQ(std::strcmp(str.c_str(), "Test"), 0);
+
+    const String<> fmt_str("{} World", "Hello");
+    STDROMANO_CHECK_EQ(std::strcmp(fmt_str.c_str(), "Hello World"), 0);
+
+    const String<> partial = String<>::make_from_c_str("Hello World", 5);
+    STDROMANO_CHECK_EQ(to_std(partial), "Hello");
+}
+
+STDROMANO_TEST_CASE(make_ref)
+{
+    const char* raw = "Reference";
+    const String<> ref = String<>::make_ref(raw, std::strlen(raw));
+    STDROMANO_CHECK(ref.is_ref());
+    STDROMANO_CHECK(ref.data() == raw);
+    STDROMANO_CHECK_EQ(ref.size(), std::strlen(raw));
+
+    const String<> str("Hello");
+    const String<> ref_from_str = String<>::make_ref(str);
+    STDROMANO_CHECK(ref_from_str.is_ref());
+    STDROMANO_CHECK_EQ(to_std(ref_from_str), "Hello");
+}
+
+STDROMANO_TEST_CASE(equality_across_vectorization_modes)
+{
+    const StringD large = create_large_string(4096);
+    const StringD large_copy = large.copy();
+
+    StringD large_changed = large.copy();
+    large_changed[2048] = ' ';
+
+    fixtures::for_each_vectorization_mode([&](std::uint32_t) {
+        STDROMANO_CHECK(String<>("Hello") == String<>("Hello"));
+        STDROMANO_CHECK(String<>("Hello") != String<>("World"));
+        STDROMANO_CHECK(String<>() == String<>());
+        STDROMANO_CHECK(String<>() != String<>("Hello"));
+        STDROMANO_CHECK(large == large_copy);
+        STDROMANO_CHECK(large != large_changed);
+    });
+}
+
+STDROMANO_TEST_CASE(push_back)
 {
     String<> str;
     str.push_back('A');
-    ASSERT_EQUAL(1, str.size());
-    ASSERT_EQUAL(0, std::strcmp(str.c_str(), "A"));
+    STDROMANO_CHECK_EQ(to_std(str), "A");
 
-    for(size_t i = 0; i < 10; ++i)
-    {
+    for(std::size_t i = 0; i < 10; ++i)
         str.push_back('B');
-    }
 
-    ASSERT_EQUAL(11, str.size());
-    ASSERT_EQUAL(0, std::strcmp(str.c_str(), "ABBBBBBBBBB"));
+    STDROMANO_CHECK_EQ(to_std(str), "ABBBBBBBBBB");
+    STDROMANO_CHECK_EQ(str.data()[str.size()], '\0');
 }
 
-TEST_CASE(test_append_prepend)
+STDROMANO_TEST_CASE(append_and_prepend)
 {
     String<> str("Middle");
 
     str.appendc("End");
-    ASSERT_EQUAL(0, std::strcmp(str.c_str(), "MiddleEnd"));
+    STDROMANO_CHECK_EQ(to_std(str), "MiddleEnd");
 
     str.prependc("Start");
-    ASSERT_EQUAL(0, std::strcmp(str.c_str(), "StartMiddleEnd"));
+    STDROMANO_CHECK_EQ(to_std(str), "StartMiddleEnd");
 
-    String<> other("More");
-    str.appends(other);
-    ASSERT_EQUAL(0, std::strcmp(str.c_str(), "StartMiddleEndMore"));
+    str.appends(String<>("More"));
+    STDROMANO_CHECK_EQ(to_std(str), "StartMiddleEndMore");
 
-    String<> prefix("Pre");
-    str.prepends(prefix);
-    ASSERT_EQUAL(0, std::strcmp(str.c_str(), "PreStartMiddleEndMore"));
+    str.prepends(String<>("Pre"));
+    STDROMANO_CHECK_EQ(to_std(str), "PreStartMiddleEndMore");
 
     str.appendf(" {}", "Formatted");
-    ASSERT_EQUAL(0, std::strcmp(str.c_str(), "PreStartMiddleEndMore Formatted"));
+    STDROMANO_CHECK_EQ(to_std(str), "PreStartMiddleEndMore Formatted");
 
     str.prependf("Before ");
-    ASSERT_EQUAL(0, std::strcmp(str.c_str(), "Before PreStartMiddleEndMore Formatted"));
+    STDROMANO_CHECK_EQ(to_std(str), "Before PreStartMiddleEndMore Formatted");
 
-    String<> another = String<>("Middle").prependc("Start").appendf("{}", "End");
-    ASSERT_EQUAL(0, std::strcmp(another.c_str(), "StartMiddleEnd"));
-
+    const String<> chained = String<>("Middle").prependc("Start").appendf("{}", "End");
+    STDROMANO_CHECK_EQ(to_std(chained), "StartMiddleEnd");
 }
 
-TEST_CASE(test_case_conversion)
+STDROMANO_TEST_CASE(case_conversion)
 {
-    String<> str("Hello World");
+    const String<> str("Hello World");
 
-    String<> upper = str.upper();
-    ASSERT_EQUAL(0, std::strcmp(upper.c_str(), "HELLO WORLD"));
+    STDROMANO_CHECK_EQ(to_std(str.upper()), "HELLO WORLD");
+    STDROMANO_CHECK_EQ(to_std(str.lower()), "hello world");
+    STDROMANO_CHECK_EQ(to_std(str.capitalize()), "Hello world");
 
-    String<> lower = str.lower();
-    ASSERT_EQUAL(0, std::strcmp(lower.c_str(), "hello world"));
-
-    String<> cap = str.capitalize();
-    ASSERT_EQUAL(0, std::strcmp(cap.c_str(), "Hello world"));
-
-    String<> empty_str;
-    ASSERT_EQUAL(0, std::strcmp(empty_str.upper().c_str(), ""));
-    ASSERT_EQUAL(0, std::strcmp(empty_str.lower().c_str(), ""));
-    ASSERT_EQUAL(0, std::strcmp(empty_str.capitalize().c_str(), ""));
+    const String<> empty;
+    STDROMANO_CHECK(empty.upper().empty());
+    STDROMANO_CHECK(empty.lower().empty());
+    STDROMANO_CHECK(empty.capitalize().empty());
 }
 
-TEST_CASE(test_strip)
+STDROMANO_TEST_CASE(strip)
 {
-    String<> str("  Hello World  ");
+    const String<> str("  Hello World  ");
 
-    String<> stripped = str.strip();
-    ASSERT_EQUAL(0, std::strncmp(stripped.c_str(), "Hello World", stripped.size()));
+    STDROMANO_CHECK_EQ(to_std(str.strip()), "Hello World");
+    STDROMANO_CHECK_EQ(to_std(str.lstrip()), "Hello World  ");
+    STDROMANO_CHECK_EQ(to_std(str.rstrip()), "  Hello World");
 
-    String<> lstripped = str.lstrip();
-    ASSERT_EQUAL(0, std::strncmp(lstripped.c_str(), "Hello World  ", stripped.size()));
+    STDROMANO_CHECK(String<>().strip().empty());
+    STDROMANO_CHECK(String<>("    ").strip().empty());
 
-    String<> rstripped = str.rstrip();
-    ASSERT_EQUAL(0, std::strncmp(rstripped.c_str(), "  Hello World", stripped.size()));
-
-    String<> empty_str;
-    ASSERT_EQUAL(0, std::strcmp(empty_str.strip().c_str(), ""));
-
-    String<> space_str("    ");
-    String<> space_strip = space_str.strip();
-    ASSERT_EQUAL(0, std::strncmp(space_strip.c_str(), "", space_strip.size()));
-
-    String<> str_custom("###Hello###");
-    String<> stripped_custom = str_custom.strip('#');
-    ASSERT_EQUAL(0, std::strncmp(stripped_custom.c_str(), "Hello", stripped_custom.size()));
-
-    String<> str_custom_ref = String<>::make_ref(str_custom);
-    String<> stripped_custom_ref = str_custom.strip('#');
-    ASSERT_EQUAL(0, std::strncmp(stripped_custom_ref.c_str(), "Hello", stripped_custom_ref.size()));
-
-    String<> str_hello_ref = String<>::make_ref("Hello", 5);
-    String<> stripped_hello_ref = str_hello_ref.strip('#');
-    ASSERT_EQUAL(0, std::strncmp(stripped_hello_ref.c_str(), "Hello", stripped_hello_ref.size()));
+    const String<> custom("###Hello###");
+    STDROMANO_CHECK_EQ(to_std(custom.strip('#')), "Hello");
+    STDROMANO_CHECK_EQ(to_std(String<>::make_ref(custom).strip('#')), "Hello");
+    STDROMANO_CHECK_EQ(to_std(String<>::make_ref("Hello", 5).strip('#')), "Hello");
 }
 
-TEST_CASE(test_startswith_endswith)
+STDROMANO_TEST_CASE(startswith_and_endswith)
 {
-    String<> str("Hello World");
+    const String<> str("Hello World");
 
-    ASSERT(str.startswith("Hello"));
-    ASSERT(!str.startswith("World"));
+    STDROMANO_CHECK(str.startswith("Hello"));
+    STDROMANO_CHECK(!str.startswith("World"));
+    STDROMANO_CHECK(str.endswith("World"));
+    STDROMANO_CHECK(!str.endswith("Hello"));
 
-    ASSERT(str.endswith("World"));
-    ASSERT(!str.endswith("Hello"));
+    STDROMANO_CHECK(!String<>().startswith("a"));
+    STDROMANO_CHECK(!String<>().endswith("a"));
+    STDROMANO_CHECK(str.startswith(""));
+    STDROMANO_CHECK(str.endswith(""));
 
-    String<> empty_str;
-    ASSERT(!empty_str.startswith("a"));
-    ASSERT(!empty_str.endswith("a"));
-    ASSERT(str.startswith(""));
-    ASSERT(str.endswith(""));
-
-    ASSERT(!str.startswith("Hello World Long"));
-    ASSERT(!str.endswith("Long Hello World"));
+    STDROMANO_CHECK(!str.startswith("Hello World Long"));
+    STDROMANO_CHECK(!str.endswith("Long Hello World"));
 }
 
-TEST_CASE(test_fin)
+STDROMANO_TEST_CASE(find)
 {
-    String<> str("Hello Hello World");
+    const String<> str("Hello Hello World");
 
-    ASSERT_EQUAL(0, str.find("Hello"));
-    ASSERT_EQUAL(12, str.find("World"));
-    ASSERT_EQUAL(-1, str.find("Missing"));
+    STDROMANO_CHECK_EQ(str.find("Hello"), 0);
+    STDROMANO_CHECK_EQ(str.find("World"), 12);
+    STDROMANO_CHECK_EQ(str.find("Missing"), -1);
+    STDROMANO_CHECK_EQ(str.find(""), 0);
+    STDROMANO_CHECK_EQ(str.find("TooLongForTheString"), -1);
+    STDROMANO_CHECK_EQ(String<>().find("a"), -1);
 
-    ASSERT_EQUAL(0, str.find(""));
-    ASSERT_EQUAL(-1, str.find("TooLongForTheString"));
-    String<> empty_str;
-    ASSERT_EQUAL(-1, empty_str.find("a"));
+    const String<> prefix = str.substr(0, 8);
+    STDROMANO_CHECK_EQ(prefix.find("World"), -1);
+    STDROMANO_CHECK_EQ(prefix.find("Hel"), 0);
 }
 
-TEST_CASE(test_split)
+STDROMANO_TEST_CASE(split)
 {
-    String<> str("Hello,World,Test");
-    String<> sep(",");
-    String<> split;
+    const String<> str("Hello,World,Test");
+    const String<> sep(",");
+    String<> part;
     String<>::split_iterator it = 0;
 
-    ASSERT(str.split(sep, it, split));
-    ASSERT_EQUAL(0, std::strncmp(split.c_str(), "Hello", split.size()));
-    ASSERT_EQUAL(6, it);
+    STDROMANO_REQUIRE(str.split(sep, it, part));
+    STDROMANO_CHECK_EQ(to_std(part), "Hello");
+    STDROMANO_CHECK_EQ(it, 6u);
 
-    ASSERT(str.split(sep, it, split));
-    ASSERT_EQUAL(0, std::strncmp(split.c_str(), "World", split.size()));
-    ASSERT_EQUAL(12, it);
+    STDROMANO_REQUIRE(str.split(sep, it, part));
+    STDROMANO_CHECK_EQ(to_std(part), "World");
+    STDROMANO_CHECK_EQ(it, 12u);
 
-    ASSERT(str.split(sep, it, split));
-    ASSERT_EQUAL(0, std::strncmp(split.c_str(), "Test", split.size()));
-    ASSERT_EQUAL(str.size(), it);
+    STDROMANO_REQUIRE(str.split(sep, it, part));
+    STDROMANO_CHECK_EQ(to_std(part), "Test");
+    STDROMANO_CHECK_EQ(it, str.size());
 
-    ASSERT(!str.split(sep, it, split));
-    ASSERT_EQUAL(0, std::strncmp(split.c_str(), "", split.size()));
-    ASSERT_EQUAL(str.size(), it);
+    STDROMANO_CHECK(!str.split(sep, it, part));
+    STDROMANO_CHECK(part.empty());
 
-    String<> empty;
     it = 0;
-    ASSERT(!empty.split(sep, it, split));
-    ASSERT_EQUAL(0, std::strcmp(split.c_str(), ""));
-    ASSERT_EQUAL(0, it);
+    STDROMANO_CHECK(!String<>().split(sep, it, part));
+    STDROMANO_CHECK(part.empty());
+    STDROMANO_CHECK_EQ(it, 0u);
 
-    String<> str2("Hello");
+    const String<> hello("Hello");
+
     it = 0;
-    ASSERT(!str2.split(String<>(), it, split));
-    ASSERT_EQUAL(0, std::strcmp(split.c_str(), "Hello"));
-    ASSERT_EQUAL(str2.size(), it);
+    STDROMANO_CHECK(!hello.split(String<>(), it, part));
+    STDROMANO_CHECK_EQ(to_std(part), "Hello");
+    STDROMANO_CHECK_EQ(it, hello.size());
 
-    String<> str3("Hello");
     it = 0;
-    ASSERT(str3.split(String<>(";"), it, split));
-    ASSERT_EQUAL(0, std::strcmp(split.c_str(), "Hello"));
-    ASSERT_EQUAL(str3.size(), it);
+    STDROMANO_CHECK(hello.split(String<>(";"), it, part));
+    STDROMANO_CHECK_EQ(to_std(part), "Hello");
+    STDROMANO_CHECK_EQ(it, hello.size());
 
-    String<> lrsplit;
-    String<> lsplit = str.lsplit(",", &lrsplit);
-    ASSERT_EQUAL(0, std::strncmp(lsplit.c_str(), "Hello", lsplit.size()));
-    ASSERT_EQUAL(0, std::strncmp(lrsplit.c_str(), "World,Test", lrsplit.size()));
+    String<> right;
+    STDROMANO_CHECK_EQ(to_std(str.lsplit(",", &right)), "Hello");
+    STDROMANO_CHECK_EQ(to_std(right), "World,Test");
 
-    String<> rlsplit;
-    String<> rsplit = str.rsplit(",", &rlsplit);
-    ASSERT_EQUAL(0, std::strncmp(rsplit.c_str(), "Test", rsplit.size()));
-    ASSERT_EQUAL(0, std::strncmp(rlsplit.c_str(), "Hello,World", rlsplit.size()));
+    String<> left;
+    STDROMANO_CHECK_EQ(to_std(str.rsplit(",", &left)), "Test");
+    STDROMANO_CHECK_EQ(to_std(left), "Hello,World");
 }
 
-TEST_CASE(test_ref_string_restrictions)
+STDROMANO_TEST_CASE(large_string)
 {
-    const char* raw = "Immutable";
-    String<> ref = String<>::make_ref(raw, std::strlen(raw));
+    const String<> large = create_large_string(1000);
+    STDROMANO_REQUIRE_EQ(large.size(), 1000u);
 
-    ASSERT(ref.is_ref());
-    ASSERT_EQUAL(0, std::strcmp(ref.c_str(), "Immutable"));
-    ASSERT_EQUAL(std::strlen(raw), ref.size());
+    for(std::size_t i = 0; i < large.size(); ++i)
+        STDROMANO_REQUIRE_EQ(large.data()[i], static_cast<char>('A' + (i % 26)));
+
+    STDROMANO_CHECK_EQ(large.data()[large.size()], '\0');
 }
 
-TEST_CASE(test_large_string)
+STDROMANO_TEST_CASE(copy_construction)
 {
-    String<> large_str = create_large_string(1000);
-    ASSERT_EQUAL(1000, large_str.size());
+    const String<> local("Hello");
+    const String<> local_copy(local);
+    STDROMANO_CHECK_EQ(to_std(local_copy), "Hello");
+    STDROMANO_CHECK(!local_copy.is_ref());
+    STDROMANO_CHECK_EQ(local_copy.capacity(), local.capacity());
+    STDROMANO_CHECK(local == local_copy);
 
-    for(size_t i = 0; i < large_str.size(); ++i)
-    {
-        ASSERT_EQUAL(static_cast<char>('A' + (i % 26)), large_str.data()[i]);
-    }
+    const String<> heap = create_large_string(100);
+    const String<> heap_copy(heap);
+    STDROMANO_CHECK(heap == heap_copy);
+    STDROMANO_CHECK(heap.data() != heap_copy.data());
+    STDROMANO_CHECK(!heap_copy.is_ref());
 
-    ASSERT_EQUAL(0, large_str.data()[large_str.size()]);
+    const String<> ref = String<>::make_ref("Reference", 9);
+    const String<> ref_copy(ref);
+    STDROMANO_CHECK(ref_copy.is_ref());
+    STDROMANO_CHECK(ref == ref_copy);
 }
 
-TEST_CASE(test_copy_constructor)
+STDROMANO_TEST_CASE(move_construction)
 {
     String<> local("Hello");
-    String<> local_copy(local);
-    ASSERT_EQUAL(0, std::strcmp(local_copy.c_str(), "Hello"));
-    ASSERT_EQUAL(local.size(), local_copy.size());
-    ASSERT(!local_copy.is_ref());
-    ASSERT(local_copy.capacity() == local.capacity());
-    ASSERT(local == local_copy);
+    const String<> local_moved(std::move(local));
+    STDROMANO_CHECK_EQ(to_std(local_moved), "Hello");
+    STDROMANO_CHECK(local.empty());
 
     String<> heap = create_large_string(100);
-    String<> heap_copy(heap);
-    ASSERT_EQUAL(0, std::strncmp(heap_copy.c_str(), heap.c_str(), heap.size()));
-    ASSERT_EQUAL(heap.size(), heap_copy.size());
-    ASSERT(!heap_copy.is_ref());
-    ASSERT(heap_copy.capacity() == heap.capacity());
-    ASSERT(heap == heap_copy);
+    const String<> heap_moved(std::move(heap));
+    STDROMANO_CHECK_EQ(heap_moved.size(), 100u);
+    STDROMANO_CHECK(heap.empty());
 
-    const char* raw = "Reference";
-    String<> ref = String<>::make_ref(raw, std::strlen(raw));
-    String<> ref_copy(ref);
-    ASSERT_EQUAL(0, std::strcmp(ref_copy.c_str(), "Reference"));
-    ASSERT(ref_copy.is_ref());
-    ASSERT_EQUAL(ref.size(), ref_copy.size());
-    ASSERT(ref == ref_copy);
+    String<> ref = String<>::make_ref("Reference", 9);
+    const String<> ref_moved(std::move(ref));
+    STDROMANO_CHECK(ref_moved.is_ref());
+    STDROMANO_CHECK(ref.empty());
 }
 
-TEST_CASE(test_move_constructor)
+STDROMANO_TEST_CASE(copy_assignment)
 {
-    String<> local("Hello");
-    String<> local_moved(std::move(local));
-    ASSERT_EQUAL(0, std::strcmp(local_moved.c_str(), "Hello"));
-    ASSERT(local.empty());
-    ASSERT_EQUAL(0, local.size());
-    ASSERT(!local_moved.is_ref());
-
-    String<> heap = create_large_string(100);
-    String<> heap_moved(std::move(heap));
-    ASSERT_EQUAL(100, heap_moved.size());
-    ASSERT(heap.empty());
-    ASSERT_EQUAL(0, heap.size());
-    ASSERT(!heap_moved.is_ref());
-
-    const char* raw = "Reference";
-    String<> ref = String<>::make_ref(raw, std::strlen(raw));
-    String<> ref_moved(std::move(ref));
-    ASSERT_EQUAL(0, std::strcmp(ref_moved.c_str(), "Reference"));
-    ASSERT(ref_moved.is_ref());
-    ASSERT(ref.empty());
-    ASSERT_EQUAL(0, ref.size());
-}
-
-TEST_CASE(test_copy_assignment)
-{
-    String<> local("Hello");
+    const String<> local("Hello");
     String<> target;
     target = local;
-    ASSERT_EQUAL(0, std::strcmp(target.c_str(), "Hello"));
-    ASSERT_EQUAL(local.size(), target.size());
-    ASSERT(!target.is_ref());
-    ASSERT(local == target);
+    STDROMANO_CHECK(target == local);
+    STDROMANO_CHECK(!target.is_ref());
 
-    String<> heap = create_large_string(100);
+    const String<> heap = create_large_string(100);
     String<> target_heap = create_large_string(50);
     target_heap = heap;
-    ASSERT_EQUAL(0, std::strncmp(target_heap.c_str(), heap.c_str(), heap.size()));
-    ASSERT_EQUAL(heap.size(), target_heap.size());
-    ASSERT(!target_heap.is_ref());
-    ASSERT(heap == target_heap);
+    STDROMANO_CHECK(target_heap == heap);
 
-    const char* raw = "Reference";
-    String<> ref = String<>::make_ref(raw, std::strlen(raw));
+    const String<> ref = String<>::make_ref("Reference", 9);
     String<> target_ref = create_large_string(100);
     target_ref = ref;
-    ASSERT_EQUAL(0, std::strcmp(target_ref.c_str(), "Reference"));
-    ASSERT(target_ref.is_ref());
-    ASSERT_EQUAL(ref.size(), target_ref.size());
-    ASSERT(ref == target_ref);
+    STDROMANO_CHECK(target_ref.is_ref());
+    STDROMANO_CHECK(target_ref == ref);
 
     String<> self("Self");
-    self = self;
-    ASSERT_EQUAL(0, std::strcmp(self.c_str(), "Self"));
+    const String<>& alias = self;
+    self = alias;
+    STDROMANO_CHECK_EQ(to_std(self), "Self");
 }
 
-TEST_CASE(test_move_assignment)
+STDROMANO_TEST_CASE(move_assignment)
 {
     String<> local("Hello");
     String<> target;
     target = std::move(local);
-    ASSERT_EQUAL(0, std::strcmp(target.c_str(), "Hello"));
-    ASSERT(local.empty());
-    ASSERT_EQUAL(0, local.size());
-    ASSERT(!target.is_ref());
+    STDROMANO_CHECK_EQ(to_std(target), "Hello");
+    STDROMANO_CHECK(local.empty());
 
     String<> heap = create_large_string(100);
     String<> target_heap = create_large_string(50);
     target_heap = std::move(heap);
-    ASSERT_EQUAL(100, target_heap.size());
-    ASSERT(heap.empty());
-    ASSERT_EQUAL(0, heap.size());
-    ASSERT(!target_heap.is_ref());
+    STDROMANO_CHECK_EQ(target_heap.size(), 100u);
+    STDROMANO_CHECK(heap.empty());
 
-    const char* raw = "Reference";
-    String<> ref = String<>::make_ref(raw, std::strlen(raw));
+    String<> ref = String<>::make_ref("Reference", 9);
     String<> target_ref = create_large_string(100);
     target_ref = std::move(ref);
-    ASSERT_EQUAL(0, std::strcmp(target_ref.c_str(), "Reference"));
-    ASSERT(target_ref.is_ref());
-    ASSERT(ref.empty());
-    ASSERT_EQUAL(0, ref.size());
+    STDROMANO_CHECK(target_ref.is_ref());
+    STDROMANO_CHECK(ref.empty());
 
     String<> self("Self");
-    self = std::move(self);
-    ASSERT_EQUAL(0, std::strcmp(self.c_str(), "Self"));
+    String<>& alias = self;
+    self = std::move(alias);
+    STDROMANO_CHECK_EQ(to_std(self), "Self");
 }
 
-TEST_CASE(test_zeroed_string)
+STDROMANO_TEST_CASE(zeroed_string)
 {
     const String<> zeroed = String<>::make_zeroed(2048);
-    ASSERT_EQUAL(2048, zeroed.capacity());
+    STDROMANO_CHECK_EQ(zeroed.capacity(), 2048u);
 }
 
-TEST_CASE(test_replace)
+STDROMANO_TEST_CASE(replace_and_zfill)
 {
-    const String<> s = "this,string,is,sep,by,commas";
+    const String<> csv = "this,string,is,sep,by,commas";
+    STDROMANO_CHECK_EQ(to_std(csv.replace(',', ' ')), "this string is sep by commas");
 
-    const String<> r_without_commas = s.replace(',', ' ');
-
-    ASSERT_EQUAL(-1, r_without_commas.find(","));
+    STDROMANO_CHECK_EQ(to_std(String<>("1").zfill(8)), "00000001");
+    STDROMANO_CHECK_EQ(to_std(String<>("123456789").zfill(4)), "123456789");
 }
 
-TEST_CASE(test_zfill)
+STDROMANO_TEST_CASE(numeric_conversions)
 {
-    const String<> s = "1";
+    STDROMANO_CHECK_EQ(String<>("1").to_long_long(), 1);
+    STDROMANO_CHECK_EQ(String<>("-42").to_long_long(), -42);
+    STDROMANO_CHECK_EQ(String<>("1.0").to_double(), 1.0);
+    STDROMANO_CHECK_EQ(String<>("-2.5").to_double(), -2.5);
 
-    const String<> zfilled = s.zfill(8);
+    for(const char* value : {"1", "true", "True", "TRUE"})
+        STDROMANO_CHECK_MSG(String<>(value).to_bool(), value);
 
-    ASSERT_EQUAL(0, std::strcmp(zfilled.c_str(), "00000001"));
+    for(const char* value : {"0", "false", "False", "FALSE"})
+        STDROMANO_CHECK_MSG(!String<>(value).to_bool(), value);
 }
 
-TEST_CASE(test_longlong_conversion)
-{
-    const String<> s = "1";
-
-    ASSERT_EQUAL(1, s.to_long_long());
-}
-
-TEST_CASE(test_double_conversion)
-{
-    const String<> s = "1.0";
-
-    ASSERT_EQUAL(1.0, s.to_double());
-}
-
-TEST_CASE(TestBoolConversion)
-{
-    const String<> zero = "0";
-    const String<> one = "1";
-    const String<> _true = "true";
-    const String<> _True = "True";
-    const String<> _TRUE = "TRUE";
-    const String<> _false = "false";
-    const String<> _False = "False";
-    const String<> _FALSE = "FALSE";
-
-    ASSERT_EQUAL(false, zero.to_bool());
-    ASSERT_EQUAL(true, one.to_bool());
-    ASSERT_EQUAL(true, _true.to_bool());
-    ASSERT_EQUAL(true, _True.to_bool());
-    ASSERT_EQUAL(true, _TRUE.to_bool());
-    ASSERT_EQUAL(false, _false.to_bool());
-    ASSERT_EQUAL(false, _False.to_bool());
-    ASSERT_EQUAL(false, _FALSE.to_bool());
-}
-
-TEST_CASE(test_substr)
+STDROMANO_TEST_CASE(substr_clear_erase_and_shrink)
 {
     const StringD s = "Hello World!";
-    const StringD w = StringD::make_ref("World!");
-    const StringD w2 = StringD::make_ref("Wor");
 
-    ASSERT_EQUAL(0, std::strncmp(w.data(), s.substr(6).data(), w.size()));
-    ASSERT_EQUAL(0, std::strncmp(w2.data(), s.substr(6, 3).data(), w2.size()));
+    STDROMANO_CHECK_EQ(to_std(s.substr(6)), "World!");
+    STDROMANO_CHECK_EQ(to_std(s.substr(6, 3)), "Wor");
+    STDROMANO_CHECK_EQ(to_std(s.substr(6, 100)), "World!");
+    STDROMANO_CHECK(s.substr(s.size()).empty());
+
+    StringD cleared = "Hello World!";
+    cleared.clear();
+    STDROMANO_CHECK(cleared.empty());
+
+    StringD erased = "Hello World!";
+    erased.erase(5);
+    STDROMANO_CHECK_EQ(to_std(erased), "Hello");
+
+    StringD shrunk = "Hello World!";
+    shrunk.shrink_to_fit();
+    STDROMANO_CHECK_EQ(to_std(shrunk), "Hello World!");
+    shrunk.shrink_to_fit(5);
+    STDROMANO_CHECK_EQ(to_std(shrunk), "Hello");
 }
 
-TEST_CASE(test_clear)
-{
-    StringD s = "Hello World!";
-
-    s.clear();
-    ASSERT_EQUAL(0, s.size());
-}
-
-TEST_CASE(test_erase)
-{
-    StringD s = "Hello World!";
-
-    s.erase(5);
-
-    ASSERT_EQUAL(0, std::strncmp(s.c_str(), "Hello", 5));
-}
-
-TEST_CASE(test_shrinktofit)
-{
-    StringD s = "Hello World!";
-
-    const std::size_t old_size = s.size();
-
-    s.shrink_to_fit();
-
-    ASSERT_EQUAL(old_size, s.size());
-
-    s.shrink_to_fit(5);
-
-    ASSERT_EQUAL(0, std::strncmp(s.c_str(), "Hello", 5));
-}
-
-TEST_CASE(test_insertion)
+STDROMANO_TEST_CASE(insertion)
 {
     String<> str = "Hello World";
 
     str.insertc(5, " Beautiful");
-    ASSERT_EQUAL(0, std::strcmp(str.c_str(), "Hello Beautiful World"));
+    STDROMANO_CHECK_EQ(to_std(str), "Hello Beautiful World");
 
-    String<> insert = " Amazing";
-    str.inserts(15, insert);
-    ASSERT_EQUAL(0, std::strcmp(str.c_str(), "Hello Beautiful Amazing World"));
+    str.inserts(15, String<>(" Amazing"));
+    STDROMANO_CHECK_EQ(to_std(str), "Hello Beautiful Amazing World");
 
     str.insertf(0, "{}: ", 42);
-    ASSERT_EQUAL(0, std::strcmp(str.c_str(), "42: Hello Beautiful Amazing World"));
+    STDROMANO_CHECK_EQ(to_std(str), "42: Hello Beautiful Amazing World");
 }
 
-TEST_CASE(test_is_digit)
+STDROMANO_TEST_CASE(is_digit)
 {
-    String<> digits = "0123456789";
-    String<> no_digits = "abcdef";
-    String<> mixed = "0123abcd";
-
-    ASSERT_EQUAL(true, digits.is_digit());
-    ASSERT_EQUAL(false, no_digits.is_digit());
-    ASSERT_EQUAL(false, mixed.is_digit());
+    STDROMANO_CHECK(String<>("0123456789").is_digit());
+    STDROMANO_CHECK(!String<>("abcdef").is_digit());
+    STDROMANO_CHECK(!String<>("0123abcd").is_digit());
 }
 
-TEST_CASE(test_to_string)
+STDROMANO_TEST_CASE(to_string_and_join)
 {
-    ASSERT_EQUAL(0, std::strcmp("1", stdromano::to_string(1).c_str()));
-    ASSERT_EQUAL(0, std::strcmp("123456789", stdromano::to_string(123456789).c_str()));
-    ASSERT_EQUAL(0, std::strcmp("1.5", stdromano::to_string(1.5).c_str()));
+    STDROMANO_CHECK_EQ(to_std(to_string(1)), "1");
+    STDROMANO_CHECK_EQ(to_std(to_string(123456789)), "123456789");
+    STDROMANO_CHECK_EQ(to_std(to_string(1.5)), "1.5");
+
+    const std::vector<int> values = {1, 2, 3};
+    const StringD joined = join(values, [](const int& v) { return to_string(v); }, ", ");
+    STDROMANO_CHECK_EQ(to_std(joined), "1, 2, 3");
 }
 
-struct UTF8TestCase {
-    const char* data;
-    bool expected_valid;
-    const char* description;
-};
+STDROMANO_TEST_CASE(three_way_strcmp)
+{
+    STDROMANO_CHECK_EQ(strcmp(StringD("abc"), StringD("abd")), -1);
+    STDROMANO_CHECK_EQ(strcmp(StringD("abd"), StringD("abc")), 1);
+    STDROMANO_CHECK_EQ(strcmp(StringD("abc"), StringD("abc")), 0);
+    STDROMANO_CHECK_EQ(strcmp(StringD("ab"), StringD("abc")), -1);
+    STDROMANO_CHECK_EQ(strcmp(StringD("ABC"), StringD("abc"), false), 0);
+    STDROMANO_CHECK_EQ(strcmp(StringD(), StringD()), 0);
+}
 
-std::vector<UTF8TestCase> get_utf8_test_cases() {
-    return {
-        {
-            "Hello, world! This is a test string with UTF-8 characters like é, ü, and €.",
-            true,
-            "Euro symbol"
-        },
-        {
-            "This has an invalid sequence: \xC3" "A",
-            false,
-            "Invalid 0xC3 without a following continuation byte"
-        },
-        {
-            "This has an overlong sequence: \xC0\xAF",
-            false,
-            "Invalid overlong encoding of '/'"
-        },
-        {
-            "Start with a continuation byte: \x80",
-            false,
-            "Invalid continuation byte not preceded by a lead byte"
-        }
+STDROMANO_TEST_CASE(utf8_validation)
+{
+    struct Case
+    {
+        const char* data;
+        bool valid;
     };
+
+    const Case cases[] = {
+        {"Hello, world! UTF-8 characters like \xC3\xA9, \xC3\xBC, and \xE2\x82\xAC.", true},
+        {"An invalid sequence: \xC3" "A", false},
+        {"An overlong sequence: \xC0\xAF", false},
+        {"A lone continuation byte: \x80", false},
+        {"A surrogate: \xED\xA0\x80", false},
+        {"Above U+10FFFF: \xF4\x90\x80\x80", false},
+        {"Truncated at the end: \xE2\x82", false},
+        {"\xF0\x9F\x98\x80", true},
+    };
+
+    fixtures::for_each_vectorization_mode([&](std::uint32_t) {
+        for(const Case& test : cases)
+            STDROMANO_CHECK_MSG(validate_utf8(test.data, std::strlen(test.data)) == test.valid,
+                                StringD::make_fmt("mode {}: \"{}\"",
+                                                  simd_get_vectorization_mode_as_string(),
+                                                  test.data));
+    });
 }
 
-TEST_CASE(test_utf8_validation)
+STDROMANO_TEST_CASE(utf8_iterator)
 {
-    for(const auto& test : get_utf8_test_cases())
     {
-        if(validate_utf8(reinterpret_cast<const char*>(test.data),
-                         std::strlen(test.data)) != test.expected_valid)
-        {
-            spdlog::error("Invalid UTF-8 validation: expected {} for case {}",
-                          test.expected_valid,
-                          test.description);
-            STDROMANO_ASSERT(0, "Invalid UTF-8 validation");
-        }
-    }
-}
-
-TEST_CASE(test_utf8_iterator)
-{
-    /* 1. ASCII-only string */
-    {
-        StringD s("Hello");
-        ASSERT(s.u8length() == 5);
+        const StringD s("Hello");
+        STDROMANO_CHECK_EQ(s.u8length(), 5u);
 
         auto it = s.u8begin();
-        ASSERT(*it == U'H'); ++it;
-        ASSERT(*it == U'e'); ++it;
-        ASSERT(*it == U'l'); ++it;
-        ASSERT(*it == U'l'); ++it;
-        ASSERT(*it == U'o'); ++it;
-        ASSERT(it == s.u8end());
-    }
 
-    /* 2. Empty string */
-    {
-        StringD s;
-        ASSERT(s.u8length() == 0);
-        ASSERT(s.u8begin() == s.u8end());
-    }
-
-    /* 3. 2-byte sequences (Latin accents) — "café" = 4 codepoints, 5 bytes */
-    {
-        StringD s("caf\xC3\xA9"); /* café */
-        ASSERT(s.size() == 5);
-        ASSERT(s.u8length() == 4);
-
-        auto it = s.u8begin();
-        ASSERT(*it == U'c'); ++it;
-        ASSERT(*it == U'a'); ++it;
-        ASSERT(*it == U'f'); ++it;
-        ASSERT(*it == U'é'); ++it;
-        ASSERT(it == s.u8end());
-    }
-
-    /* 4. 3-byte sequences (CJK / Euro sign) — "€" = U+20AC */
-    {
-        StringD s("\xE2\x82\xAC"); /* € */
-        ASSERT(s.size() == 3);
-        ASSERT(s.u8length() == 1);
-        ASSERT(*s.u8begin() == U'\u20AC');
-    }
-
-    /* 5. 4-byte sequences (emoji) — U+1F600 😀 */
-    {
-        StringD s("\xF0\x9F\x98\x80"); /* 😀 */
-        ASSERT(s.size() == 4);
-        ASSERT(s.u8length() == 1);
-        ASSERT(*s.u8begin() == U'\U0001F600');
-    }
-
-    /* 6. Mixed byte lengths — "Héllo 🌍" */
-    {
-        /* H(1) é(2) l(1) l(1) o(1) ' '(1) 🌍(4) = 7 codepoints, 11 bytes */
-        StringD s("H\xC3\xA9llo \xF0\x9F\x8C\x8D");
-        ASSERT(s.size() == 11);
-        ASSERT(s.u8length() == 7);
-
-        const char32_t expected[] = { U'H', U'é', U'l', U'l', U'o', U' ', U'\U0001F30D' };
-
-        std::size_t idx = 0;
-
-        for(auto it = s.u8begin(); it != s.u8end(); ++it, ++idx)
+        for(const char32_t expected : {U'H', U'e', U'l', U'l', U'o'})
         {
-            ASSERT(*it == expected[idx]);
+            STDROMANO_CHECK(*it == expected);
+            ++it;
         }
 
-        ASSERT(idx == 7);
+        STDROMANO_CHECK(it == s.u8end());
     }
 
-    /* 7. byte_length() per codepoint */
     {
-        StringD s("A\xC3\xA9\xE2\x82\xAC\xF0\x9F\x98\x80"); /* A é € 😀 */
+        const StringD s;
+        STDROMANO_CHECK_EQ(s.u8length(), 0u);
+        STDROMANO_CHECK(s.u8begin() == s.u8end());
+    }
+
+    {
+        const StringD s("H\xC3\xA9llo \xF0\x9F\x8C\x8D");
+        STDROMANO_CHECK_EQ(s.size(), 11u);
+        STDROMANO_CHECK_EQ(s.u8length(), 7u);
+
+        const char32_t expected[] = {U'H', U'\u00E9', U'l', U'l', U'o', U' ', U'\U0001F30D'};
+
+        std::size_t index = 0;
+
+        for(auto it = s.u8begin(); it != s.u8end(); ++it, ++index)
+            STDROMANO_REQUIRE(*it == expected[index]);
+
+        STDROMANO_CHECK_EQ(index, 7u);
+    }
+
+    {
+        const StringD s("A\xC3\xA9\xE2\x82\xAC\xF0\x9F\x98\x80");
         auto it = s.u8begin();
-        ASSERT(it.byte_length() == 1); ++it; /* A */
-        ASSERT(it.byte_length() == 2); ++it; /* é */
-        ASSERT(it.byte_length() == 3); ++it; /* € */
-        ASSERT(it.byte_length() == 4); ++it; /* 😀 */
-        ASSERT(it == s.u8end());
+
+        for(const std::size_t length : {std::size_t(1), std::size_t(2), std::size_t(3), std::size_t(4)})
+        {
+            STDROMANO_CHECK_EQ(it.byte_length(), length);
+            ++it;
+        }
+
+        STDROMANO_CHECK(it == s.u8end());
     }
 
-    /* 8. base() returns correct raw pointer offset */
     {
-        StringD s("ab\xC3\xA9"); /* a b é */
+        const StringD s("ab\xC3\xA9");
         auto it = s.u8begin();
-        ASSERT(it.base() == s.data());     ++it;
-        ASSERT(it.base() == s.data() + 1); ++it;
-        ASSERT(it.base() == s.data() + 2); ++it;
-        ASSERT(it.base() == s.data() + 4); /* past the 2-byte é */
-        ASSERT(it == s.u8end());
+
+        STDROMANO_CHECK(it.base() == s.data());
+        ++it;
+        STDROMANO_CHECK(it.base() == s.data() + 1);
+        ++it;
+        STDROMANO_CHECK(it.base() == s.data() + 2);
+        ++it;
+        STDROMANO_CHECK(it.base() == s.data() + 4);
+        STDROMANO_CHECK(it == s.u8end());
     }
 
-    /* 9. Post-increment */
     {
-        StringD s("ab");
+        const StringD s("ab");
         auto it = s.u8begin();
-        auto prev = it++;
-        ASSERT(*prev == U'a');
-        ASSERT(*it == U'b');
+        const auto previous = it++;
+        STDROMANO_CHECK(*previous == U'a');
+        STDROMANO_CHECK(*it == U'b');
+
+        auto back = s.u8end();
+        const auto end = back--;
+        STDROMANO_CHECK(end == s.u8end());
+        STDROMANO_CHECK(*back == U'b');
     }
 
-    /* 10. Backward iteration (--) */
     {
-        StringD s("A\xC3\xA9\xE2\x82\xAC"); /* A é € = 3 codepoints */
+        const StringD s("A\xC3\xA9\xE2\x82\xAC");
         auto it = s.u8end();
 
-        --it; ASSERT(*it == U'\u20AC'); /* € */
-        --it; ASSERT(*it == U'é');
-        --it; ASSERT(*it == U'A');
-        ASSERT(it == s.u8begin());
+        --it;
+        STDROMANO_CHECK(*it == U'\u20AC');
+        --it;
+        STDROMANO_CHECK(*it == U'\u00E9');
+        --it;
+        STDROMANO_CHECK(*it == U'A');
+        STDROMANO_CHECK(it == s.u8begin());
     }
 
-    /* 11. Post-decrement */
     {
-        StringD s("ab");
-        auto it = s.u8end();
-        auto prev = it--;
-        ASSERT(prev == s.u8end());
-        ASSERT(*it == U'b');
-    }
-
-    /* 12. Comparison operators */
-    {
-        StringD s("abc");
+        const StringD s("abc");
         auto a = s.u8begin();
         auto b = s.u8begin();
         ++b;
 
-        ASSERT(a < b);
-        ASSERT(b > a);
-        ASSERT(a <= b);
-        ASSERT(b >= a);
-        ASSERT(a <= a);
-        ASSERT(a >= a);
-        ASSERT(!(a == b));
-        ASSERT(a != b);
+        STDROMANO_CHECK(a < b);
+        STDROMANO_CHECK(b > a);
+        STDROMANO_CHECK(a <= b);
+        STDROMANO_CHECK(b >= a);
+        STDROMANO_CHECK(a <= a);
+        STDROMANO_CHECK(a >= a);
+        STDROMANO_CHECK(a != b);
     }
 
-    /* 13. Range-for via a small wrapper (verifies begin/end contract) */
     {
-        StringD s("Hi\xF0\x9F\x91\x8B"); /* Hi👋 */
-        std::size_t count = 0;
-        char32_t last = 0;
+        const String<7> small("abc");
+        STDROMANO_CHECK_EQ(small.u8length(), 3u);
 
-        /* Manual loop since u8begin/u8end aren't called begin/end */
-        for(auto it = s.u8begin(); it != s.u8end(); ++it)
+        const String<7> big("abcdefghijklmnop");
+        STDROMANO_CHECK_EQ(big.u8length(), 16u);
+    }
+}
+
+STDROMANO_TEST_CASE(fuzz_equality_matches_memcmp)
+{
+    const auto report = fuzz::run_property(fixtures::options("string_equality", 500), [](fuzz::Source& source) {
+        const std::string lhs = to_std(source.string(300, "abAB01 "));
+        std::string rhs = lhs;
+
+        if(!rhs.empty() && source.boolean())
+            rhs[source.index(rhs.size())] ^= 0x20;
+
+        if(source.one_in(4))
+            rhs.push_back('x');
+
+        const StringD a = from_std(lhs);
+        const StringD b = from_std(rhs);
+
+        bool ok = true;
+
+        fixtures::for_each_vectorization_mode([&](std::uint32_t) {
+            ok &= (a == b) == (lhs == rhs);
+            ok &= (a != b) == (lhs != rhs);
+        });
+
+        return ok;
+    });
+
+    TESTS_REQUIRE_PROPERTY(report);
+}
+
+STDROMANO_TEST_CASE(fuzz_case_conversion_matches_ctype)
+{
+    const auto report = fuzz::run_property(fixtures::options("string_case", 500), [](fuzz::Source& source) {
+        const std::string input = to_std(source.string(200));
+
+        std::string lower = input;
+        std::string upper = input;
+
+        for(char& c : lower)
+            if(c >= 'A' && c <= 'Z')
+                c = static_cast<char>(c - 'A' + 'a');
+
+        for(char& c : upper)
+            if(c >= 'a' && c <= 'z')
+                c = static_cast<char>(c - 'a' + 'A');
+
+        const StringD str = from_std(input);
+
+        bool ok = to_std(str.upper()) == upper;
+
+        fixtures::for_each_vectorization_mode([&](std::uint32_t) { ok &= to_std(str.lower()) == lower; });
+
+        return ok;
+    });
+
+    TESTS_REQUIRE_PROPERTY(report);
+}
+
+STDROMANO_TEST_CASE(fuzz_search_matches_std_string)
+{
+    const auto report = fuzz::run_property(fixtures::options("string_search", 1000), [](fuzz::Source& source) {
+        const std::string haystack = to_std(source.string(64, "ab,"));
+        const std::string needle = to_std(source.string(4, "ab,"));
+
+        const StringD str = from_std(haystack);
+        const StringD sub = from_std(needle);
+
+        const std::size_t expected = haystack.find(needle);
+        STDROMANO_FUZZ_CHECK_EQ(str.find(sub), expected == std::string::npos ? -1 : static_cast<int>(expected));
+
+        const bool starts = haystack.compare(0, needle.size(), needle) == 0 && needle.size() <= haystack.size();
+        const bool ends = needle.size() <= haystack.size() &&
+                          haystack.compare(haystack.size() - needle.size(), needle.size(), needle) == 0;
+
+        STDROMANO_FUZZ_CHECK_EQ(str.startswith(sub), starts);
+        STDROMANO_FUZZ_CHECK_EQ(str.endswith(sub), ends);
+
+        const std::size_t cut = source.range<std::size_t>(0, haystack.size());
+        const StringD prefix = str.substr(0, cut);
+        const std::size_t prefix_expected = haystack.substr(0, cut).find(needle);
+
+        STDROMANO_FUZZ_CHECK_EQ(prefix.find(sub),
+                                prefix_expected == std::string::npos ? -1 : static_cast<int>(prefix_expected));
+
+        return true;
+    });
+
+    TESTS_REQUIRE_PROPERTY(report);
+}
+
+STDROMANO_TEST_CASE(fuzz_split_round_trips)
+{
+    const auto report = fuzz::run_property(fixtures::options("string_split", 1000), [](fuzz::Source& source) {
+        const std::string input = to_std(source.string(64, "ab,;"));
+        const std::string separator = source.pick<const char*>({",", ";", ",;", "ab"});
+
+        const StringD str = from_std(input);
+        const StringD sep = from_std(separator);
+
+        std::vector<std::string> expected;
+        std::size_t start = 0;
+
+        while(start < input.size())
         {
-            last = *it;
-            ++count;
+            const std::size_t found = input.find(separator, start);
+
+            if(found == std::string::npos)
+            {
+                expected.push_back(input.substr(start));
+                break;
+            }
+
+            expected.push_back(input.substr(start, found - start));
+            start = found + separator.size();
         }
 
-        ASSERT(count == 3);
-        ASSERT(last == U'\U0001F44B'); /* 👋 */
-    }
+        std::vector<std::string> parts;
+        StringD part;
+        StringD::split_iterator it = 0;
 
-    /* 14. Works with local (SSO) and heap strings */
-    {
-        /* Small string — should stay local */
-        String<7> small("abc");
-        ASSERT(small.u8length() == 3);
+        while(str.split(sep, it, part))
+        {
+            parts.push_back(to_std(part));
+            STDROMANO_FUZZ_CHECK(parts.size() <= input.size() + 1);
+        }
 
-        /* Large string — should heap-allocate */
-        String<7> big("abcdefghijklmnop");
-        ASSERT(big.u8length() == 16);
-    }
+        STDROMANO_FUZZ_CHECK(parts == expected);
+
+        const std::size_t first = input.find(separator);
+        const std::size_t last = input.rfind(separator);
+
+        StringD right;
+        const StringD left = str.lsplit(sep, &right);
+        StringD before;
+        const StringD after = str.rsplit(sep, &before);
+
+        if(first == std::string::npos)
+        {
+            STDROMANO_FUZZ_CHECK_EQ(to_std(left), input);
+            STDROMANO_FUZZ_CHECK(right.empty());
+            STDROMANO_FUZZ_CHECK_EQ(to_std(after), input);
+            STDROMANO_FUZZ_CHECK(before.empty());
+        }
+        else
+        {
+            STDROMANO_FUZZ_CHECK_EQ(to_std(left), input.substr(0, first));
+            STDROMANO_FUZZ_CHECK_EQ(to_std(right), input.substr(first + separator.size()));
+            STDROMANO_FUZZ_CHECK_EQ(to_std(after), input.substr(last + separator.size()));
+            STDROMANO_FUZZ_CHECK_EQ(to_std(before), input.substr(0, last));
+        }
+
+        const StringD view = str.substr(0, source.range<std::size_t>(0, input.size()));
+        std::size_t view_parts = 0;
+        StringD::split_iterator view_it = 0;
+
+        while(view.split(sep, view_it, part))
+        {
+            STDROMANO_FUZZ_CHECK(part.data() + part.size() <= view.data() + view.size());
+            ++view_parts;
+        }
+
+        STDROMANO_FUZZ_CHECK(view_parts <= view.size() + 1);
+
+        return true;
+    });
+
+    TESTS_REQUIRE_PROPERTY(report);
 }
 
-int main()
+STDROMANO_TEST_CASE(fuzz_strip_matches_manual_trim)
 {
-    TestRunner runner;
+    const auto report = fuzz::run_property(fixtures::options("string_strip", 500), [](fuzz::Source& source) {
+        const std::string input = to_std(source.string(32, " #a"));
+        const char c = source.pick({' ', '#'});
 
-    runner.add_test("Construction", test_construction);
-    runner.add_test("MakeRef", test_make_ref);
-    runner.add_test("Comparison", test_comparison);
-    runner.add_test("PushBack", test_pushback);
-    runner.add_test("AppendPrepend", test_append_prepend);
-    runner.add_test("CaseConversion", test_case_conversion);
-    runner.add_test("Strip", test_strip);
-    runner.add_test("StartsWithEndsWith", test_startswith_endswith);
-    runner.add_test("Find", test_fin);
-    runner.add_test("Split", test_split);
-    runner.add_test("ReferenceStringRestrictions", test_ref_string_restrictions);
-    runner.add_test("LargeString", test_large_string);
-    runner.add_test("CopyConstructor", test_copy_constructor);
-    runner.add_test("MoveConstructor", test_move_constructor);
-    runner.add_test("CopyAssignment", test_copy_assignment);
-    runner.add_test("MoveAssignment", test_move_assignment);
-    runner.add_test("ZeroedString", test_zeroed_string);
-    runner.add_test("Replace", test_replace);
-    runner.add_test("ZFill", test_zfill);
-    runner.add_test("LongLongConversion", test_longlong_conversion);
-    runner.add_test("DoubleConversion", test_double_conversion);
-    runner.add_test("SubStr", test_substr);
-    runner.add_test("Clear", test_clear);
-    runner.add_test("Erase", test_erase);
-    runner.add_test("ShrinkToFit", test_shrinktofit);
-    runner.add_test("Insertion", test_insertion);
-    runner.add_test("IsDigit", test_is_digit);
-    runner.add_test("ToString", test_to_string);
-    runner.add_test("UTF-8 Validation", test_utf8_validation);
-    runner.add_test("UTF-8 Iterator", test_utf8_iterator);
+        const std::size_t first = input.find_first_not_of(c);
+        const std::size_t last = input.find_last_not_of(c);
 
-    if(runner.run_all() != 0)
-        return 1;
+        const std::string lstripped = first == std::string::npos ? "" : input.substr(first);
+        const std::string rstripped = last == std::string::npos ? "" : input.substr(0, last + 1);
+        const std::string stripped = first == std::string::npos ? "" : input.substr(first, last - first + 1);
 
-    return 0;
+        const StringD str = from_std(input);
+
+        STDROMANO_FUZZ_CHECK_EQ(to_std(str.lstrip(c)), lstripped);
+        STDROMANO_FUZZ_CHECK_EQ(to_std(str.rstrip(c)), rstripped);
+        STDROMANO_FUZZ_CHECK_EQ(to_std(str.strip(c)), stripped);
+
+        return true;
+    });
+
+    TESTS_REQUIRE_PROPERTY(report);
 }
+
+STDROMANO_TEST_CASE(fuzz_edits_match_std_string)
+{
+    const auto report = fuzz::run_property(fixtures::options("string_edits", 500), [](fuzz::Source& source) {
+        StringD str;
+        std::string reference;
+
+        const std::size_t steps = source.range<std::size_t>(1, 60);
+
+        for(std::size_t step = 0; step < steps; ++step)
+        {
+            const std::string chunk = to_std(source.string(40, "xyz0123"));
+
+            switch(source.index(7))
+            {
+                case 0:
+                    str.push_back('p');
+                    reference.push_back('p');
+                    break;
+                case 1:
+                    str.appendc(chunk.c_str(), chunk.size());
+                    reference += chunk;
+                    break;
+                case 2:
+                    str.prepends(from_std(chunk));
+                    reference.insert(0, chunk);
+                    break;
+                case 3:
+                {
+                    const std::size_t position = source.range<std::size_t>(0, reference.size());
+                    str.inserts(position, from_std(chunk));
+                    reference.insert(position, chunk);
+                    break;
+                }
+                case 4:
+                {
+                    const std::size_t start = source.range<std::size_t>(0, reference.size());
+                    const std::size_t length = source.range<std::size_t>(0, reference.size() - start);
+                    str.erase(start, length);
+                    reference.erase(start, length);
+                    break;
+                }
+                case 5:
+                {
+                    StringD copy = str;
+                    str = std::move(copy);
+                    break;
+                }
+                default:
+                    str.appendf("{}", step);
+                    reference += std::to_string(step);
+                    break;
+            }
+
+            STDROMANO_FUZZ_CHECK_EQ(str.size(), reference.size());
+            STDROMANO_FUZZ_CHECK_EQ(str.c_str()[str.size()], '\0');
+        }
+
+        STDROMANO_FUZZ_CHECK_EQ(to_std(str), reference);
+
+        return true;
+    });
+
+    TESTS_REQUIRE_PROPERTY(report);
+}
+
+STDROMANO_TEST_CASE(fuzz_integer_conversions_round_trip)
+{
+    const auto report = fuzz::run_property(fixtures::options("string_integers", 1000), [](fuzz::Source& source) {
+        const long long value = source.integer<long long>();
+        const StringD str = to_string(value);
+
+        STDROMANO_FUZZ_CHECK_EQ(to_std(str), std::to_string(value));
+        STDROMANO_FUZZ_CHECK_EQ(str.to_long_long(), value);
+
+        return true;
+    });
+
+    TESTS_REQUIRE_PROPERTY(report);
+}
+
+STDROMANO_TEST_CASE(fuzz_three_way_strcmp)
+{
+    const auto report = fuzz::run_property(fixtures::options("string_strcmp", 1000), [](fuzz::Source& source) {
+        const std::string lhs = to_std(source.string(8, "aAbB"));
+        const std::string rhs = to_std(source.string(8, "aAbB"));
+
+        const int expected = lhs < rhs ? -1 : (lhs == rhs ? 0 : 1);
+
+        STDROMANO_FUZZ_CHECK_EQ(strcmp(from_std(lhs), from_std(rhs)), expected);
+
+        std::string lhs_lower = lhs;
+        std::string rhs_lower = rhs;
+        std::transform(lhs_lower.begin(), lhs_lower.end(), lhs_lower.begin(), ::tolower);
+        std::transform(rhs_lower.begin(), rhs_lower.end(), rhs_lower.begin(), ::tolower);
+
+        const int expected_ci = lhs_lower < rhs_lower ? -1 : (lhs_lower == rhs_lower ? 0 : 1);
+
+        STDROMANO_FUZZ_CHECK_EQ(strcmp(from_std(lhs), from_std(rhs), false), expected_ci);
+
+        return true;
+    });
+
+    TESTS_REQUIRE_PROPERTY(report);
+}
+
+STDROMANO_TEST_CASE(fuzz_utf8_validation_matches_reference)
+{
+    const auto report = fuzz::run_property(fixtures::options("utf8_validation", 2000), [](fuzz::Source& source) {
+        const std::string bytes = random_utf8_bytes(source, 80);
+        const bool expected = reference_validate_utf8(reinterpret_cast<const std::uint8_t*>(bytes.data()),
+                                                      bytes.size());
+
+        bool ok = true;
+
+        fixtures::for_each_vectorization_mode([&](std::uint32_t) {
+            ok &= validate_utf8(bytes.data(), bytes.size()) == expected;
+        });
+
+        return ok;
+    });
+
+    TESTS_REQUIRE_PROPERTY(report);
+}
+
+STDROMANO_TEST_CASE(fuzz_utf8_iterator_decodes_valid_input)
+{
+    const auto report = fuzz::run_property(fixtures::options("utf8_iterator", 1000), [](fuzz::Source& source) {
+        std::vector<char32_t> code_points;
+        std::string bytes;
+
+        const std::size_t count = source.size(64);
+
+        for(std::size_t i = 0; i < count; ++i)
+        {
+            code_points.push_back(valid_code_point(source));
+            encode_utf8(code_points.back(), bytes);
+        }
+
+        const StringD str = from_std(bytes);
+
+        STDROMANO_FUZZ_CHECK_EQ(str.u8length(), code_points.size());
+
+        std::size_t index = 0;
+
+        for(auto it = str.u8begin(); it != str.u8end(); ++it, ++index)
+            STDROMANO_FUZZ_CHECK_EQ(static_cast<std::uint32_t>(*it), static_cast<std::uint32_t>(code_points[index]));
+
+        STDROMANO_FUZZ_CHECK_EQ(index, code_points.size());
+
+        auto it = str.u8end();
+
+        for(std::size_t i = code_points.size(); i > 0; --i)
+        {
+            --it;
+            STDROMANO_FUZZ_CHECK_EQ(static_cast<std::uint32_t>(*it), static_cast<std::uint32_t>(code_points[i - 1]));
+        }
+
+        STDROMANO_FUZZ_CHECK(it == str.u8begin());
+
+        return true;
+    });
+
+    TESTS_REQUIRE_PROPERTY(report);
+}
+
+STDROMANO_TEST_MAIN()

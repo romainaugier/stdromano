@@ -117,10 +117,10 @@ template<typename T>
 STDROMANO_FORCE_INLINE bool isinf(const T x) noexcept;
 
 template<>
-STDROMANO_FORCE_INLINE bool isinf(const float x) noexcept { return _finite(x) == 0; }
+STDROMANO_FORCE_INLINE bool isinf(const float x) noexcept { return _finite(x) == 0 && _isnan(x) == 0; }
 
 template<>
-STDROMANO_FORCE_INLINE bool isinf(const double x) noexcept { return _finite(x) == 0; }
+STDROMANO_FORCE_INLINE bool isinf(const double x) noexcept { return _finite(x) == 0 && _isnan(x) == 0; }
 
 /******************************************/
 template<typename T>
@@ -147,10 +147,10 @@ template<typename T>
 STDROMANO_FORCE_INLINE bool isinf(const T x) noexcept;
 
 template<>
-STDROMANO_FORCE_INLINE bool isinf(const float x) noexcept { return __builtin_isinf(x) == 0; }
+STDROMANO_FORCE_INLINE bool isinf(const float x) noexcept { return __builtin_isinf(x) != 0; }
 
 template<>
-STDROMANO_FORCE_INLINE bool isinf(const double x) noexcept { return __builtin_isinf(x) == 0; }
+STDROMANO_FORCE_INLINE bool isinf(const double x) noexcept { return __builtin_isinf(x) != 0; }
 
 /******************************************/
 template<typename T>
@@ -553,7 +553,7 @@ STDROMANO_FORCE_INLINE float fma(float a, float b, float c) noexcept
 #if defined(STDROMANO_HAS_FMA_INTRINSICS)
     return _mm_cvtss_f32(_mm_fmadd_ss(_mm_set_ss(a), _mm_set_ss(b), _mm_set_ss(c)));
 #elif defined(STDROMANO_AARCH64)
-    return __builtin_fmaf(a, b, c);
+    return std::fma(a, b, c);
 #else
     return a * b + c;
 #endif /* defined(STDROMANO_HAS_FMA_INTRINSICS) */
@@ -565,7 +565,7 @@ STDROMANO_FORCE_INLINE double fma(double a, double b, double c) noexcept
 #if defined(STDROMANO_HAS_FMA_INTRINSICS)
     return _mm_cvtsd_f64(_mm_fmadd_sd(_mm_set_sd(a), _mm_set_sd(b), _mm_set_sd(c)));
 #elif defined(STDROMANO_AARCH64)
-    return __builtin_fma(a, b, c);
+    return std::fma(a, b, c);
 #else
     return a * b + c;
 #endif /* defined(STDROMANO_HAS_FMA_INTRINSICS) */
@@ -581,7 +581,7 @@ STDROMANO_FORCE_INLINE float fms(float a, float b, float c) noexcept
 #if defined(STDROMANO_HAS_FMA_INTRINSICS)
     return _mm_cvtss_f32(_mm_fmsub_ss(_mm_set_ss(a), _mm_set_ss(b), _mm_set_ss(c)));
 #elif defined(STDROMANO_AARCH64)
-    return __builtin_fmaf(a, b, -c);
+    return std::fma(a, b, -c);
 #else
     return a * b - c;
 #endif /* defined(STDROMANO_HAS_FMA_INTRINSICS) */
@@ -593,7 +593,7 @@ STDROMANO_FORCE_INLINE double fms(double a, double b, double c) noexcept
 #if defined(STDROMANO_HAS_FMA_INTRINSICS)
     return _mm_cvtsd_f64(_mm_fmsub_sd(_mm_set_sd(a), _mm_set_sd(b), _mm_set_sd(c)));
 #elif defined(STDROMANO_AARCH64)
-    return __builtin_fma(a, b, -c);
+    return std::fma(a, b, -c);
 #else
     return a * b - c;
 #endif /* defined(STDROMANO_HAS_FMA_INTRINSICS) */
@@ -609,7 +609,7 @@ STDROMANO_FORCE_INLINE float nfma(float a, float b, float c) noexcept
 #if defined(STDROMANO_HAS_FMA_INTRINSICS)
     return _mm_cvtss_f32(_mm_fnmadd_ss(_mm_set_ss(a), _mm_set_ss(b), _mm_set_ss(c)));
 #elif defined(STDROMANO_AARCH64)
-    return __builtin_fmaf(-a, b, c);
+    return std::fma(-a, b, c);
 #else
     return -a * b + c;
 #endif /* defined(STDROMANO_HAS_FMA_INTRINSICS) */
@@ -621,7 +621,7 @@ STDROMANO_FORCE_INLINE double nfma(double a, double b, double c) noexcept
 #if defined(STDROMANO_HAS_FMA_INTRINSICS)
     return _mm_cvtsd_f64(_mm_fnmadd_sd(_mm_set_sd(a), _mm_set_sd(b), _mm_set_sd(c)));
 #elif defined(STDROMANO_AARCH64)
-    return __builtin_fma(-a, b, c);
+    return std::fma(-a, b, c);
 #else
     return -a * b + c;
 #endif /* defined(STDROMANO_HAS_FMA_INTRINSICS) */
@@ -637,7 +637,7 @@ STDROMANO_FORCE_INLINE float nfms(float a, float b, float c) noexcept
 #if defined(STDROMANO_HAS_FMA_INTRINSICS)
     return _mm_cvtss_f32(_mm_fnmsub_ss(_mm_set_ss(a), _mm_set_ss(b), _mm_set_ss(c)));
 #elif defined(STDROMANO_AARCH64)
-    return -__builtin_fmaf(a, b, c);
+    return -std::fma(a, b, c);
 #else
     return -a * b - c;
 #endif /* defined(STDROMANO_HAS_FMA_INTRINSICS) */
@@ -649,7 +649,7 @@ STDROMANO_FORCE_INLINE double nfms(double a, double b, double c) noexcept
 #if defined(STDROMANO_HAS_FMA_INTRINSICS)
     return _mm_cvtsd_f64(_mm_fnmsub_sd(_mm_set_sd(a), _mm_set_sd(b), _mm_set_sd(c)));
 #elif defined(STDROMANO_AARCH64)
-    return -__builtin_fma(a, b, c);
+    return -std::fma(a, b, c);
 #else
     return -a * b - c;
 #endif /* defined(STDROMANO_HAS_FMA_INTRINSICS) */

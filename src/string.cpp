@@ -5,14 +5,8 @@
 #include "stdromano/string.hpp"
 #include "stdromano/simd.hpp"
 
-/*
-    The hand written strcmp kernels are nasm/masm x86-64, and are only assembled on windows
-    and linux (the object format and the symbol decoration differ everywhere else).
-    STDROMANO_ASM_STRCMP must be kept in sync with src/CMakeLists.txt.
-*/
-#if defined(STDROMANO_X86_64) && (defined(STDROMANO_WIN) || defined(STDROMANO_LINUX))
-#define STDROMANO_ASM_STRCMP
-
+/* STDROMANO_ASM_STRCMP is defined by src/CMakeLists.txt when the asm kernels are assembled */
+#if defined(STDROMANO_ASM_STRCMP)
 extern "C" bool asm__detail_strcmp_cs(const char* lhs,
                                       const char* rhs,
                                       std::size_t length) noexcept;
@@ -24,8 +18,7 @@ extern "C" bool asm__detail_strcmp_sse_cs(const char* lhs,
 extern "C" bool asm__detail_strcmp_avx_cs(const char* lhs,
                                           const char* rhs,
                                           size_t length) noexcept;
-
-#endif /* defined(STDROMANO_X86_64) && (defined(STDROMANO_WIN) || defined(STDROMANO_LINUX)) */
+#endif /* defined(STDROMANO_ASM_STRCMP) */
 
 STDROMANO_NAMESPACE_BEGIN
 
@@ -797,14 +790,15 @@ bool case_sensitive_less(char lhs, char rhs) noexcept
 
 int strcmp(const StringD& lhs, const StringD& rhs, bool case_sensitive) noexcept
 {
-    bool ret = std::lexicographical_compare(lhs.begin(),
-                                            lhs.end(),
-                                            rhs.begin(),
-                                            rhs.end(),
-                                            case_sensitive ? case_sensitive_less :
-                                                             case_insensitive_less);
+    const auto less = case_sensitive ? case_sensitive_less : case_insensitive_less;
 
-    return ret ? -1 : 1;
+    if(std::lexicographical_compare(lhs.begin(), lhs.end(), rhs.begin(), rhs.end(), less))
+        return -1;
+
+    if(std::lexicographical_compare(rhs.begin(), rhs.end(), lhs.begin(), lhs.end(), less))
+        return 1;
+
+    return 0;
 }
 
 STDROMANO_NAMESPACE_END

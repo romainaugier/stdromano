@@ -2,46 +2,102 @@
 // Copyright (c) 2025 - Present Romain Augier
 // All rights reserved.
 
-#include "stdromano/python.hpp"
 #include "stdromano/filesystem.hpp"
+#include "stdromano/python.hpp"
 
-#define STDROMANO_ENABLE_PROFILING
-#include "stdromano/profiling.hpp"
+#include "fixtures.hpp"
 
-#include "spdlog/sinks/stdout_color_sinks.h"
+#include <string>
 
-int main()
+using namespace stdromano;
+
+static std::size_t count_nodes(Python::AST& ast)
 {
-    auto console_sink = std::make_shared<spdlog::sinks::stdout_color_sink_mt>();
-    console_sink->set_pattern("[%H:%M:%S.%e] [%^%l%$] [%n] %v");
+    std::size_t count = 0;
 
-    auto logger = std::make_shared<spdlog::logger>("python", console_sink);
-    logger->set_level(spdlog::level::trace);
-
-    spdlog::info("Starting Python test");
-
-    stdromano::Python::AST ast(logger);
-
-    const stdromano::StringD source_code_path("{}/python/test_all.py", TESTS_DATA_DIR);
-
-    if(!stdromano::fs::path_exists(source_code_path))
-    {
-        spdlog::warn("Source code file does not exist, discarding test");
-        return 0;
-    }
-
-    const stdromano::StringD source_code = stdromano::fs::load_file_content(source_code_path).value_or([&](const stdromano::Error& err) {
-        spdlog::error("Error caught while loading file content: {}", err.message);
-        std::exit(1);
+    Python::visit(ast.root(), [&](Python::Node*, std::uint32_t) {
+        ++count;
+        return true;
     });
 
-    if(!ast.from_text(source_code, true))
-    {
-        spdlog::error("Cannot parse source code");
-        return 1;
-    }
-
-    spdlog::info("Finished Python test");
-
-    return 0;
+    return count;
 }
+
+static bool parses(const char* source)
+{
+    Python::AST ast;
+    return ast.from_text(StringD(source)) && ast.root() != nullptr;
+}
+
+STDROMANO_TEST_CASE(parses_statements)
+{
+    const char* sources[] = {
+        "x = 1\n",
+        "x = 1 + 2 * 3 - (4 / 5)\n",
+        "a, b = b, a\n",
+        "if x:\n    y = 1\nelif z:\n    y = 2\nelse:\n    y = 3\n",
+        "while i < 10:\n    i += 1\n",
+        "for item in items:\n    print(item)\n",
+        "def add(a, b=2):\n    return a + b\n",
+        "class Point:\n    def __init__(self, x):\n        self.x = x\n",
+        "values = [1, 2, 3]\nmapping = {'a': 1}\n",
+        "import os\nfrom sys import path\n",
+        "result = obj.method(1, key=2)[0]\n",
+    };
+
+    for(const char* source : sources)
+        STDROMANO_CHECK_MSG(parses(source), source);
+}
+
+STDROMANO_TEST_CASE(tree_has_nodes)
+{
+    Python::AST ast;
+
+    STDROMANO_REQUIRE(ast.from_text(StringD("def f(x):\n    return x * 2\n\ny = f(3)\n")));
+    STDROMANO_REQUIRE(ast.root() != nullptr);
+    STDROMANO_CHECK_GT(count_nodes(ast), 4u);
+}
+
+STDROMANO_TEST_CASE(data_file_when_present)
+{
+    const StringD path(TESTS_DATA_DIR "/python/test_all.py");
+
+    if(!fs::path_exists(path))
+        return;
+
+    const auto source = fs::load_file_content(path);
+    STDROMANO_REQUIRE(source.has_value());
+
+    Python::AST ast;
+    STDROMANO_CHECK(ast.from_text(source.value()));
+}
+
+STDROMANO_TEST_CASE(fuzz_arbitrary_source_does_not_crash)
+{
+    fixtures::QuietLogs quiet;
+
+    auto options = fixtures::options("python_arbitrary_source", 2000);
+    options.max_input_size = 160;
+    options.dictionary.tokens = {"def ", "class ", "if ", "elif ", "else:", "while ", "for ", " in ", "return ",
+                                 "import ", "from ", "lambda ", ":", "\n", "    ", "(", ")", "[", "]", "{",
+                                 "}", ",", "=", "+=", "**", "'", "\"", "\"\"\"", "#", "\\", "1.5e3", "x"};
+    options.corpus = {{'x', ' ', '=', ' ', '1', '\n'},
+                      {'d', 'e', 'f', ' ', 'f', '(', ')', ':', '\n', ' ', ' ', ' ', ' ', 'p', 'a', 's', 's', '\n'}};
+
+    const auto report = fuzz::run_input(options, [](const std::uint8_t* data, std::size_t size) {
+        std::string source(reinterpret_cast<const char*>(data), size);
+
+        for(char& c : source)
+            if(c == '\0')
+                c = ' ';
+
+        Python::AST ast;
+        (void)ast.from_text(StringD::make_from_c_str(source.c_str(), source.size()));
+
+        return true;
+    });
+
+    TESTS_REQUIRE_PROPERTY(report);
+}
+
+STDROMANO_TEST_MAIN()

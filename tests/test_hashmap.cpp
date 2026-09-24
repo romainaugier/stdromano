@@ -2,19 +2,17 @@
 // Copyright (c) 2025 - Present Romain Augier
 // All rights reserved.
 
-#include "stdromano/fuzz.hpp"
 #include "stdromano/hashmap.hpp"
 
-#define STDROMANO_ENABLE_PROFILING
-#include "stdromano/profiling.hpp"
-
-#include "test.hpp"
+#include "fixtures.hpp"
 
 #include <numeric>
 #include <random>
 #include <string>
 #include <unordered_map>
 #include <vector>
+
+using namespace stdromano;
 
 struct ComplexKey
 {
@@ -23,472 +21,491 @@ struct ComplexKey
 
     bool operator==(const ComplexKey& other) const
     {
-        return id == other.id && name == other.name;
+        return this->id == other.id && this->name == other.name;
     }
 };
 
 struct ComplexKeyHash
 {
-    size_t operator()(const ComplexKey& key) const
+    std::size_t operator()(const ComplexKey& key) const
     {
         return std::hash<int>()(key.id) ^ std::hash<std::string>()(key.name);
     }
 };
 
-TEST_CASE(test_basic_operations)
+struct CollisionHash
 {
-    stdromano::HashMap<int, std::string> my_map;
+    std::size_t operator()(int) const
+    {
+        return 1;
+    }
+};
 
-    ASSERT_EQUAL(0u, my_map.size());
-    ASSERT(my_map.empty());
-
-    my_map.insert(std::pair<int, std::string>(1, "one"));
-    ASSERT_EQUAL(1u, my_map.size());
-    ASSERT(!my_map.empty());
-
-    auto it = my_map.find(1);
-    ASSERT(it != my_map.end());
-    ASSERT_EQUAL("one", it->second);
-
-    ASSERT(my_map.find(2) == my_map.end());
-
-    my_map.erase(1);
-    ASSERT_EQUAL(0u, my_map.size());
-    ASSERT(my_map.empty());
+static int stress_size()
+{
+    return fixtures::is_debug_build() ? 10000 : 1000000;
 }
 
-TEST_CASE(test_operator_bracket)
+static std::vector<std::int64_t> shuffled_range(const std::size_t count, std::mt19937& rng)
 {
-    stdromano::HashMap<std::string, int> map;
+    std::vector<std::int64_t> values(count);
+    std::iota(values.begin(), values.end(), 0);
+    std::shuffle(values.begin(), values.end(), rng);
+    return values;
+}
+
+template <typename K, typename V, typename H, typename R>
+static bool matches_reference(const HashMap<K, V, H>& map, const R& reference)
+{
+    if(map.size() != reference.size())
+        return false;
+
+    for(const auto& entry : reference)
+    {
+        const auto it = map.find(entry.first);
+
+        if(it == map.cend() || !(it->second == entry.second))
+            return false;
+    }
+
+    std::size_t iterated = 0;
+
+    for(auto it = map.cbegin(); it != map.cend(); ++it)
+    {
+        const auto ref = reference.find(it->first);
+
+        if(ref == reference.end() || !(ref->second == it->second))
+            return false;
+
+        ++iterated;
+    }
+
+    return iterated == reference.size();
+}
+
+STDROMANO_TEST_CASE(basic_operations)
+{
+    HashMap<int, std::string> map;
+
+    STDROMANO_CHECK_EQ(map.size(), 0u);
+    STDROMANO_CHECK(map.empty());
+
+    map.insert(std::pair<int, std::string>(1, "one"));
+    STDROMANO_CHECK_EQ(map.size(), 1u);
+    STDROMANO_CHECK(!map.empty());
+
+    auto it = map.find(1);
+    STDROMANO_REQUIRE(it != map.end());
+    STDROMANO_CHECK_EQ(it->second, "one");
+    STDROMANO_CHECK(map.find(2) == map.end());
+
+    map.insert(std::pair<int, std::string>(1, "uno"));
+    STDROMANO_CHECK_EQ(map.size(), 1u);
+    STDROMANO_CHECK_EQ(map.find(1)->second, "one");
+
+    map.erase(1);
+    STDROMANO_CHECK_EQ(map.size(), 0u);
+    STDROMANO_CHECK(map.empty());
+}
+
+STDROMANO_TEST_CASE(operator_bracket)
+{
+    HashMap<std::string, int> map;
 
     map["test"] = 42;
-    ASSERT_EQUAL(1u, map.size());
-    ASSERT_EQUAL(42, map["test"]);
+    STDROMANO_CHECK_EQ(map.size(), 1u);
+    STDROMANO_CHECK_EQ(map["test"], 42);
 
     map["test"] = 24;
-    ASSERT_EQUAL(1u, map.size());
-    ASSERT_EQUAL(24, map["test"]);
+    STDROMANO_CHECK_EQ(map.size(), 1u);
+    STDROMANO_CHECK_EQ(map["test"], 24);
 
     int& value = map["new"];
-    ASSERT_EQUAL(2u, map.size());
+    STDROMANO_CHECK_EQ(map.size(), 2u);
+    STDROMANO_CHECK_EQ(value, 0);
     value = 100;
-    ASSERT_EQUAL(100, map["new"]);
+    STDROMANO_CHECK_EQ(map["new"], 100);
 }
 
-TEST_CASE(test_complex_key)
+STDROMANO_TEST_CASE(complex_key)
 {
-    stdromano::HashMap<ComplexKey, double, ComplexKeyHash> map;
+    HashMap<ComplexKey, double, ComplexKeyHash> map;
 
-    ComplexKey key1{1, "one"};
-    ComplexKey key2{2, "two"};
+    const ComplexKey key1{1, "one"};
+    const ComplexKey key2{2, "two"};
 
     map.insert(std::pair<ComplexKey, double>(key1, 1.1));
     map.insert(std::pair<ComplexKey, double>(key2, 2.2));
 
-    ASSERT_EQUAL(2u, map.size());
-    ASSERT_EQUAL(1.1, map.find(key1)->second);
-    ASSERT_EQUAL(2.2, map.find(key2)->second);
+    STDROMANO_REQUIRE_EQ(map.size(), 2u);
+    STDROMANO_CHECK_EQ(map.find(key1)->second, 1.1);
+    STDROMANO_CHECK_EQ(map.find(key2)->second, 2.2);
+    STDROMANO_CHECK(!map.contains(ComplexKey{1, "two"}));
 }
 
-TEST_CASE(test_iterator)
+STDROMANO_TEST_CASE(iterators_visit_every_entry_once)
 {
-    stdromano::HashMap<int, int> map;
-    const int TEST_SIZE = 10;
+    HashMap<int, int> map;
 
-    for(int i = 0; i < TEST_SIZE; ++i)
+    for(int i = 0; i < 10; ++i)
         map.insert(std::pair<int, int>(i, i * i));
 
-    size_t count = 0;
+    std::vector<int> seen(10, 0);
 
     for(auto it = map.begin(); it != map.end(); ++it)
     {
-        ASSERT_EQUAL(it->first * it->first, it->second);
-        ++count;
+        STDROMANO_CHECK_EQ(it->second, it->first * it->first);
+        seen[it->first]++;
     }
 
-    ASSERT_EQUAL(TEST_SIZE, count);
-
-    const stdromano::HashMap<int, int>& const_map = map;
-
-    count = 0;
+    const HashMap<int, int>& const_map = map;
 
     for(auto it = const_map.cbegin(); it != const_map.cend(); ++it)
-    {
-        ASSERT_EQUAL(it->first * it->first, it->second);
-        ++count;
-    }
+        seen[it->first]++;
 
-    ASSERT_EQUAL(TEST_SIZE, count);
+    for(const int count : seen)
+        STDROMANO_CHECK_EQ(count, 2);
+
+    HashMap<int, int> empty;
+    STDROMANO_CHECK(empty.begin() == empty.end());
 }
 
-TEST_CASE(test_load_factor_and_rehashing)
+STDROMANO_TEST_CASE(load_factor_stays_bounded)
 {
-    stdromano::HashMap<int, int> map(2);
+    HashMap<int, int> map(2);
 
     for(int i = 0; i < 100; ++i)
     {
         map.insert(std::pair<int, int>(i, i));
-        ASSERT(map.load_factor() <= 1.0f);
+        STDROMANO_REQUIRE_LE(map.load_factor(), 1.0f);
     }
 
     for(int i = 0; i < 100; ++i)
     {
-        auto it = map.find(i);
-        ASSERT(it != map.end());
-        ASSERT_EQUAL(i, it->second);
+        const auto it = map.find(i);
+        STDROMANO_REQUIRE(it != map.end());
+        STDROMANO_CHECK_EQ(it->second, i);
     }
 }
 
-TEST_CASE(test_collisions)
+STDROMANO_TEST_CASE(collisions)
 {
-    struct CollisionHash
-    {
-        size_t operator()(int) const
-        {
-            return 1;
-        }
-    };
-
-    stdromano::HashMap<int, std::string, CollisionHash> map;
+    HashMap<int, std::string, CollisionHash> map;
 
     map.insert(std::pair<int, std::string>(1, "one"));
     map.insert(std::pair<int, std::string>(2, "two"));
     map.insert(std::pair<int, std::string>(3, "three"));
 
-    ASSERT_EQUAL(3u, map.size());
-    ASSERT_EQUAL("one", map.find(1)->second);
-    ASSERT_EQUAL("two", map.find(2)->second);
-    ASSERT_EQUAL("three", map.find(3)->second);
+    STDROMANO_REQUIRE_EQ(map.size(), 3u);
+    STDROMANO_CHECK_EQ(map.find(1)->second, "one");
+    STDROMANO_CHECK_EQ(map.find(2)->second, "two");
+    STDROMANO_CHECK_EQ(map.find(3)->second, "three");
+
+    map.erase(2);
+    STDROMANO_CHECK(!map.contains(2));
+    STDROMANO_CHECK_EQ(map.find(3)->second, "three");
 }
 
-TEST_CASE(test_clear_and_reserve)
+STDROMANO_TEST_CASE(clear_keeps_the_capacity)
 {
-    stdromano::HashMap<int, int> map;
+    HashMap<int, int> map;
 
     map.reserve(100);
-    size_t capacity = map.capacity();
-    ASSERT(capacity >= 100);
+    const std::size_t capacity = map.capacity();
+    STDROMANO_CHECK_GE(capacity, 100u);
 
     for(int i = 0; i < 50; ++i)
         map.insert(std::pair<int, int>(i, i));
 
     map.clear();
-    ASSERT_EQUAL(0u, map.size());
-    ASSERT(map.empty());
-    ASSERT_EQUAL(capacity, map.capacity());
+    STDROMANO_CHECK_EQ(map.size(), 0u);
+    STDROMANO_CHECK(map.empty());
+    STDROMANO_CHECK_EQ(map.capacity(), capacity);
+    STDROMANO_CHECK(!map.contains(10));
 }
 
-TEST_CASE(test_edge_cases)
+STDROMANO_TEST_CASE(edge_cases)
 {
-    stdromano::HashMap<std::string, int> map;
+    HashMap<std::string, int> map;
 
     map.insert(std::pair<std::string, int>("", 0));
-    ASSERT_EQUAL(0, map[""]);
+    STDROMANO_CHECK_EQ(map[""], 0);
 
     map.insert(std::pair<std::string, int>("test", 1));
-
     map["test"] = 2;
+    STDROMANO_CHECK_EQ(map["test"], 2);
 
-    ASSERT_EQUAL(2, map["test"]);
-
-    size_t size_before = map.size();
+    const std::size_t size = map.size();
     map.erase("non-existent");
-    ASSERT_EQUAL(size_before, map.size());
-
-    ASSERT(map.find("non-existent") == map.end());
+    STDROMANO_CHECK_EQ(map.size(), size);
+    STDROMANO_CHECK(map.find("non-existent") == map.end());
 }
 
-static std::random_device rd;
-static std::mt19937 generator(rd());
-
-std::vector<std::int64_t> get_random_shuffle_range_ints(std::size_t nb_ints)
+STDROMANO_TEST_CASE(initializer_list)
 {
-    std::vector<std::int64_t> random_shuffle_ints(nb_ints);
-    std::iota(random_shuffle_ints.begin(), random_shuffle_ints.end(), 0);
-    std::shuffle(random_shuffle_ints.begin(), random_shuffle_ints.end(), generator);
-
-    return random_shuffle_ints;
-}
-
-TEST_CASE(test_stress)
-{
-    stdromano::HashMap<int64_t, int64_t> map;
-
-#if defined(DEBUG_BUILD)
-    const int TEST_SIZE = 10000;
-#else
-    const int TEST_SIZE = 1000000;
-#endif // DEBUG_BUILD
-
-    std::vector<std::int64_t> keys = get_random_shuffle_range_ints(TEST_SIZE);
-
-    SCOPED_PROFILE_START(stdromano::ProfileUnit::MilliSeconds, map_insert);
-
-    for(int i = 0; i < TEST_SIZE; ++i)
-    {
-        map.insert(std::pair<int64_t, int64_t>(keys[i], 1));
-    }
-
-    SCOPED_PROFILE_STOP(map_insert);
-
-    float load_factor = map.load_factor();
-    ASSERT(load_factor > 0.0f && load_factor <= 1.0f);
-
-    size_t count = 0;
-
-    SCOPED_PROFILE_START(stdromano::ProfileUnit::MilliSeconds, map_iterate);
-
-    for(auto it = map.begin(); it != map.end(); ++it)
-        ++count;
-
-    SCOPED_PROFILE_STOP(map_iterate);
-
-    ASSERT_EQUAL(count, map.size());
-
-    std::shuffle(keys.begin(), keys.end(), generator);
-
-    SCOPED_PROFILE_START(stdromano::ProfileUnit::MilliSeconds, map_erase);
-
-    for(int i = 0; i < TEST_SIZE / 2; i++)
-        map.erase(keys[i]);
-
-    SCOPED_PROFILE_STOP(map_erase);
-
-    std::shuffle(keys.begin(), keys.end(), generator);
-
-    size_t num_found = 0;
-
-    SCOPED_PROFILE_START(stdromano::ProfileUnit::MilliSeconds, map_find);
-
-    for(int i = 0; i < TEST_SIZE; ++i)
-        if(map.find(keys[i]) != map.end())
-            num_found++;
-
-    SCOPED_PROFILE_STOP(map_find);
-
-    ASSERT_EQUAL(num_found, TEST_SIZE / 2);
-}
-
-TEST_CASE(test_stress_emplace_vs_find_existing)
-{
-    stdromano::HashMap<int64_t, std::string> map;
-
-#if defined(DEBUG_BUILD)
-    const int TEST_SIZE = 10000;
-#else
-    const int TEST_SIZE = 1000000;
-#endif // DEBUG_BUILD
-
-    std::vector<std::int64_t> keys = get_random_shuffle_range_ints(TEST_SIZE);
-
-    for(int i = 0; i < TEST_SIZE; ++i)
-        map.insert(std::pair<int64_t, std::string>(keys[i], std::string(1000, 'a')));
-
-    SCOPED_PROFILE_START(stdromano::ProfileUnit::MilliSeconds, find_time);
-    for(int i = 0; i < TEST_SIZE; ++i)
-    {
-        auto it = map.find(keys[i]);
-        ASSERT(it != map.end());
-    }
-    SCOPED_PROFILE_STOP(find_time);
-}
-
-TEST_CASE(test_initializer_list)
-{
-    stdromano::HashMap<std::int64_t, std::string> map = {
-        { 0, "zero" },
-        { 1, "one" },
-        { 2, "two" },
-        { 3, "three" },
+    const HashMap<std::int64_t, std::string> map = {
+        {0, "zero"},
+        {1, "one"},
+        {2, "two"},
+        {3, "three"},
     };
 
-    ASSERT(map.contains(0));
-    ASSERT(map.contains(1));
-    ASSERT(map.contains(2));
-    ASSERT(map.contains(3));
-    ASSERT(!map.contains(6));
+    STDROMANO_CHECK_EQ(map.size(), 4u);
+
+    for(std::int64_t key = 0; key < 4; ++key)
+        STDROMANO_CHECK(map.contains(key));
+
+    STDROMANO_CHECK(!map.contains(6));
 }
 
-TEST_CASE(test_operator_bracket_assignment_after_displacement)
+STDROMANO_TEST_CASE(copy_and_move)
+{
+    HashMap<std::string, int> map;
+
+    for(int i = 0; i < 200; ++i)
+        map[std::to_string(i)] = i;
+
+    HashMap<std::string, int> copy(map);
+    STDROMANO_CHECK_EQ(copy.size(), map.size());
+    copy["0"] = -1;
+    STDROMANO_CHECK_EQ(map["0"], 0);
+
+    HashMap<std::string, int> moved(std::move(copy));
+    STDROMANO_CHECK_EQ(moved.size(), 200u);
+    STDROMANO_CHECK_EQ(moved["0"], -1);
+
+    HashMap<std::string, int> assigned;
+    assigned["x"] = 1;
+    assigned = map;
+    STDROMANO_CHECK_EQ(assigned.size(), 200u);
+    STDROMANO_CHECK(!assigned.contains("x"));
+
+    HashMap<std::string, int> move_assigned;
+    move_assigned = std::move(assigned);
+    STDROMANO_CHECK_EQ(move_assigned.size(), 200u);
+    STDROMANO_CHECK_EQ(move_assigned["199"], 199);
+}
+
+STDROMANO_TEST_CASE(moved_from_map_is_reusable)
+{
+    HashMap<int, int> map;
+
+    for(int i = 0; i < 64; ++i)
+        map[i] = i;
+
+    HashMap<int, int> other(std::move(map));
+
+    STDROMANO_CHECK_EQ(map.size(), 0u);
+    STDROMANO_CHECK(!map.contains(3));
+
+    for(int i = 0; i < 64; ++i)
+        map[i] = -i;
+
+    STDROMANO_CHECK_EQ(map.size(), 64u);
+    STDROMANO_CHECK_EQ(map[10], -10);
+    STDROMANO_CHECK_EQ(other[10], 10);
+}
+
+STDROMANO_TEST_CASE(emplace_returns_the_inserted_element)
 {
     for(int trial = 0; trial < 200; ++trial)
     {
-        stdromano::HashMap<int, int> map;
+        HashMap<int, int> map;
 
         for(int i = 0; i < 256; ++i)
         {
+            const auto result = map.emplace(i, i + 1000);
+
+            STDROMANO_REQUIRE(result.second);
+            STDROMANO_REQUIRE_EQ(result.first->first, i);
+            STDROMANO_REQUIRE_EQ(result.first->second, i + 1000);
+        }
+
+        const auto again = map.emplace(7, 0);
+        STDROMANO_CHECK(!again.second);
+        STDROMANO_CHECK_EQ(again.first->second, 1007);
+    }
+}
+
+STDROMANO_TEST_CASE(operator_bracket_after_displacement)
+{
+    for(int trial = 0; trial < 200; ++trial)
+    {
+        HashMap<int, int> map;
+
+        for(int i = 0; i < 256; ++i)
             map[i] = i * 7 + 1;
-        }
 
-        ASSERT_EQUAL(256u, map.size());
+        STDROMANO_REQUIRE_EQ(map.size(), 256u);
 
         for(int i = 0; i < 256; ++i)
         {
-            auto it = map.find(i);
-            ASSERT(it != map.end());
-            ASSERT_EQUAL(i * 7 + 1, it->second);
+            const auto it = map.find(i);
+            STDROMANO_REQUIRE(it != map.end());
+            STDROMANO_REQUIRE_EQ(it->second, i * 7 + 1);
         }
     }
 }
 
-TEST_CASE(test_emplace_returns_inserted_element)
+STDROMANO_TEST_CASE(stress)
 {
-    for(int trial = 0; trial < 200; ++trial)
-    {
-        stdromano::HashMap<int, int> map;
+    std::mt19937 rng(0x5EED);
 
-        for(int i = 0; i < 256; ++i)
-        {
-            auto result = map.emplace(i, i + 1000);
+    const int count = stress_size();
+    std::vector<std::int64_t> keys = shuffled_range(count, rng);
 
-            ASSERT(result.second);
-            ASSERT_EQUAL(i, result.first->first);
-            ASSERT_EQUAL(i + 1000, result.first->second);
-        }
-    }
+    HashMap<std::int64_t, std::int64_t> map;
+
+    for(const std::int64_t key : keys)
+        map.insert(std::pair<std::int64_t, std::int64_t>(key, key));
+
+    STDROMANO_REQUIRE_EQ(map.size(), static_cast<std::size_t>(count));
+
+    const float load_factor = map.load_factor();
+    STDROMANO_CHECK(load_factor > 0.0f && load_factor <= 1.0f);
+
+    std::size_t iterated = 0;
+
+    for(auto it = map.begin(); it != map.end(); ++it)
+        ++iterated;
+
+    STDROMANO_CHECK_EQ(iterated, map.size());
+
+    std::shuffle(keys.begin(), keys.end(), rng);
+
+    for(int i = 0; i < count / 2; ++i)
+        map.erase(keys[i]);
+
+    std::size_t found = 0;
+
+    for(const std::int64_t key : keys)
+        if(map.find(key) != map.end())
+            ++found;
+
+    STDROMANO_CHECK_EQ(found, static_cast<std::size_t>(count - count / 2));
+    STDROMANO_CHECK_EQ(map.size(), found);
 }
 
-TEST_CASE(test_randomized_against_unordered_map)
+STDROMANO_TEST_CASE(fuzz_int_keys_against_unordered_map)
 {
-    std::mt19937 rng(0xC0FFEE);
+    const auto report = fuzz::run_property(fixtures::options("hashmap_int_vs_unordered_map", 400), [](fuzz::Source& source) {
+        HashMap<int, int> map;
+        std::unordered_map<int, int> reference;
 
-    for(int trial = 0; trial < 50; ++trial)
-    {
-        stdromano::HashMap<stdromano::StringD, int> map;
-        std::unordered_map<std::string, int> reference;
+        const std::size_t steps = source.range<std::size_t>(1, 400);
+        const int key_space = source.pick({8, 96, 4096});
 
-        std::uniform_int_distribution<int> key_dist(0, 2000);
-        std::uniform_int_distribution<int> op_dist(0, 2);
-
-        for(int step = 0; step < 3000; ++step)
+        for(std::size_t i = 0; i < steps; ++i)
         {
-            const std::string key = "k" + std::to_string(key_dist(rng));
-            const stdromano::StringD skey = stdromano::StringD::make_from_c_str(key.c_str());
+            const int key = source.range<int>(0, key_space);
+            const int value = static_cast<int>(i) * 7 + 1;
 
-            switch(op_dist(rng))
+            switch(source.index(7))
             {
                 case 0:
-                    map[skey] = step;
-                    reference[key] = step;
+                    map[key] = value;
+                    reference[key] = value;
                     break;
                 case 1:
                 {
-                    auto result = map.emplace(skey.copy(), step);
-                    auto ref_result = reference.emplace(key, step);
-                    ASSERT_EQUAL(ref_result.second, result.second);
-                    ASSERT(result.first->first == skey);
-                    ASSERT_EQUAL(ref_result.first->second, result.first->second);
+                    const auto inserted = map.emplace(key, value);
+                    const auto expected = reference.emplace(key, value);
+
+                    STDROMANO_FUZZ_CHECK_EQ(inserted.second, expected.second);
+                    STDROMANO_FUZZ_CHECK_EQ(inserted.first->first, key);
+                    STDROMANO_FUZZ_CHECK_EQ(inserted.first->second, expected.first->second);
                     break;
                 }
-                default:
-                    map.erase(skey);
+                case 2:
+                    map.insert(std::pair<int, int>(key, value));
+                    reference.insert(std::pair<int, int>(key, value));
+                    break;
+                case 3:
+                    map.erase(key);
                     reference.erase(key);
                     break;
-            }
-        }
-
-        ASSERT_EQUAL(reference.size(), map.size());
-
-        for(const auto& entry : reference)
-        {
-            auto it = map.find(stdromano::StringD::make_from_c_str(entry.first.c_str()));
-            ASSERT(it != map.end());
-            ASSERT_EQUAL(entry.second, it->second);
-        }
-    }
-}
-
-TEST_CASE(test_fuzz_against_unordered_map)
-{
-    stdromano::fuzz::Options options;
-    options.name = "hashmap_vs_unordered_map";
-    options.iterations = 300;
-
-    const stdromano::fuzz::Report report =
-        stdromano::fuzz::run_property(options, [](stdromano::fuzz::Source& source) -> bool {
-            stdromano::HashMap<int, int> map;
-            std::unordered_map<int, int> reference;
-
-            const std::size_t steps = source.range<std::size_t>(1, 400);
-
-            for(std::size_t i = 0; i < steps; ++i)
-            {
-                // A small key space, so insertions displace each other often
-                const int key = source.range<int>(0, 96);
-                const int value = static_cast<int>(i) * 7 + 1;
-
-                switch(source.index(4))
+                case 4:
                 {
-                    case 0:
-                        map[key] = value;
-                        reference[key] = value;
-                        break;
-                    case 1:
-                    {
-                        const auto inserted = map.emplace(key, value);
-                        const auto expected = reference.emplace(key, value);
+                    const auto it = map.find(key);
+                    const bool found = it != map.end();
 
-                        STDROMANO_FUZZ_CHECK_EQ(inserted.second, expected.second);
-                        STDROMANO_FUZZ_CHECK_EQ(inserted.first->first, key);
-                        STDROMANO_FUZZ_CHECK_EQ(inserted.first->second, expected.first->second);
-                        break;
-                    }
-                    case 2:
-                        map.erase(key);
-                        reference.erase(key);
-                        break;
-                    default:
-                    {
-                        const auto it = map.find(key);
-                        const bool found = it != map.end();
+                    STDROMANO_FUZZ_CHECK_EQ(found, reference.count(key) == 1);
 
-                        STDROMANO_FUZZ_CHECK_EQ(found, reference.find(key) != reference.end());
-
-                        if(found)
-                            STDROMANO_FUZZ_CHECK_EQ(it->second, reference[key]);
-                        break;
-                    }
+                    if(found)
+                        STDROMANO_FUZZ_CHECK_EQ(it->second, reference[key]);
+                    break;
                 }
-
-                STDROMANO_FUZZ_CHECK_EQ(map.size(), reference.size());
+                case 5:
+                    if(source.one_in(4))
+                        map.reserve(source.range<std::size_t>(0, 2048));
+                    break;
+                default:
+                    if(source.one_in(20))
+                    {
+                        map.clear();
+                        reference.clear();
+                    }
+                    break;
             }
 
-            for(const auto& entry : reference)
-            {
-                const auto it = map.find(entry.first);
+            STDROMANO_FUZZ_CHECK_EQ(map.size(), reference.size());
+        }
 
-                STDROMANO_FUZZ_CHECK(it != map.end());
-                STDROMANO_FUZZ_CHECK_EQ(it->second, entry.second);
-            }
+        STDROMANO_FUZZ_CHECK(matches_reference(map, reference));
 
-            return true;
-        });
+        const HashMap<int, int> copy(map);
+        STDROMANO_FUZZ_CHECK(matches_reference(copy, reference));
 
-    STDROMANO_REQUIRE_MSG(report.passed(), report.describe());
+        return true;
+    });
+
+    TESTS_REQUIRE_PROPERTY(report);
 }
 
-int main()
+STDROMANO_TEST_CASE(fuzz_string_keys_with_collisions)
 {
-    TestRunner runner("hashmap");
+    struct WeakHash
+    {
+        std::size_t operator()(const std::string& key) const
+        {
+            return key.size() % 3;
+        }
+    };
 
-    runner.add_test("Basic Operations", test_basic_operations);
-    runner.add_test("Operator []", test_operator_bracket);
-    runner.add_test("Complex Key", test_complex_key);
-    runner.add_test("Iterator", test_iterator);
-    runner.add_test("Load Factor and Rehashing", test_load_factor_and_rehashing);
-    runner.add_test("Collisions", test_collisions);
-    runner.add_test("Clear and Reserve", test_clear_and_reserve);
-    runner.add_test("Edge Cases", test_edge_cases);
-    runner.add_test("Stress Test", test_stress);
-    runner.add_test("Stress Emplace vs Find Existing", test_stress_emplace_vs_find_existing);
-    runner.add_test("Test Initializer list construction", test_initializer_list);
-    runner.add_test("Operator [] assignment after displacement", test_operator_bracket_assignment_after_displacement);
-    runner.add_test("Emplace returns inserted element", test_emplace_returns_inserted_element);
-    runner.add_test("Randomized against std::unordered_map", test_randomized_against_unordered_map);
-    runner.add_test("Fuzzed against std::unordered_map", test_fuzz_against_unordered_map);
+    const auto report = fuzz::run_property(fixtures::options("hashmap_weak_hash", 200), [](fuzz::Source& source) {
+        HashMap<std::string, std::string, WeakHash> map;
+        std::unordered_map<std::string, std::string> reference;
 
-    if(runner.run_all() != 0)
-        return 1;
+        const std::size_t steps = source.range<std::size_t>(1, 120);
 
-    return 0;
+        for(std::size_t i = 0; i < steps; ++i)
+        {
+            const StringD raw = source.string(6, "abc");
+            const std::string key(raw.c_str(), raw.size());
+            const std::string value = std::to_string(i);
+
+            switch(source.index(3))
+            {
+                case 0:
+                    map[key] = value;
+                    reference[key] = value;
+                    break;
+                case 1:
+                    map.erase(key);
+                    reference.erase(key);
+                    break;
+                default:
+                    STDROMANO_FUZZ_CHECK_EQ(map.contains(key), reference.count(key) == 1);
+                    break;
+            }
+        }
+
+        STDROMANO_FUZZ_CHECK(matches_reference(map, reference));
+
+        return true;
+    });
+
+    TESTS_REQUIRE_PROPERTY(report);
 }
+
+STDROMANO_TEST_MAIN()

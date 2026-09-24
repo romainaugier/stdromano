@@ -5,6 +5,8 @@
 #include "stdromano/json.hpp"
 
 #include <cmath>
+#include <cstdint>
+#include <cstdlib>
 #include <cstring>
 #include <cstdio>
 #include <new>
@@ -54,16 +56,6 @@ STDROMANO_FORCE_INLINE uint32_t tag_get_sz(uint64_t tags) noexcept
     return static_cast<uint32_t>((tags >> 32) & 0xFFFFFFFFULL);
 }
 
-STDROMANO_FORCE_INLINE void tag_incr_sz(uint64_t& tags) noexcept
-{
-    tags += 1ULL << 32;
-}
-
-STDROMANO_FORCE_INLINE void tag_decr_sz(uint64_t& tags) noexcept
-{
-    tags -= 1ULL << 32;
-}
-
 STDROMANO_FORCE_INLINE void tag_set_invalid(uint64_t& tags) noexcept
 {
     tags |= JsonTag_Invalid;
@@ -93,6 +85,7 @@ struct JsonArrayInfo
 {
     JsonArrayElement* head;
     JsonArrayElement* tail;
+    std::size_t size;
 };
 
 struct JsonDictElement
@@ -105,6 +98,7 @@ struct JsonDictInfo
 {
     JsonDictElement* head;
     JsonDictElement* tail;
+    std::size_t size;
 };
 
 /****************************/
@@ -177,7 +171,7 @@ size_t JsonObject::array_size() const noexcept
     if(!(this->_tags & JsonTag_Array))
         return 0;
 
-    return static_cast<size_t>(tag_get_sz(this->_tags));
+    return static_cast<const JsonArrayInfo*>(this->_value.ptr)->size;
 }
 
 size_t JsonObject::dict_size() const noexcept
@@ -185,7 +179,7 @@ size_t JsonObject::dict_size() const noexcept
     if(!(this->_tags & JsonTag_Dict))
         return 0;
 
-    return static_cast<size_t>(tag_get_sz(this->_tags));
+    return static_cast<const JsonDictInfo*>(this->_value.ptr)->size;
 }
 
 JsonObject* JsonObject::dict_find(const char* key) const noexcept
@@ -200,9 +194,9 @@ JsonObject* JsonObject::dict_find(const char* key) const noexcept
 
     while(current != nullptr)
     {
-        const std::size_t current_key_sz = std::strlen(key);
+        const std::size_t current_key_sz = std::strlen(current->kv.key);
 
-        if(key_sz == current_key_sz && detail::strcmp(current->kv.key, key, key_sz) == 0)
+        if(key_sz == current_key_sz && std::memcmp(current->kv.key, key, key_sz) == 0)
             return current->kv.value;
 
         current = current->next;
@@ -365,6 +359,7 @@ JsonObject* Json::make_array() noexcept
 
     info->head = nullptr;
     info->tail = nullptr;
+    info->size = 0;
 
     tag_set_type(obj->_tags, JsonTag_Array);
     obj->_value.ptr = info;
@@ -379,6 +374,7 @@ JsonObject* Json::make_dict() noexcept
 
     info->head = nullptr;
     info->tail = nullptr;
+    info->size = 0;
 
     tag_set_type(obj->_tags, JsonTag_Dict);
     obj->_value.ptr = info;
@@ -465,17 +461,15 @@ void Json::array_append(JsonObject* array, JsonObject* value, bool reference) no
         element->value = value;
     }
 
-    tag_incr_sz(array->_tags);
+    info->size++;
 }
 
 void Json::array_pop(JsonObject* array, std::size_t index) noexcept
 {
-    const size_t sz = static_cast<size_t>(tag_get_sz(array->_tags));
-
-    if(index >= sz)
-        return;
-
     auto* info = static_cast<JsonArrayInfo*>(array->_value.ptr);
+
+    if(index >= info->size)
+        return;
 
     if(index == 0)
     {
@@ -484,7 +478,7 @@ void Json::array_pop(JsonObject* array, std::size_t index) noexcept
         if(info->head == nullptr)
             info->tail = nullptr;
 
-        tag_decr_sz(array->_tags);
+        info->size--;
         return;
     }
 
@@ -499,7 +493,7 @@ void Json::array_pop(JsonObject* array, std::size_t index) noexcept
     if(target == info->tail)
         info->tail = previous;
 
-    tag_decr_sz(array->_tags);
+    info->size--;
 }
 
 /******************************/
@@ -546,7 +540,7 @@ void Json::dict_append(JsonObject* dict,
 
     element->kv.key = new_key;
 
-    tag_incr_sz(dict->_tags);
+    info->size++;
 }
 
 void Json::dict_pop(JsonObject* dict, const char* key) noexcept
@@ -583,7 +577,7 @@ void Json::dict_pop(JsonObject* dict, const char* key) noexcept
             info->tail = previous;
     }
 
-    tag_decr_sz(dict->_tags);
+    info->size--;
 }
 
 /****************/
@@ -624,6 +618,67 @@ struct JsonParser_
     JsonObject* parse_literal() noexcept;
 };
 
+static int hex_value(const char c) noexcept
+{
+    if(c >= '0' && c <= '9')
+        return c - '0';
+
+    if(c >= 'a' && c <= 'f')
+        return c - 'a' + 10;
+
+    if(c >= 'A' && c <= 'F')
+        return c - 'A' + 10;
+
+    return -1;
+}
+
+static bool read_hex4(const char* p, std::uint32_t& out) noexcept
+{
+    out = 0;
+
+    for(int i = 0; i < 4; ++i)
+    {
+        const int v = hex_value(p[i]);
+
+        if(v < 0)
+            return false;
+
+        out = (out << 4) | static_cast<std::uint32_t>(v);
+    }
+
+    return true;
+}
+
+static std::size_t encode_utf8(std::uint32_t cp, char* out) noexcept
+{
+    if(cp < 0x80)
+    {
+        out[0] = static_cast<char>(cp);
+        return 1;
+    }
+
+    if(cp < 0x800)
+    {
+        out[0] = static_cast<char>(0xC0 | (cp >> 6));
+        out[1] = static_cast<char>(0x80 | (cp & 0x3F));
+        return 2;
+    }
+
+    if(cp < 0x10000)
+    {
+        out[0] = static_cast<char>(0xE0 | (cp >> 12));
+        out[1] = static_cast<char>(0x80 | ((cp >> 6) & 0x3F));
+        out[2] = static_cast<char>(0x80 | (cp & 0x3F));
+        return 3;
+    }
+
+    out[0] = static_cast<char>(0xF0 | (cp >> 18));
+    out[1] = static_cast<char>(0x80 | ((cp >> 12) & 0x3F));
+    out[2] = static_cast<char>(0x80 | ((cp >> 6) & 0x3F));
+    out[3] = static_cast<char>(0x80 | (cp & 0x3F));
+    return 4;
+}
+
 JsonObject* JsonParser_::parse_string() noexcept
 {
     if(pos >= len || str[pos] != '"')
@@ -632,7 +687,6 @@ JsonObject* JsonParser_::parse_string() noexcept
     pos++;
 
     const std::size_t start = pos;
-    std::size_t slen = 0;
     bool has_escape = false;
 
     while(pos < len)
@@ -640,10 +694,9 @@ JsonObject* JsonParser_::parse_string() noexcept
         const char c = str[pos];
 
         if(c == '"')
-        {
             break;
-        }
-        else if(c == '\\')
+
+        if(c == '\\')
         {
             has_escape = true;
             pos++;
@@ -653,10 +706,16 @@ JsonObject* JsonParser_::parse_string() noexcept
 
             if(str[pos] == 'u')
             {
-                pos += 4;
+                std::uint32_t unused;
 
-                if(pos >= len)
+                if(pos + 4 >= len || !read_hex4(str + pos + 1, unused))
                     return nullptr;
+
+                pos += 4;
+            }
+            else if(std::strchr("\"\\/bfnrt", str[pos]) == nullptr || str[pos] == '\0')
+            {
+                return nullptr;
             }
         }
         else if(static_cast<unsigned char>(c) < 0x20)
@@ -665,61 +724,78 @@ JsonObject* JsonParser_::parse_string() noexcept
         }
 
         pos++;
-        slen++;
     }
 
     if(pos >= len)
         return nullptr;
 
+    const std::size_t raw_len = pos - start;
+
     JsonObject* obj = json->_value_arena.emplace<JsonObject>();
-    char* s;
+    char* s = static_cast<char*>(json->_string_arena.allocate(raw_len + 1));
+    std::size_t slen = 0;
 
     if(!has_escape)
     {
-        s = static_cast<char*>(json->_string_arena.allocate(slen + 1));
-        std::memcpy(s, str + start, slen);
-        s[slen] = '\0';
+        std::memcpy(s, str + start, raw_len);
+        slen = raw_len;
     }
     else
     {
-        s = static_cast<char*>(json->_string_arena.allocate(slen + 1));
-        std::size_t j = 0;
-
         for(std::size_t i = start; i < pos; i++)
         {
-            if(str[i] == '\\')
+            if(str[i] != '\\')
             {
-                i++;
+                s[slen++] = str[i];
+                continue;
+            }
 
-                switch(str[i])
+            i++;
+
+            switch(str[i])
+            {
+                case '"':  s[slen++] = '"';  break;
+                case '\\': s[slen++] = '\\'; break;
+                case '/':  s[slen++] = '/';  break;
+                case 'b':  s[slen++] = '\b'; break;
+                case 'f':  s[slen++] = '\f'; break;
+                case 'n':  s[slen++] = '\n'; break;
+                case 'r':  s[slen++] = '\r'; break;
+                case 't':  s[slen++] = '\t'; break;
+                default:
                 {
-                    case '"':  s[j++] = '"';  break;
-                    case '\\': s[j++] = '\\'; break;
-                    case '/':  s[j++] = '/';  break;
-                    case 'b':  s[j++] = '\b'; break;
-                    case 'f':  s[j++] = '\f'; break;
-                    case 'n':  s[j++] = '\n'; break;
-                    case 'r':  s[j++] = '\r'; break;
-                    case 't':  s[j++] = '\t'; break;
-                    case 'u':
+                    std::uint32_t cp = 0;
+                    read_hex4(str + i + 1, cp);
+                    i += 4;
+
+                    if(cp >= 0xD800 && cp <= 0xDBFF)
                     {
-                        /* TODO: proper unicode handling */
-                        i += 4;
-                        s[j++] = '?';
-                        break;
+                        std::uint32_t low = 0;
+
+                        if(i + 6 < pos && str[i + 1] == '\\' && str[i + 2] == 'u' &&
+                           read_hex4(str + i + 3, low) && low >= 0xDC00 && low <= 0xDFFF)
+                        {
+                            cp = 0x10000 + ((cp - 0xD800) << 10) + (low - 0xDC00);
+                            i += 6;
+                        }
+                        else
+                        {
+                            cp = 0xFFFD;
+                        }
                     }
-                    default: s[j++] = str[i]; break;
+                    else if(cp >= 0xDC00 && cp <= 0xDFFF)
+                    {
+                        cp = 0xFFFD;
+                    }
+
+                    slen += encode_utf8(cp, s + slen);
+                    break;
                 }
             }
-            else
-            {
-                s[j++] = str[i];
-            }
         }
-
-        s[j] = '\0';
-        slen = j;
     }
+
+    s[slen] = '\0';
 
     pos++;
 
@@ -730,31 +806,14 @@ JsonObject* JsonParser_::parse_string() noexcept
     return obj;
 }
 
-static const double pow10_table[] = {
-    1e0, 1e1, 1e2, 1e3, 1e4, 1e5, 1e6, 1e7, 1e8, 1e9,
-    1e10, 1e11, 1e12, 1e13, 1e14, 1e15, 1e16, 1e17, 1e18, 1e19,
-    1e20, 1e21, 1e22
-};
-
-static const std::uint64_t pow10_int_table[] = {
-    1ULL, 10ULL, 100ULL, 1000ULL, 10000ULL, 100000ULL, 1000000ULL,
-    10000000ULL, 100000000ULL, 1000000000ULL, 10000000000ULL,
-    100000000000ULL, 1000000000000ULL, 10000000000000ULL,
-    100000000000000ULL, 1000000000000000ULL, 10000000000000000ULL,
-    100000000000000000ULL, 1000000000000000000ULL, 10000000000000000000ULL
-};
-
-static constexpr std::size_t POW10_TABLE_SIZE     = sizeof(pow10_table) / sizeof(pow10_table[0]);
-static constexpr std::size_t POW10_INT_TABLE_SIZE = sizeof(pow10_int_table) / sizeof(pow10_int_table[0]);
-
 JsonObject* JsonParser_::parse_number() noexcept
 {
+    const std::size_t start = pos;
+
     bool is_negative = false;
     bool is_float = false;
-    std::int64_t int_val = 0;
-    double float_val = 0.0;
-    int exponent = 0;
-    bool exp_negative = false;
+    bool overflow = false;
+    std::uint64_t magnitude = 0;
 
     if(pos < len && str[pos] == '-')
     {
@@ -767,8 +826,13 @@ JsonObject* JsonParser_::parse_number() noexcept
 
     while(pos < len && is_digit(str[pos]))
     {
-        int_val = int_val * 10 + (str[pos] - '0');
-        float_val = float_val * 10.0 + (str[pos] - '0');
+        const std::uint64_t digit = static_cast<std::uint64_t>(str[pos] - '0');
+
+        if(magnitude > (UINT64_MAX - digit) / 10)
+            overflow = true;
+        else
+            magnitude = magnitude * 10 + digit;
+
         pos++;
     }
 
@@ -780,24 +844,8 @@ JsonObject* JsonParser_::parse_number() noexcept
         if(pos >= len || !is_digit(str[pos]))
             return nullptr;
 
-        int frac_digits = 0;
-        std::uint64_t frac_int = 0;
-
-        while(pos < len && is_digit(str[pos])
-              && static_cast<std::size_t>(frac_digits) < POW10_INT_TABLE_SIZE)
-        {
-            frac_int = frac_int * 10 + (str[pos] - '0');
-            frac_digits++;
-            pos++;
-        }
-
         while(pos < len && is_digit(str[pos]))
             pos++;
-
-        if(frac_digits > 0 && static_cast<std::size_t>(frac_digits) < POW10_TABLE_SIZE)
-            float_val += static_cast<double>(frac_int) / pow10_table[frac_digits];
-        else if(frac_digits > 0)
-            float_val += static_cast<double>(frac_int) / std::pow(10.0, frac_digits);
     }
 
     if(pos < len && (str[pos] == 'e' || str[pos] == 'E'))
@@ -805,54 +853,45 @@ JsonObject* JsonParser_::parse_number() noexcept
         is_float = true;
         pos++;
 
-        if(pos < len && str[pos] == '-')
-        {
-            exp_negative = true;
+        if(pos < len && (str[pos] == '-' || str[pos] == '+'))
             pos++;
-        }
-        else if(pos < len && str[pos] == '+')
-        {
-            pos++;
-        }
 
         if(pos >= len || !is_digit(str[pos]))
             return nullptr;
 
         while(pos < len && is_digit(str[pos]))
-        {
-            exponent = exponent * 10 + (str[pos] - '0');
             pos++;
-        }
     }
 
-    if(is_float)
+    constexpr std::uint64_t min_i64_magnitude = static_cast<std::uint64_t>(INT64_MAX) + 1;
+
+    if(!is_float && !overflow)
     {
-        if(exp_negative)
-            exponent = -exponent;
+        if(!is_negative)
+            return json->make_u64(magnitude);
 
-        if(exponent >= -static_cast<int>(POW10_TABLE_SIZE)
-           && exponent < static_cast<int>(POW10_TABLE_SIZE))
-        {
-            if(exponent >= 0)
-                float_val *= pow10_table[exponent];
-            else
-                float_val /= pow10_table[-exponent];
-        }
-        else
-        {
-            float_val *= std::pow(10.0, exponent);
-        }
-
-        if(is_negative)
-            float_val = -float_val;
-
-        return json->make_f64(float_val);
+        if(magnitude <= min_i64_magnitude)
+            return json->make_i64(magnitude == min_i64_magnitude ? INT64_MIN : -static_cast<std::int64_t>(magnitude));
     }
 
-    if(is_negative)
-        return json->make_i64(-int_val);
+    const std::size_t number_len = pos - start;
 
-    return json->make_u64(static_cast<uint64_t>(int_val));
+    char stack_buffer[64];
+    char* buffer = number_len < sizeof(stack_buffer) ? stack_buffer
+                                                     : static_cast<char*>(std::malloc(number_len + 1));
+
+    if(buffer == nullptr)
+        return nullptr;
+
+    std::memcpy(buffer, str + start, number_len);
+    buffer[number_len] = '\0';
+
+    const double value = std::strtod(buffer, nullptr);
+
+    if(buffer != stack_buffer)
+        std::free(buffer);
+
+    return json->make_f64(value);
 }
 
 JsonObject* JsonParser_::parse_array() noexcept
@@ -1034,26 +1073,14 @@ struct JsonWriter_
     }
 
     bool write_value(const JsonObject* value) noexcept;
-    void write_str(const char* s) noexcept;
+    void write_str(const char* s, const std::size_t size) noexcept;
     bool write_array(const JsonObject* array) noexcept;
     bool write_dict(const JsonObject* dict) noexcept;
 };
 
 STDROMANO_FORCE_INLINE bool char_needs_escape(char c) noexcept
 {
-    switch(c)
-    {
-        case '"':
-        case '\\':
-        case '\b':
-        case '\f':
-        case '\n':
-        case '\r':
-        case '\t':
-            return true;
-        default:
-            return false;
-    }
+    return c == '"' || c == '\\' || static_cast<unsigned char>(c) < 0x20;
 }
 
 STDROMANO_FORCE_INLINE char escape_char(char c) noexcept
@@ -1071,22 +1098,33 @@ STDROMANO_FORCE_INLINE char escape_char(char c) noexcept
     }
 }
 
-void JsonWriter_::write_str(const char* s) noexcept
+void JsonWriter_::write_str(const char* s, const std::size_t size) noexcept
 {
     out->appendc("\"", 1);
 
     const char* seg_start = s;
     const char* p = s;
+    const char* end = s + size;
 
-    while(*p != '\0')
+    while(p < end)
     {
         if(char_needs_escape(*p))
         {
             if(p > seg_start)
                 out->appendc(seg_start, static_cast<size_t>(p - seg_start));
 
-            const char esc[2] = { '\\', escape_char(*p) };
-            out->appendc(esc, 2);
+            const char escaped = escape_char(*p);
+
+            if(escaped != *p || *p == '"' || *p == '\\')
+            {
+                const char esc[2] = {'\\', escaped};
+                out->appendc(esc, 2);
+            }
+            else
+            {
+                out->appendf("\\u{:04x}", static_cast<unsigned int>(static_cast<unsigned char>(*p)));
+            }
+
             seg_start = p + 1;
         }
 
@@ -1156,7 +1194,7 @@ bool JsonWriter_::write_dict(const JsonObject* dict) noexcept
             write_indent();
         }
 
-        write_str(key);
+        write_str(key, std::strlen(key));
         out->appendc(": ", 2);
 
         if(!write_value(value))
@@ -1202,11 +1240,28 @@ bool JsonWriter_::write_value(const JsonObject* value) noexcept
             return true;
 
         case JsonTag_F64:
-            out->appendf("{:.3f}", value->_value.f64);
+        {
+            const double f64 = value->_value.f64;
+
+            if(!std::isfinite(f64))
+            {
+                out->appendc("null", 4);
+                return true;
+            }
+
+            const std::size_t number_start = out->size();
+            out->appendf("{}", f64);
+
+            const char* written = out->c_str() + number_start;
+
+            if(std::strpbrk(written, ".eE") == nullptr)
+                out->appendc(".0", 2);
+
             return true;
+        }
 
         case JsonTag_Str:
-            write_str(value->_value.str);
+            write_str(value->_value.str, static_cast<std::size_t>(tag_get_sz(value->_tags)));
             return true;
 
         case JsonTag_Array:

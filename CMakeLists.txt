@@ -43,7 +43,7 @@ endif()
 message(STATUS "stdromano target architecture: ${STDROMANO_TARGET_ARCH}")
 
 # The hand written strcmp kernels are x86-64 nasm (elf64) and masm, they are only assembled
-# on windows and linux. Keep in sync with STDROMANO_ASM_STRCMP in src/string.cpp
+# on windows and linux, src/CMakeLists.txt defines STDROMANO_ASM_STRCMP when they are
 if(STDROMANO_ARCH_X86_64 AND (WIN32 OR (UNIX AND NOT APPLE AND NOT CMAKE_SYSTEM_NAME MATCHES "BSD")))
     set(STDROMANO_BUILD_ASM ON)
 endif()
@@ -102,6 +102,26 @@ if(UNIX AND NOT APPLE)
 endif()
 
 # mimalloc
+if(VCPKG_TARGET_TRIPLET)
+    set(STDROMANO_VCPKG_TRIPLET ${VCPKG_TARGET_TRIPLET})
+else()
+    if(STDROMANO_ARCH_AARCH64)
+        set(STDROMANO_VCPKG_ARCH arm64)
+    elseif(STDROMANO_ARCH_X86)
+        set(STDROMANO_VCPKG_ARCH x86)
+    else()
+        set(STDROMANO_VCPKG_ARCH x64)
+    endif()
+
+    if(WIN32)
+        set(STDROMANO_VCPKG_TRIPLET ${STDROMANO_VCPKG_ARCH}-windows)
+    elseif(APPLE)
+        set(STDROMANO_VCPKG_TRIPLET ${STDROMANO_VCPKG_ARCH}-osx)
+    else()
+        set(STDROMANO_VCPKG_TRIPLET ${STDROMANO_VCPKG_ARCH}-linux)
+    endif()
+endif()
+
 find_package(mimalloc CONFIG QUIET)
 
 if(mimalloc_FOUND)
@@ -121,8 +141,7 @@ else()
         ${CMAKE_INSTALL_PREFIX}/include
         /opt/homebrew/include
         /usr/local/include
-        $ENV{VCPKG_ROOT}/installed/x64-windows/include
-        $ENV{VCPKG_ROOT}/installed/arm64-osx/include
+        $ENV{VCPKG_ROOT}/installed/${STDROMANO_VCPKG_TRIPLET}/include
         PATH_SUFFIXES mimalloc mimalloc-2.1
     )
 
@@ -133,8 +152,7 @@ else()
         ${CMAKE_INSTALL_PREFIX}/lib
         /opt/homebrew/lib
         /usr/local/lib
-        $ENV{VCPKG_ROOT}/installed/x64-windows/lib
-        $ENV{VCPKG_ROOT}/installed/arm64-osx/lib
+        $ENV{VCPKG_ROOT}/installed/${STDROMANO_VCPKG_TRIPLET}/lib
     )
 
     if(MIMALLOC_INCLUDE_DIR AND MIMALLOC_LIBRARY)
@@ -244,7 +262,7 @@ if(ENABLE_OPENCL)
                 COMMAND vcpkg install
                 WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/vcpkg
             )
-            set(OpenCL_ROOT "${CMAKE_SOURCE_DIR}/vcpkg/packages/opencl_x64-windows")
+            set(OpenCL_ROOT "${CMAKE_SOURCE_DIR}/vcpkg/packages/opencl_${STDROMANO_VCPKG_TRIPLET}")
         else()
             set(OpenCL_ROOT "${CUDA_TOOLKIT_ROOT_DIR}")
         endif()

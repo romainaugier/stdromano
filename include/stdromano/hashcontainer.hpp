@@ -376,6 +376,15 @@ protected:
         return Iterator(this, this->_buckets.size());
     }
 
+    void reset_to_initial_capacity()
+    {
+        this->_buckets.clear();
+        this->_buckets.resize(INITIAL_CAPACITY);
+        this->_items_count = 0;
+        this->_max_probes = static_cast<std::int16_t>(std::log2(static_cast<float>(INITIAL_CAPACITY)));
+        this->update_grow_threshold();
+    }
+
     void grow(const std::size_t new_capacity, bool rehash)
     {
         std::vector<Bucket> old_buckets = std::move(this->_buckets);
@@ -564,8 +573,7 @@ protected:
                                                     _max_probes(other._max_probes),
                                                     _key_select(std::move(other._key_select))
     {
-        other._items_count = 0;
-        other._grow_threshold = 0;
+        other.reset_to_initial_capacity();
     }
 
     HashContainer& operator=(HashContainer&& other) noexcept
@@ -580,8 +588,7 @@ protected:
             this->_max_probes = other._max_probes;
             this->_key_select = std::move(other._key_select);
 
-            other._items_count = 0;
-            other._grow_threshold = 0;
+            other.reset_to_initial_capacity();
         }
 
         return *this;

@@ -215,9 +215,10 @@ struct Registrar
 STDROMANO_NAMESPACE_END
 
 #define STDROMANO_TEST_CASE(name)                                                                  \
-    static void name();                                                                            \
-    static const stdromano::test::Registrar CONCAT(stdromano_test_registrar_, name)(#name, name);  \
-    static void name()
+    static void CONCAT(stdromano_test_case_, name)();                                              \
+    static const stdromano::test::Registrar CONCAT(stdromano_test_registrar_,                      \
+                                                   name)(#name, CONCAT(stdromano_test_case_, name)); \
+    static void CONCAT(stdromano_test_case_, name)()
 
 #define STDROMANO_TEST_MAIN()                                                                      \
     int main(int argc, char** argv) { return stdromano::test::default_runner().run(argc, argv); }

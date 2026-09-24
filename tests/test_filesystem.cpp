@@ -3,82 +3,77 @@
 // All rights reserved.
 
 #include "stdromano/filesystem.hpp"
-#include "test.hpp"
 
-/* path_exists */
+#include "fixtures.hpp"
 
-TEST_CASE(test_path_exists_file)
+#include <cstring>
+#include <string>
+#include <vector>
+
+STDROMANO_TEST_CASE(path_exists_file)
 {
-    ASSERT_EQUAL(true, stdromano::fs::path_exists(__FILE__));
+    STDROMANO_CHECK(stdromano::fs::path_exists(__FILE__));
 }
 
-TEST_CASE(test_path_exists_nonexistent)
+STDROMANO_TEST_CASE(path_exists_nonexistent)
 {
-    ASSERT_EQUAL(false, stdromano::fs::path_exists(stdromano::StringD("{}n", __FILE__)));
+    STDROMANO_CHECK(!(stdromano::fs::path_exists(stdromano::StringD("{}n", __FILE__))));
 }
 
-TEST_CASE(test_path_exists_directory)
+STDROMANO_TEST_CASE(path_exists_directory)
 {
     const stdromano::StringD dir = stdromano::fs::parent_dir(__FILE__);
-    ASSERT_EQUAL(true, stdromano::fs::path_exists(dir));
+    STDROMANO_CHECK(stdromano::fs::path_exists(dir));
 }
 
-TEST_CASE(test_path_exists_empty)
+STDROMANO_TEST_CASE(path_exists_empty)
 {
-    ASSERT_EQUAL(false, stdromano::fs::path_exists(stdromano::String<>("")));
+    STDROMANO_CHECK(!(stdromano::fs::path_exists(stdromano::String<>(""))));
 }
 
-/* parent_dir */
-
-TEST_CASE(test_parent_dir_file)
+STDROMANO_TEST_CASE(parent_dir_file)
 {
     const stdromano::String<> parent = stdromano::fs::parent_dir(__FILE__);
 
-    ASSERT(!parent.empty());
+    STDROMANO_CHECK(!parent.empty());
 
-    ASSERT_EQUAL(true, stdromano::fs::path_exists(parent));
+    STDROMANO_CHECK(stdromano::fs::path_exists(parent));
 }
 
-TEST_CASE(test_parent_dir_nested)
+STDROMANO_TEST_CASE(parent_dir_nested)
 {
     const stdromano::String<> parent = stdromano::fs::parent_dir(__FILE__);
     const stdromano::String<> grandparent = stdromano::fs::parent_dir(parent);
-    ASSERT(!grandparent.empty());
-    ASSERT_EQUAL(true, stdromano::fs::path_exists(grandparent));
+    STDROMANO_CHECK(!grandparent.empty());
+    STDROMANO_CHECK(stdromano::fs::path_exists(grandparent));
 }
 
-/* filename */
-
-TEST_CASE(test_filename_from_path)
+STDROMANO_TEST_CASE(filename_from_path)
 {
     const stdromano::String<> name = stdromano::fs::filename(__FILE__);
-    ASSERT(!name.empty());
+    STDROMANO_CHECK(!name.empty());
     spdlog::debug("Filename: {}", name);
 }
 
-TEST_CASE(test_filename_no_directory)
+STDROMANO_TEST_CASE(filename_no_directory)
 {
     const stdromano::String<> name = stdromano::fs::filename("just_a_file.txt");
-    ASSERT(!name.empty());
+    STDROMANO_CHECK(!name.empty());
 }
 
-/* filesize */
-
-TEST_CASE(test_filesize)
+STDROMANO_TEST_CASE(filesize)
 {
     const std::size_t size = stdromano::fs::filesize(__FILE__).unwrap();
     spdlog::debug("Size: {}", size);
 
     const stdromano::StringD content = stdromano::fs::load_file_content(__FILE__).unwrap();
 
-    ASSERT(size == content.size());
+    STDROMANO_CHECK(size == content.size());
 
     spdlog::debug("Content size: {}", content.size());
 }
 
-/* relative_to */
-
-TEST_CASE(test_relative_to)
+STDROMANO_TEST_CASE(relative_to)
 {
     const stdromano::StringD parent = stdromano::fs::parent_dir(__FILE__);
     const stdromano::StringD rel = stdromano::fs::relative_to(__FILE__, parent).unwrap();
@@ -86,315 +81,271 @@ TEST_CASE(test_relative_to)
     spdlog::debug("Relative to: {}, {}", parent, rel);
 }
 
-/* current_dir */
-
-TEST_CASE(test_current_dir)
+STDROMANO_TEST_CASE(current_dir)
 {
     const stdromano::StringD cwd = stdromano::fs::current_dir();
-    ASSERT(!cwd.empty());
-    ASSERT_EQUAL(true, stdromano::fs::path_exists(cwd));
+    STDROMANO_CHECK(!cwd.empty());
+    STDROMANO_CHECK(stdromano::fs::path_exists(cwd));
     spdlog::debug("CWD: {}", cwd);
 }
 
-/* tmp_dir */
-
-TEST_CASE(test_tmp_dir)
+STDROMANO_TEST_CASE(tmp_dir)
 {
     auto result = stdromano::fs::tmp_dir();
-    ASSERT(!result.has_error());
+    STDROMANO_CHECK(!result.has_error());
 
     const stdromano::StringD tmp = result.unwrap();
-    ASSERT(!tmp.empty());
-    ASSERT_EQUAL(true, stdromano::fs::path_exists(tmp));
+    STDROMANO_CHECK(!tmp.empty());
+    STDROMANO_CHECK(stdromano::fs::path_exists(tmp));
     spdlog::debug("TMP: {}", tmp);
 }
 
-/* home_dir */
-
-TEST_CASE(test_home_dir)
+STDROMANO_TEST_CASE(home_dir)
 {
     auto result = stdromano::fs::home_dir();
-    ASSERT(!result.has_error());
+    STDROMANO_CHECK(!result.has_error());
 
     const stdromano::StringD home = result.unwrap();
-    ASSERT(!home.empty());
-    ASSERT_EQUAL(true, stdromano::fs::path_exists(home));
+    STDROMANO_CHECK(!home.empty());
+    STDROMANO_CHECK(stdromano::fs::path_exists(home));
     spdlog::debug("HOME: {}", home);
 }
 
-TEST_CASE(test_home_dir_use_env)
+STDROMANO_TEST_CASE(home_dir_use_env)
 {
     auto result = stdromano::fs::home_dir(true);
-    ASSERT(!result.has_error());
+    STDROMANO_CHECK(!result.has_error());
 
     const stdromano::StringD home = result.unwrap();
-    ASSERT(!home.empty());
-    ASSERT_EQUAL(true, stdromano::fs::path_exists(home));
+    STDROMANO_CHECK(!home.empty());
+    STDROMANO_CHECK(stdromano::fs::path_exists(home));
     spdlog::debug("HOME (env): {}", home);
 }
 
-/* makedir / removedir */
-
-TEST_CASE(test_makedir_removedir)
+STDROMANO_TEST_CASE(makedir_removedir)
 {
-    const stdromano::StringD tmp = stdromano::fs::tmp_dir().unwrap();
-    const stdromano::StringD test_dir = stdromano::StringD("{}/stdromano_test_mkdir", tmp);
+    const stdromano::StringD test_dir = stdromano::test::temp_path("stdromano_test_mkdir");
 
-    // Cleanup in case previous run left it behind
     stdromano::fs::removedir(test_dir, true);
 
-    // Create directory
     auto mk_result = stdromano::fs::makedir(test_dir);
-    ASSERT(!mk_result.has_error());
-    ASSERT_EQUAL(true, stdromano::fs::path_exists(test_dir));
+    STDROMANO_CHECK(!mk_result.has_error());
+    STDROMANO_CHECK(stdromano::fs::path_exists(test_dir));
 
-    // Remove directory
     auto rm_result = stdromano::fs::removedir(test_dir, false);
-    ASSERT(!rm_result.has_error());
-    ASSERT_EQUAL(false, stdromano::fs::path_exists(test_dir));
+    STDROMANO_CHECK(!rm_result.has_error());
+    STDROMANO_CHECK(!(stdromano::fs::path_exists(test_dir)));
 }
 
-TEST_CASE(test_removedir_nonexistent)
+STDROMANO_TEST_CASE(removedir_nonexistent)
 {
     const stdromano::StringD bogus("/tmp/stdromano_nonexistent_dir_xyz");
 
-    // Should be a no-op, not an error
     auto result = stdromano::fs::removedir(bogus);
-    ASSERT(!result.has_error());
+    STDROMANO_CHECK(!result.has_error());
 }
 
-TEST_CASE(test_removedir_recursive)
+STDROMANO_TEST_CASE(removedir_recursive)
 {
-    const stdromano::StringD tmp = stdromano::fs::tmp_dir().unwrap();
-    const stdromano::StringD root = stdromano::StringD("{}/stdromano_test_recursive", tmp);
+    const stdromano::StringD root = stdromano::test::temp_path("stdromano_test_recursive");
     const stdromano::StringD child = stdromano::StringD("{}/child", root);
 
     stdromano::fs::removedir(root, true);
 
-    // Create parent and child
-    ASSERT(!stdromano::fs::makedir(root).has_error());
-    ASSERT(!stdromano::fs::makedir(child).has_error());
-    ASSERT_EQUAL(true, stdromano::fs::path_exists(child));
+    STDROMANO_CHECK(!stdromano::fs::makedir(root).has_error());
+    STDROMANO_CHECK(!stdromano::fs::makedir(child).has_error());
+    STDROMANO_CHECK(stdromano::fs::path_exists(child));
 
-    // Write a file inside the child dir
     const stdromano::StringD file_in_child = stdromano::StringD("{}/dummy.txt", child);
     const char* data = "hello";
-    ASSERT(!stdromano::fs::write_file_content(data, 5, file_in_child).has_error());
-    ASSERT_EQUAL(true, stdromano::fs::path_exists(file_in_child));
+    STDROMANO_CHECK(!stdromano::fs::write_file_content(data, 5, file_in_child).has_error());
+    STDROMANO_CHECK(stdromano::fs::path_exists(file_in_child));
 
-    // Recursive remove should delete everything
     auto result = stdromano::fs::removedir(root, true);
-    ASSERT(!result.has_error());
-    ASSERT_EQUAL(false, stdromano::fs::path_exists(root));
+    STDROMANO_CHECK(!result.has_error());
+    STDROMANO_CHECK(!(stdromano::fs::path_exists(root)));
 }
 
-/* copydir */
-
-TEST_CASE(test_copydir)
+STDROMANO_TEST_CASE(copydir)
 {
-    const stdromano::StringD tmp = stdromano::fs::tmp_dir().unwrap();
-    const stdromano::StringD root = stdromano::StringD("{}/stdromano_test_copy_recursive", tmp);
+    const stdromano::StringD root = stdromano::test::temp_path("stdromano_test_copy_recursive");
     const stdromano::StringD child = stdromano::StringD("{}/child", root);
 
     stdromano::fs::removedir(root, true);
 
-    // Create parent and child
-    ASSERT(!stdromano::fs::makedir(root).has_error());
-    ASSERT(!stdromano::fs::makedir(child).has_error());
-    ASSERT_EQUAL(true, stdromano::fs::path_exists(child));
+    STDROMANO_CHECK(!stdromano::fs::makedir(root).has_error());
+    STDROMANO_CHECK(!stdromano::fs::makedir(child).has_error());
+    STDROMANO_CHECK(stdromano::fs::path_exists(child));
 
-    // Write a file inside the child dir
     const stdromano::StringD file_in_child = stdromano::StringD("{}/dummy.txt", child);
     const char* data = "hello";
-    ASSERT(!stdromano::fs::write_file_content(data, 5, file_in_child).has_error());
-    ASSERT_EQUAL(true, stdromano::fs::path_exists(file_in_child));
+    STDROMANO_CHECK(!stdromano::fs::write_file_content(data, 5, file_in_child).has_error());
+    STDROMANO_CHECK(stdromano::fs::path_exists(file_in_child));
 
-    const stdromano::StringD root2 = stdromano::StringD("{}/stdromano_test_copy_recursive2", tmp);
+    const stdromano::StringD root2 = stdromano::test::temp_path("stdromano_test_copy_recursive2");
 
     if(stdromano::fs::path_exists(root2))
         stdromano::fs::removedir(root2);
 
-    ASSERT(stdromano::fs::copydir(root, root2));
+    STDROMANO_CHECK(stdromano::fs::copydir(root, root2));
 
     for(auto it = stdromano::fs::WalkIterator(root2); it != stdromano::fs::WalkIterator(); ++it)
         spdlog::debug("Copied path: {}", it->get_current_path());
 }
 
-/* removefile */
-
-TEST_CASE(test_removefile)
+STDROMANO_TEST_CASE(removefile)
 {
-    const stdromano::StringD tmp = stdromano::fs::tmp_dir().unwrap();
-    const stdromano::StringD file_path = stdromano::StringD("{}/stdromano_test_removefile.txt", tmp);
+    const stdromano::StringD file_path = stdromano::test::temp_path("stdromano_test_removefile.txt");
 
     const char* data = "to be removed";
-    ASSERT(!stdromano::fs::write_file_content(data, 13, file_path).has_error());
-    ASSERT_EQUAL(true, stdromano::fs::path_exists(file_path));
+    STDROMANO_CHECK(!stdromano::fs::write_file_content(data, 13, file_path).has_error());
+    STDROMANO_CHECK(stdromano::fs::path_exists(file_path));
 
     auto result = stdromano::fs::removefile(file_path);
-    ASSERT(!result.has_error());
-    ASSERT_EQUAL(false, stdromano::fs::path_exists(file_path));
+    STDROMANO_CHECK(!result.has_error());
+    STDROMANO_CHECK(!(stdromano::fs::path_exists(file_path)));
 }
 
-TEST_CASE(test_removefile_nonexistent)
+STDROMANO_TEST_CASE(removefile_nonexistent)
 {
     const stdromano::StringD bogus("/tmp/stdromano_no_such_file.txt");
 
-    // Should be a no-op, not an error
     auto result = stdromano::fs::removefile(bogus);
-    ASSERT(!result.has_error());
+    STDROMANO_CHECK(!result.has_error());
 }
 
-/* copyfile */
-
-TEST_CASE(test_copyfile)
+STDROMANO_TEST_CASE(copyfile)
 {
-    const stdromano::StringD tmp = stdromano::fs::tmp_dir().unwrap();
-    const stdromano::StringD src = stdromano::StringD("{}/stdromano_copy_src.txt", tmp);
-    const stdromano::StringD dst = stdromano::StringD("{}/stdromano_copy_dst.txt", tmp);
+    const stdromano::StringD src = stdromano::test::temp_path("stdromano_copy_src.txt");
+    const stdromano::StringD dst = stdromano::test::temp_path("stdromano_copy_dst.txt");
 
-    // Cleanup
     stdromano::fs::removefile(src);
     stdromano::fs::removefile(dst);
 
     const char* data = "copy me";
-    ASSERT(!stdromano::fs::write_file_content(data, 7, src).has_error());
+    STDROMANO_CHECK(!stdromano::fs::write_file_content(data, 7, src).has_error());
 
     auto result = stdromano::fs::copyfile(src, dst);
-    ASSERT(!result.has_error());
-    ASSERT_EQUAL(true, stdromano::fs::path_exists(dst));
+    STDROMANO_CHECK(!result.has_error());
+    STDROMANO_CHECK(stdromano::fs::path_exists(dst));
 
-    // Verify content matches
     auto dst_content = stdromano::fs::load_file_content(dst, "r");
-    ASSERT(!dst_content.has_error());
+    STDROMANO_CHECK(!dst_content.has_error());
 
     const stdromano::StringD content = dst_content.unwrap();
-    ASSERT_EQUAL(static_cast<std::size_t>(7), content.size());
+    STDROMANO_CHECK_EQ(static_cast<std::size_t>(7), content.size());
 
-    // Cleanup
     stdromano::fs::removefile(src);
     stdromano::fs::removefile(dst);
 }
 
-/* expand_from_executable_dir / expand_from_lib_dir */
-
-TEST_CASE(test_expand_executable)
+STDROMANO_TEST_CASE(expand_executable)
 {
     auto result = stdromano::fs::expand_from_executable_dir("test/expand/file.c");
-    ASSERT(!result.has_error());
+    STDROMANO_CHECK(!result.has_error());
 
     const stdromano::StringD expanded = result.unwrap();
-    ASSERT(!expanded.empty());
+    STDROMANO_CHECK(!expanded.empty());
     spdlog::debug("Expand exe: {}", expanded);
 }
 
-TEST_CASE(test_expand_executable_empty)
+STDROMANO_TEST_CASE(expand_executable_empty)
 {
     auto result = stdromano::fs::expand_from_executable_dir("");
-    ASSERT(!result.has_error());
+    STDROMANO_CHECK(!result.has_error());
 
     const stdromano::StringD expanded = result.unwrap();
-    ASSERT(!expanded.empty());
+    STDROMANO_CHECK(!expanded.empty());
 }
 
-TEST_CASE(test_expand_library)
+STDROMANO_TEST_CASE(expand_library)
 {
     auto result = stdromano::fs::expand_from_lib_dir("test/expand/file.c");
-    ASSERT(!result.has_error());
+    STDROMANO_CHECK(!result.has_error());
 
     const stdromano::StringD expanded = result.unwrap();
-    ASSERT(!expanded.empty());
+    STDROMANO_CHECK(!expanded.empty());
     spdlog::debug("Expand lib: {}", expanded);
 }
 
-/* load_file_content */
-
-TEST_CASE(test_load_file_content)
+STDROMANO_TEST_CASE(load_file_content)
 {
     auto content = stdromano::fs::load_file_content(__FILE__, "r");
-    ASSERT(!content.has_error());
+    STDROMANO_CHECK(!content.has_error());
 
     const stdromano::StringD text = content.unwrap();
-    ASSERT(!text.empty());
+    STDROMANO_CHECK(!text.empty());
 }
 
-TEST_CASE(test_load_file_content_binary)
+STDROMANO_TEST_CASE(load_file_content_binary)
 {
     auto content = stdromano::fs::load_file_content(__FILE__, "rb");
-    ASSERT(!content.has_error());
+    STDROMANO_CHECK(!content.has_error());
 
     const stdromano::StringD text = content.unwrap();
-    ASSERT(!text.empty());
+    STDROMANO_CHECK(!text.empty());
 }
 
-TEST_CASE(test_load_file_content_nonexistent)
+STDROMANO_TEST_CASE(load_file_content_nonexistent)
 {
     auto content = stdromano::fs::load_file_content("/no/such/file.txt", "r");
-    ASSERT(content.has_error());
+    STDROMANO_CHECK(content.has_error());
 }
 
-/* write_file_content */
-
-TEST_CASE(test_write_file_content)
+STDROMANO_TEST_CASE(write_file_content)
 {
-    const stdromano::StringD tmp = stdromano::fs::tmp_dir().unwrap();
-    const stdromano::StringD file_path = stdromano::StringD("{}/stdromano_test_write.txt", tmp);
+    const stdromano::StringD file_path = stdromano::test::temp_path("stdromano_test_write.txt");
 
     stdromano::fs::removefile(file_path);
 
     const char* data = "hello world";
     auto result = stdromano::fs::write_file_content(data, 11, file_path);
-    ASSERT(!result.has_error());
-    ASSERT_EQUAL(true, stdromano::fs::path_exists(file_path));
+    STDROMANO_CHECK(!result.has_error());
+    STDROMANO_CHECK(stdromano::fs::path_exists(file_path));
 
-    // Verify content
     auto content = stdromano::fs::load_file_content(file_path, "r");
-    ASSERT(!content.has_error());
-    ASSERT_EQUAL(static_cast<std::size_t>(11), content.unwrap().size());
+    STDROMANO_CHECK(!content.has_error());
+    STDROMANO_CHECK_EQ(static_cast<std::size_t>(11), content.unwrap().size());
 
     stdromano::fs::removefile(file_path);
 }
 
-TEST_CASE(test_write_file_content_creates_parent_dirs)
+STDROMANO_TEST_CASE(write_file_content_creates_parent_dirs)
 {
-    const stdromano::StringD tmp = stdromano::fs::tmp_dir().unwrap();
-    const stdromano::StringD nested_dir = stdromano::StringD("{}/stdromano_test_nested/sub/dir", tmp);
+    const stdromano::StringD nested_dir = stdromano::test::temp_path("stdromano_test_nested/sub/dir");
     const stdromano::StringD file_path = stdromano::StringD("{}/file.txt", nested_dir);
-    const stdromano::StringD root = stdromano::StringD("{}/stdromano_test_nested", tmp);
+    const stdromano::StringD root = stdromano::test::temp_path("stdromano_test_nested");
 
     stdromano::fs::removedir(root, true);
 
     const char* data = "nested write";
     auto result = stdromano::fs::write_file_content(data, 12, file_path);
-    ASSERT(!result.has_error());
-    ASSERT_EQUAL(true, stdromano::fs::path_exists(file_path));
+    STDROMANO_CHECK(!result.has_error());
+    STDROMANO_CHECK(stdromano::fs::path_exists(file_path));
 
     stdromano::fs::removedir(root, true);
 }
 
-TEST_CASE(test_write_file_content_append)
+STDROMANO_TEST_CASE(write_file_content_append)
 {
-    const stdromano::StringD tmp = stdromano::fs::tmp_dir().unwrap();
-    const stdromano::StringD file_path = stdromano::StringD("{}/stdromano_test_append.txt", tmp);
+    const stdromano::StringD file_path = stdromano::test::temp_path("stdromano_test_append.txt");
 
     stdromano::fs::removefile(file_path);
 
     const char* data1 = "hello";
-    ASSERT(!stdromano::fs::write_file_content(data1, 5, file_path, "w").has_error());
+    STDROMANO_CHECK(!stdromano::fs::write_file_content(data1, 5, file_path, "w").has_error());
 
     const char* data2 = " world";
-    ASSERT(!stdromano::fs::write_file_content(data2, 6, file_path, "a").has_error());
+    STDROMANO_CHECK(!stdromano::fs::write_file_content(data2, 6, file_path, "a").has_error());
 
     auto content = stdromano::fs::load_file_content(file_path, "r");
-    ASSERT(!content.has_error());
-    ASSERT_EQUAL(static_cast<std::size_t>(11), content.unwrap().size());
+    STDROMANO_CHECK(!content.has_error());
+    STDROMANO_CHECK_EQ(static_cast<std::size_t>(11), content.unwrap().size());
 
     stdromano::fs::removefile(file_path);
 }
 
-/* list_dir */
-
-TEST_CASE(test_list_dir_all)
+STDROMANO_TEST_CASE(list_dir_all)
 {
     const stdromano::StringD directory_path = stdromano::fs::parent_dir(__FILE__).copy();
     spdlog::debug("Listing directory: {}", directory_path);
@@ -406,17 +357,16 @@ TEST_CASE(test_list_dir_all)
     {
         spdlog::debug("{} | file={} dir={}", it.get_current_path(), it.is_file(), it.is_directory());
 
-        // Each entry should be either a file or a directory, not both
-        ASSERT(it.is_file() || it.is_directory());
-        ASSERT(!(it.is_file() && it.is_directory()));
+        STDROMANO_CHECK(it.is_file() || it.is_directory());
+        STDROMANO_CHECK(!(it.is_file() && it.is_directory()));
 
         count++;
     }
 
-    ASSERT(count > 0);
+    STDROMANO_CHECK(count > 0);
 }
 
-TEST_CASE(test_list_dir_files_only)
+STDROMANO_TEST_CASE(list_dir_files_only)
 {
     const stdromano::StringD directory_path = stdromano::fs::parent_dir(__FILE__).copy();
 
@@ -424,12 +374,12 @@ TEST_CASE(test_list_dir_files_only)
 
     while(stdromano::fs::list_dir(it, directory_path, stdromano::fs::ListDirFlags_ListFiles))
     {
-        ASSERT_EQUAL(true, it.is_file());
-        ASSERT_EQUAL(false, it.is_directory());
+        STDROMANO_CHECK(it.is_file());
+        STDROMANO_CHECK(!(it.is_directory()));
     }
 }
 
-TEST_CASE(test_list_dir_dirs_only)
+STDROMANO_TEST_CASE(list_dir_dirs_only)
 {
     const stdromano::StringD directory_path = stdromano::fs::parent_dir(__FILE__).copy();
 
@@ -437,16 +387,14 @@ TEST_CASE(test_list_dir_dirs_only)
 
     while(stdromano::fs::list_dir(it, directory_path, stdromano::fs::ListDirFlags_ListDirs))
     {
-        ASSERT_EQUAL(false, it.is_file());
-        ASSERT_EQUAL(true, it.is_directory());
+        STDROMANO_CHECK(!(it.is_file()));
+        STDROMANO_CHECK(it.is_directory());
     }
 }
 
-TEST_CASE(test_list_dir_known_contents)
+STDROMANO_TEST_CASE(list_dir_known_contents)
 {
-    // Create a temp directory with known contents
-    const stdromano::StringD tmp = stdromano::fs::tmp_dir().unwrap();
-    const stdromano::StringD test_dir = stdromano::StringD("{}/stdromano_test_listdir", tmp);
+    const stdromano::StringD test_dir = stdromano::test::temp_path("stdromano_test_listdir");
     const stdromano::StringD sub_dir = stdromano::StringD("{}/subdir", test_dir);
     const stdromano::StringD file1 = stdromano::StringD("{}/file1.txt", test_dir);
     const stdromano::StringD file2 = stdromano::StringD("{}/file2.txt", test_dir);
@@ -469,34 +417,28 @@ TEST_CASE(test_list_dir_known_contents)
         if(it.is_directory()) dir_count++;
     }
 
-    ASSERT_EQUAL(2, file_count);
-    ASSERT_EQUAL(1, dir_count);
+    STDROMANO_CHECK_EQ(file_count, 2);
+    STDROMANO_CHECK_EQ(dir_count, 1);
 
     stdromano::fs::removedir(test_dir, true);
 }
 
-/* ListDirIterator move semantics */
-
-TEST_CASE(test_list_dir_iterator_move)
+STDROMANO_TEST_CASE(list_dir_iterator_move)
 {
     const stdromano::StringD directory_path = stdromano::fs::parent_dir(__FILE__).copy();
 
     stdromano::fs::ListDirIterator it;
     stdromano::fs::list_dir(it, directory_path, stdromano::fs::ListDirFlags_ListAll);
 
-    // Move construct
     stdromano::fs::ListDirIterator it2(std::move(it));
-    ASSERT(!it2.get_current_path().empty());
+    STDROMANO_CHECK(!it2.get_current_path().empty());
 
-    // Move assign
     stdromano::fs::ListDirIterator it3;
     it3 = std::move(it2);
-    ASSERT(!it3.get_current_path().empty());
+    STDROMANO_CHECK(!it3.get_current_path().empty());
 }
 
-/* walk */
-
-TEST_CASE(test_walk_all)
+STDROMANO_TEST_CASE(walk_all)
 {
     const stdromano::StringD directory_path = stdromano::fs::parent_dir(__FILE__).copy();
     spdlog::debug("Walk: {}", directory_path);
@@ -508,16 +450,16 @@ TEST_CASE(test_walk_all)
         ++it)
     {
         const auto& item = *it;
-        ASSERT(!item.get_current_path().empty());
-        ASSERT(item.is_file() || item.is_directory());
-        ASSERT(!(item.is_file() && item.is_directory()));
+        STDROMANO_CHECK(!item.get_current_path().empty());
+        STDROMANO_CHECK(item.is_file() || item.is_directory());
+        STDROMANO_CHECK(!(item.is_file() && item.is_directory()));
         count++;
     }
 
-    ASSERT(count > 0);
+    STDROMANO_CHECK(count > 0);
 }
 
-TEST_CASE(test_walk_files_only)
+STDROMANO_TEST_CASE(walk_files_only)
 {
     const stdromano::StringD directory_path = stdromano::fs::parent_dir(__FILE__).copy();
 
@@ -525,12 +467,12 @@ TEST_CASE(test_walk_files_only)
         it != stdromano::fs::WalkIterator();
         ++it)
     {
-        ASSERT_EQUAL(true, it->is_file());
-        ASSERT_EQUAL(false, it->is_directory());
+        STDROMANO_CHECK(it->is_file());
+        STDROMANO_CHECK(!(it->is_directory()));
     }
 }
 
-TEST_CASE(test_walk_dirs_only)
+STDROMANO_TEST_CASE(walk_dirs_only)
 {
     const stdromano::StringD directory_path = stdromano::fs::parent_dir(__FILE__).copy();
 
@@ -538,16 +480,14 @@ TEST_CASE(test_walk_dirs_only)
         it != stdromano::fs::WalkIterator();
         ++it)
     {
-        ASSERT_EQUAL(false, it->is_file());
-        ASSERT_EQUAL(true, it->is_directory());
+        STDROMANO_CHECK(!(it->is_file()));
+        STDROMANO_CHECK(it->is_directory());
     }
 }
 
-TEST_CASE(test_walk_recursive)
+STDROMANO_TEST_CASE(walk_recursive)
 {
-    // Create a known hierarchy
-    const stdromano::StringD tmp = stdromano::fs::tmp_dir().unwrap();
-    const stdromano::StringD root = stdromano::StringD("{}/stdromano_test_walk", tmp);
+    const stdromano::StringD root = stdromano::test::temp_path("stdromano_test_walk");
     const stdromano::StringD child = stdromano::StringD("{}/child", root);
     const stdromano::StringD grandchild = stdromano::StringD("{}/grandchild", child);
 
@@ -574,19 +514,15 @@ TEST_CASE(test_walk_recursive)
         if(it->is_directory()) dir_count++;
     }
 
-    // Should find files across all levels
-    ASSERT_EQUAL(3, file_count);
-    // child + grandchild (root itself is not listed as an entry)
-    ASSERT_EQUAL(2, dir_count);
+    STDROMANO_CHECK_EQ(file_count, 3);
+    STDROMANO_CHECK_EQ(dir_count, 2);
 
     stdromano::fs::removedir(root, true);
 }
 
-TEST_CASE(test_walk_non_recursive)
+STDROMANO_TEST_CASE(walk_non_recursive)
 {
-    // Create a known hierarchy
-    const stdromano::StringD tmp = stdromano::fs::tmp_dir().unwrap();
-    const stdromano::StringD root = stdromano::StringD("{}/stdromano_test_walk_nr", tmp);
+    const stdromano::StringD root = stdromano::test::temp_path("stdromano_test_walk_nr");
     const stdromano::StringD child = stdromano::StringD("{}/child", root);
 
     stdromano::fs::removedir(root, true);
@@ -606,153 +542,129 @@ TEST_CASE(test_walk_non_recursive)
         if(it->is_file()) file_count++;
     }
 
-    // Without WalkFlags_Recursive, should only see files in root
-    ASSERT_EQUAL(1, file_count);
+    STDROMANO_CHECK_EQ(file_count, 1);
 
     stdromano::fs::removedir(root, true);
 }
 
-/* WalkIterator end sentinel */
-
-TEST_CASE(test_walk_iterator_end)
+STDROMANO_TEST_CASE(walk_iterator_end)
 {
     stdromano::fs::WalkIterator end;
-    ASSERT(end == stdromano::fs::WalkIterator());
+    STDROMANO_CHECK(end == stdromano::fs::WalkIterator());
 }
 
-/* WalkIterator arrow operator */
-
-TEST_CASE(test_walk_iterator_arrow)
+STDROMANO_TEST_CASE(walk_iterator_arrow)
 {
     const stdromano::StringD directory_path = stdromano::fs::parent_dir(__FILE__).copy();
 
     stdromano::fs::WalkIterator it(directory_path, stdromano::fs::WalkFlags_ListAll);
     if(it != stdromano::fs::WalkIterator())
     {
-        // Test arrow operator
         const stdromano::StringD& path = it->get_current_path();
-        ASSERT(!path.empty());
+        STDROMANO_CHECK(!path.empty());
 
-        // Test dereference operator
         const auto& item = *it;
-        ASSERT(!item.get_current_path().empty());
+        STDROMANO_CHECK(!item.get_current_path().empty());
     }
 }
 
-/* Round-trip write then load */
-
-TEST_CASE(test_write_then_load_roundtrip)
+STDROMANO_TEST_CASE(write_then_load_roundtrip)
 {
-    const stdromano::StringD tmp = stdromano::fs::tmp_dir().unwrap();
-    const stdromano::StringD file_path = stdromano::StringD("{}/stdromano_roundtrip.txt", tmp);
+    const stdromano::StringD file_path = stdromano::test::temp_path("stdromano_roundtrip.txt");
 
     stdromano::fs::removefile(file_path);
 
     const char* expected = "round trip content 12345";
     const std::size_t expected_sz = std::strlen(expected);
 
-    ASSERT(!stdromano::fs::write_file_content(expected, expected_sz, file_path, "w").has_error());
+    STDROMANO_CHECK(!stdromano::fs::write_file_content(expected, expected_sz, file_path, "w").has_error());
 
     auto loaded = stdromano::fs::load_file_content(file_path, "r");
-    ASSERT(!loaded.has_error());
+    STDROMANO_CHECK(!loaded.has_error());
 
     const stdromano::StringD content = loaded.unwrap();
-    ASSERT_EQUAL(expected_sz, content.size());
-    ASSERT_EQUAL(0, std::memcmp(expected, content.c_str(), expected_sz));
+    STDROMANO_CHECK_EQ(expected_sz, content.size());
+    STDROMANO_CHECK_EQ(std::memcmp(expected, content.c_str(), expected_sz), 0);
 
     stdromano::fs::removefile(file_path);
 }
 
-/* copyfile error case */
-
-TEST_CASE(test_copyfile_nonexistent_src)
+STDROMANO_TEST_CASE(copyfile_nonexistent_src)
 {
     const stdromano::StringD tmp = stdromano::fs::tmp_dir().unwrap();
     const stdromano::StringD src("/tmp/stdromano_no_such_src.txt");
-    const stdromano::StringD dst = stdromano::StringD("{}/stdromano_copy_fail_dst.txt", tmp);
+    const stdromano::StringD dst = stdromano::test::temp_path("stdromano_copy_fail_dst.txt");
 
     auto result = stdromano::fs::copyfile(src, dst);
-    ASSERT(result.has_error());
+    STDROMANO_CHECK(result.has_error());
 }
 
-int main()
+STDROMANO_TEST_CASE(fuzz_binary_write_load_round_trip)
 {
-    TestRunner runner("filesystem");
+    const auto report = stdromano::fuzz::run_property(fixtures::options("fs_round_trip", 100), [](stdromano::fuzz::Source& source) {
+        const std::vector<std::uint8_t> bytes = source.bytes(8192);
 
-    /* path_exists */
-    runner.add_test("PathExists_File", test_path_exists_file);
-    runner.add_test("PathExists_Nonexistent", test_path_exists_nonexistent);
-    runner.add_test("PathExists_Directory", test_path_exists_directory);
-    runner.add_test("PathExists_Empty", test_path_exists_empty);
+        const stdromano::StringD path = stdromano::test::temp_path("fuzz_round_trip/data.bin");
+        const stdromano::StringD copy = stdromano::test::temp_path("fuzz_round_trip/copy.bin");
 
-    /* parent_dir */
-    runner.add_test("ParentDir_File", test_parent_dir_file);
-    runner.add_test("ParentDir_Nested", test_parent_dir_nested);
+        STDROMANO_FUZZ_CHECK(stdromano::fs::write_file_content(reinterpret_cast<const char*>(bytes.data()),
+                                                               bytes.size(),
+                                                               path,
+                                                               "wb")
+                                 .has_value());
 
-    /* filename */
-    runner.add_test("Filename_FromPath", test_filename_from_path);
-    runner.add_test("Filename_NoDirectory", test_filename_no_directory);
+        const auto size = stdromano::fs::filesize(path);
+        STDROMANO_FUZZ_CHECK(size.has_value());
+        STDROMANO_FUZZ_CHECK_EQ(size.value(), bytes.size());
 
-    /* filesize */
-    runner.add_test("FileSize", test_filesize);
+        STDROMANO_FUZZ_CHECK(stdromano::fs::copyfile(path, copy).has_value());
 
-    /* relative_to */
-    runner.add_test("RelativeTo", test_relative_to);
+        for(const stdromano::StringD* file : {&path, &copy})
+        {
+            const auto content = stdromano::fs::load_file_content(*file, "rb");
+            STDROMANO_FUZZ_CHECK(content.has_value());
+            STDROMANO_FUZZ_CHECK_EQ(content.value().size(), bytes.size());
+            STDROMANO_FUZZ_CHECK(bytes.empty() || std::memcmp(content.value().data(), bytes.data(), bytes.size()) == 0);
+        }
 
-    /* current_dir / tmp_dir / home_dir */
-    runner.add_test("CurrentDir", test_current_dir);
-    runner.add_test("TmpDir", test_tmp_dir);
-    runner.add_test("HomeDir", test_home_dir);
-    runner.add_test("HomeDir_UseEnv", test_home_dir_use_env);
+        STDROMANO_FUZZ_CHECK(stdromano::fs::removefile(copy).has_value());
+        STDROMANO_FUZZ_CHECK(!stdromano::fs::path_exists(copy));
 
-    /* makedir / removedir */
-    runner.add_test("MakeDir_RemoveDir", test_makedir_removedir);
-    runner.add_test("RemoveDir_Nonexistent", test_removedir_nonexistent);
-    runner.add_test("RemoveDir_Recursive", test_removedir_recursive);
+        return true;
+    });
 
-    /* copydir */
-    runner.add_test("CopyDir", test_copydir);
-
-    /* removefile */
-    runner.add_test("RemoveFile", test_removefile);
-    runner.add_test("RemoveFile_Nonexistent", test_removefile_nonexistent);
-
-    /* copyfile */
-    runner.add_test("CopyFile", test_copyfile);
-    runner.add_test("CopyFile_NonexistentSrc", test_copyfile_nonexistent_src);
-
-    /* expand */
-    runner.add_test("ExpandExecutable", test_expand_executable);
-    runner.add_test("ExpandExecutable_Empty", test_expand_executable_empty);
-    runner.add_test("ExpandLibrary", test_expand_library);
-
-    /* load / write file content */
-    runner.add_test("LoadFileContent", test_load_file_content);
-    runner.add_test("LoadFileContent_Binary", test_load_file_content_binary);
-    runner.add_test("LoadFileContent_Nonexistent", test_load_file_content_nonexistent);
-    runner.add_test("WriteFileContent", test_write_file_content);
-    runner.add_test("WriteFileContent_CreatesParentDirs", test_write_file_content_creates_parent_dirs);
-    runner.add_test("WriteFileContent_Append", test_write_file_content_append);
-    runner.add_test("WriteThenLoad_Roundtrip", test_write_then_load_roundtrip);
-
-    /* list_dir */
-    runner.add_test("ListDir_All", test_list_dir_all);
-    runner.add_test("ListDir_FilesOnly", test_list_dir_files_only);
-    runner.add_test("ListDir_DirsOnly", test_list_dir_dirs_only);
-    runner.add_test("ListDir_KnownContents", test_list_dir_known_contents);
-    runner.add_test("ListDirIterator_Move", test_list_dir_iterator_move);
-
-    /* walk */
-    runner.add_test("Walk_All", test_walk_all);
-    runner.add_test("Walk_FilesOnly", test_walk_files_only);
-    runner.add_test("Walk_DirsOnly", test_walk_dirs_only);
-    runner.add_test("Walk_Recursive", test_walk_recursive);
-    runner.add_test("Walk_NonRecursive", test_walk_non_recursive);
-    runner.add_test("WalkIterator_End", test_walk_iterator_end);
-    runner.add_test("WalkIterator_Arrow", test_walk_iterator_arrow);
-
-    if(runner.run_all() != 0)
-        return 1;
-
-    return 0;
+    TESTS_REQUIRE_PROPERTY(report);
 }
+
+STDROMANO_TEST_CASE(fuzz_filename_and_parent_dir_split_a_path)
+{
+    const auto report = stdromano::fuzz::run_property(fixtures::options("fs_path_split", 500), [](stdromano::fuzz::Source& source) {
+        std::string path = "root";
+
+        const std::size_t depth = source.range<std::size_t>(0, 6);
+
+        for(std::size_t i = 0; i < depth; ++i)
+        {
+            const stdromano::StringD component = source.string(12, "abcdefgh_-0123");
+            path += "/d" + std::string(component.c_str(), component.size());
+        }
+
+        const stdromano::StringD name = source.string(12, "abcxyz_");
+        const std::string leaf = "f" + std::string(name.c_str(), name.size()) + ".txt";
+        const std::string full = path + "/" + leaf;
+
+        const stdromano::StringD full_path = stdromano::StringD::make_from_c_str(full.c_str(), full.size());
+
+        const stdromano::StringD file = stdromano::fs::filename(full_path);
+        const stdromano::StringD parent = stdromano::fs::parent_dir(full_path);
+
+        STDROMANO_FUZZ_CHECK_EQ(std::string(file.c_str(), file.size()), leaf);
+        STDROMANO_FUZZ_CHECK_EQ(std::string(parent.c_str(), parent.size()), path);
+
+        return true;
+    });
+
+    TESTS_REQUIRE_PROPERTY(report);
+}
+
+STDROMANO_TEST_MAIN()

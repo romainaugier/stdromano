@@ -17,6 +17,14 @@
 
 STDROMANO_NAMESPACE_BEGIN
 
+#if defined(STDROMANO_MSVC) && defined(STDROMANO_AARCH64)
+#define STDROMANO_ARM64_SYSREG(op0, op1, crn, crm, op2)                                            \
+    ((((op0) & 1) << 14) | (((op1) & 7) << 11) | (((crn) & 15) << 7) | (((crm) & 15) << 3) |       \
+     ((op2) & 7))
+#define STDROMANO_ARM64_CNTVCT STDROMANO_ARM64_SYSREG(3, 3, 14, 0, 2)
+#define STDROMANO_ARM64_CNTFRQ STDROMANO_ARM64_SYSREG(3, 3, 14, 0, 0)
+#endif /* defined(STDROMANO_MSVC) && defined(STDROMANO_AARCH64) */
+
 #if defined(STDROMANO_INTEL)
 
 #if defined(STDROMANO_MSVC)
@@ -49,7 +57,7 @@ STDROMANO_FORCE_INLINE std::uint64_t cpu_rdtsc() noexcept
     return __rdtsc();
 #elif defined(STDROMANO_AARCH64)
 #if defined(STDROMANO_MSVC)
-    return static_cast<std::uint64_t>(_ReadStatusReg(ARM64_CNTVCT));
+    return static_cast<std::uint64_t>(_ReadStatusReg(STDROMANO_ARM64_CNTVCT));
 #else
     std::uint64_t value;
     asm volatile("mrs %0, cntvct_el0" : "=r"(value));
@@ -65,7 +73,7 @@ STDROMANO_FORCE_INLINE std::uint64_t cpu_rdtsc_frequency() noexcept
 {
 #if defined(STDROMANO_AARCH64)
 #if defined(STDROMANO_MSVC)
-    return static_cast<std::uint64_t>(_ReadStatusReg(ARM64_CNTFRQ));
+    return static_cast<std::uint64_t>(_ReadStatusReg(STDROMANO_ARM64_CNTFRQ));
 #else
     std::uint64_t value;
     asm volatile("mrs %0, cntfrq_el0" : "=r"(value));

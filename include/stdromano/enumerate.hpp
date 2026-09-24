@@ -9,7 +9,9 @@
 
 #include "stdromano/stdromano.hpp"
 
+#include <functional>
 #include <iterator>
+#include <utility>
 
 STDROMANO_NAMESPACE_BEGIN
 
@@ -68,8 +70,8 @@ private:
     Container& container;
 
 public:
-    using iterator = enumerate_iterator<typename Container::iterator>;
-    using const_iterator = enumerate_iterator<typename Container::const_iterator>;
+    using iterator = enumerate_iterator<decltype(std::declval<Container&>().begin())>;
+    using const_iterator = enumerate_iterator<decltype(std::declval<const Container&>().begin())>;
 
     explicit enumerate_wrapper(Container& cont) : container(cont) {}
 

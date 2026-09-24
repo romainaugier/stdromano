@@ -29,7 +29,7 @@ Expected<void> CommandLineParser::add_argument(const StringD& arg_name,
 
     this->_args[arg_name] = CommandLineArg(arg_name, arg_type, arg_mode);
 
-    if(arg_short_name != nullptr)
+    if(!arg_short_name.empty())
         this->_aliases.emplace(arg_short_name, arg_name);
 
     return Ok();
@@ -92,7 +92,15 @@ Expected<void> CommandLineParser::parse(int argc, char** argv) noexcept
         auto arg_it = this->_args.find(key);
 
         if(arg_it == this->_args.end())
-            continue;
+        {
+            const auto alias_it = this->_aliases.find(key);
+
+            if(alias_it == this->_aliases.end())
+                continue;
+
+            key = alias_it->second;
+            arg_it = this->_args.find(key);
+        }
 
         if(arg_it->second.get_mode() == ArgMode::ArgMode_StoreTrue)
         {

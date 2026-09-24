@@ -163,7 +163,8 @@ public:
 
         if(this->_backend == LinAlgBackend_CPU)
         {
-            std::memcpy(this->_data, other._data, this->nbytes());
+            if(this->nbytes() > 0)
+                std::memcpy(this->_data, other._data, this->nbytes());
         }
         else if(this->_backend == LinAlgBackend_GPU)
         {
@@ -184,6 +185,18 @@ public:
             this->_backend = other._backend;
 
             this->allocate(this->nbytes());
+
+            if(this->_backend == LinAlgBackend_CPU)
+            {
+                if(this->nbytes() > 0)
+                    std::memcpy(this->_data, other._data, this->nbytes());
+            }
+            else if(this->_backend == LinAlgBackend_GPU)
+            {
+#if defined(STDROMANO_ENABLE_OPENCL)
+                opencl_manager.copy_buffer(this->_gpu_data, other._gpu_data, this->nbytes());
+#endif /* defined(STDROMANO_ENABLE_OPENCL) */
+            }
         }
 
         return *this;
@@ -276,11 +289,17 @@ public:
 
     Expected<DenseMatrix> to_backend(std::uint32_t backend) const noexcept
     {
+#if !defined(STDROMANO_ENABLE_OPENCL)
+        if(backend == LinAlgBackend_GPU || this->_backend == LinAlgBackend_GPU)
+            return Error("GPU backend not available");
+#endif /* !defined(STDROMANO_ENABLE_OPENCL) */
+
         DenseMatrix res(this->_nrows, this->_ncols, backend);
 
         if(this->_backend == LinAlgBackend_CPU && backend == LinAlgBackend_CPU)
         {
-            std::memcpy(res.data(), this->data(), this->nbytes());
+            if(this->nbytes() > 0)
+                std::memcpy(res.data(), this->data(), this->nbytes());
         }
         else if(this->_backend == LinAlgBackend_CPU && backend == LinAlgBackend_GPU)
         {
@@ -313,11 +332,14 @@ public:
 
     Expected<DenseMatrix> operator*(const DenseMatrix& other) const noexcept
     {
-        DenseMatrix res(this->_nrows, other._ncols, this->_backend);
-        res.zero();
-
         if(this->_backend != other._backend)
             return Error("Backend mismatch");
+
+        if(this->_ncols != other._nrows)
+            return Error("Dimension mismatch: ({}x{}) * ({}x{})", this->_nrows, this->_ncols, other._nrows, other._ncols);
+
+        DenseMatrix res(this->_nrows, other._ncols, this->_backend);
+        res.zero();
 
         const std::size_t M = this->_nrows;
         const std::size_t K = this->_ncols;
@@ -349,7 +371,7 @@ public:
             {
                 return Error(StringD::make_fmt("Matmul error: cannot find opencl kernel \"{}\" (path should be: {})",
                                                kernel_name,
-                                               fs_expand_from_lib_dir(StringD("cl/{}.cl", kernel_name))));
+                                               fs::expand_from_lib_dir(StringD("cl/{}.cl", kernel_name))));
             }
 
             const std::size_t global_x = ((N + 15) / 16) * 16;
@@ -410,7 +432,7 @@ public:
             {
                 return Error(StringD::make_fmt("Fill error: cannot find opencl kernel \"{}\" (path should be: {})",
                                                kernel_name,
-                                               fs_expand_from_lib_dir(StringD("cl/{}.cl", kernel_name))));
+                                               fs::expand_from_lib_dir(StringD("cl/{}.cl", kernel_name))));
             }
 
             cl::Event event;

@@ -1088,6 +1088,7 @@ struct Parser
     std::shared_ptr<spdlog::logger>& logger;
     const StringD& source_code;
     std::uint32_t pos;
+    Token end_token;
 
     Parser(const Vector<Token>& tokens,
            Arena& arena,
@@ -1096,13 +1097,25 @@ struct Parser
                                          arena(arena),
                                          logger(logger),
                                          source_code(source_code),
-                                         pos(0) {}
+                                         pos(0),
+                                         end_token(StringD(),
+                                                   Token::Kind::Newline,
+                                                   0,
+                                                   tokens.empty() ? 1 : tokens.back().column,
+                                                   tokens.empty() ? 1 : tokens.back().line) {}
 
     bool at_end() const noexcept { return this->pos >= this->tokens.size(); }
 
-    const Token& current() const noexcept { return tokens[this->pos]; }
+    const Token& current() const noexcept
+    {
+        return this->pos < this->tokens.size() ? this->tokens[this->pos] : this->end_token;
+    }
 
-    const Token& peek(std::uint32_t offset = 1) const noexcept { return this->tokens[this->pos + offset]; }
+    const Token& peek(std::uint32_t offset = 1) const noexcept
+    {
+        const std::size_t index = static_cast<std::size_t>(this->pos) + offset;
+        return index < this->tokens.size() ? this->tokens[index] : this->end_token;
+    }
 
     void advance(const std::uint32_t n = 1) noexcept { this->pos += n; }
 
@@ -1544,28 +1557,28 @@ struct Parser
 
         Node* node = nullptr;
 
-        std::function<void(Node*)> add_name = [&](Node*) {};
+        std::function<void(Node*)> add_name = [](Node*) {};
 
         switch(node_type)
         {
             case ASTNodeGlobal:
             {
                 auto* global_node = this->arena.emplace<GlobalNode>(line, column);
-                add_name = [&](Node* name) { global_node->names.emplace_back(std::move(name)); };
+                add_name = [global_node](Node* name) { global_node->names.emplace_back(std::move(name)); };
                 node = global_node;
                 break;
             }
             case ASTNodeNonLocal:
             {
                 auto* non_local_node = this->arena.emplace<NonLocalNode>(line, column);
-                add_name = [&](Node* name) { non_local_node->names.emplace_back(std::move(name)); };
+                add_name = [non_local_node](Node* name) { non_local_node->names.emplace_back(std::move(name)); };
                 node = non_local_node;
                 break;
             }
             case ASTNodeDel:
             {
                 auto* del_node = this->arena.emplace<DelNode>(line, column);
-                add_name = [&](Node* name) { del_node->names.emplace_back(std::move(name)); };
+                add_name = [del_node](Node* name) { del_node->names.emplace_back(std::move(name)); };
                 node = del_node;
                 break;
             }
@@ -1672,7 +1685,7 @@ struct Parser
         {
             // Peek ahead: must be followed by an identifier
             if(this->pos + 1 < this->tokens.size() &&
-               this->tokens[this->pos + 1].kind == Token::Kind::Identifier)
+               this->peek(1).kind == Token::Kind::Identifier)
                 return this->parse_type_alias();
         }
 
@@ -1682,7 +1695,7 @@ struct Parser
         {
             if(this->pos + 1 < this->tokens.size())
             {
-                const Token& next = this->tokens[this->pos + 1];
+                const Token& next = this->peek(1);
 
                 bool is_match_stmt =
                     next.kind == Token::Kind::Identifier ||
@@ -1736,7 +1749,7 @@ struct Parser
             if(this->match_operator(Operator::Multiplication))
             {
                 if(this->pos + 1 < this->tokens.size() &&
-                   (this->tokens[this->pos + 1].kind == Token::Kind::Delimiter))
+                   (this->peek(1).kind == Token::Kind::Delimiter))
                 {
                     kwonly_index = arg_count;
                     this->advance();
@@ -3193,7 +3206,7 @@ struct Parser
         // Numeric literals (including negative: -42, -3.14, complex: 1+2j)
         if(this->check(Token::Kind::Literal) ||
            ((this->match_operator(Operator::Subtraction)) && this->pos + 1 < this->tokens.size() &&
-            this->tokens[this->pos + 1].kind == Token::Kind::Literal))
+            this->peek(1).kind == Token::Kind::Literal))
         {
             bool negate = false;
 
@@ -3459,8 +3472,8 @@ struct Parser
             // Check for keyword pattern: attr=pattern
             if(this->check(Token::Kind::Identifier) &&
                this->pos + 1 < this->tokens.size() &&
-               this->tokens[this->pos + 1].kind == Token::Kind::Operator &&
-               static_cast<Operator>(this->tokens[this->pos + 1].type) == Operator::Assign)
+               this->peek(1).kind == Token::Kind::Operator &&
+               static_cast<Operator>(this->peek(1).type) == Operator::Assign)
             {
                 StringD attr = std::move(StringD::make_from_c_str(this->current().value.c_str(),
                                                                   this->current().value.size()));
@@ -4099,8 +4112,8 @@ struct Parser
             {
                 // 'is not'
                 if(this->pos + 1 < this->tokens.size() &&
-                   this->tokens[this->pos + 1].kind == Token::Kind::Keyword &&
-                   static_cast<Keyword>(this->tokens[this->pos + 1].type) == Keyword::Not)
+                   this->peek(1).kind == Token::Kind::Keyword &&
+                   static_cast<Keyword>(this->peek(1).type) == Keyword::Not)
                 {
                     out_op = Operator::IdentityIsNot;
                     out_advance = 2;
@@ -4123,8 +4136,8 @@ struct Parser
             {
                 // 'not in'
                 if(this->pos + 1 < this->tokens.size() &&
-                   this->tokens[this->pos + 1].kind == Token::Kind::Keyword &&
-                   static_cast<Keyword>(this->tokens[this->pos + 1].type) == Keyword::In)
+                   this->peek(1).kind == Token::Kind::Keyword &&
+                   static_cast<Keyword>(this->peek(1).type) == Keyword::In)
                 {
                     out_op = Operator::MembershipNotIn;
                     out_advance = 2;

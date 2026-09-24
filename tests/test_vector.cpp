@@ -3,553 +3,600 @@
 // All rights reserved.
 
 #include "stdromano/vector.hpp"
-#include "test.hpp"
+
+#include "fixtures.hpp"
 
 #include <string>
+#include <vector>
 
-INIT_TEST_OBJECT;
+using namespace stdromano;
+using fixtures::Tracked;
 
-TEST_CASE(test_constructor_and_destructor)
+static std::int32_t offset(const std::size_t index) noexcept
 {
-    // Default constructor
+    return static_cast<std::int32_t>(index);
+}
+
+template <typename T>
+static bool same_content(const Vector<T>& vec, const std::vector<T>& reference)
+{
+    if(vec.size() != reference.size())
+        return false;
+
+    for(std::size_t i = 0; i < reference.size(); ++i)
+        if(!(vec[i] == reference[i]))
+            return false;
+
+    return true;
+}
+
+static Vector<Tracked> make_tracked(std::initializer_list<const char*> values)
+{
+    Vector<Tracked> vec;
+
+    for(const char* value : values)
+        vec.emplace_back(value);
+
+    return vec;
+}
+
+STDROMANO_TEST_CASE(default_construction_is_empty)
+{
+    const std::int64_t live = Tracked::live();
+
     {
-        stdromano::Vector<TestObject> vec;
-        ASSERT_EQUAL(0u, vec.size());
-        ASSERT_EQUAL(0u, TestObject::get_total_instances());
+        Vector<Tracked> vec;
+
+        STDROMANO_CHECK_EQ(vec.size(), 0u);
+        STDROMANO_CHECK_EQ(vec.capacity(), 0u);
+        STDROMANO_CHECK(vec.empty());
+        STDROMANO_CHECK(vec.data() == nullptr);
     }
 
-    // Constructor with size
+    STDROMANO_CHECK_EQ(Tracked::live(), live);
+}
+
+STDROMANO_TEST_CASE(count_construction_copies_the_value)
+{
+    const std::int64_t live = Tracked::live();
+
     {
-        stdromano::Vector<TestObject> vec(5, TestObject("test"));
-        ASSERT_EQUAL(5u, vec.size());
-        ASSERT_EQUAL(5u, TestObject::get_total_instances());
+        Vector<Tracked> vec(5, Tracked("test"));
+
+        STDROMANO_REQUIRE_EQ(vec.size(), 5u);
+        STDROMANO_CHECK_EQ(Tracked::live(), live + 5);
+
+        for(const Tracked& item : vec)
+            STDROMANO_CHECK_EQ(item.value(), "test");
     }
 
-    // Constructor with initialization list and with iterator
+    STDROMANO_CHECK_EQ(Tracked::live(), live);
+}
+
+STDROMANO_TEST_CASE(zero_count_construction_allocates)
+{
+    Vector<Tracked> vec(0, Tracked("x"));
+
+    STDROMANO_CHECK_EQ(vec.size(), 0u);
+    STDROMANO_CHECK_GT(vec.capacity(), 0u);
+}
+
+STDROMANO_TEST_CASE(initializer_list_and_iterator_construction)
+{
+    const std::int64_t live = Tracked::live();
+
     {
-        stdromano::Vector<TestObject> vec({TestObject("test1"), TestObject("test2")});
-        ASSERT_EQUAL(2u, vec.size());
-        ASSERT_EQUAL(2u, TestObject::get_total_instances());
+        Vector<Tracked> vec({Tracked("test1"), Tracked("test2")});
 
-        stdromano::Vector<TestObject> vec2(vec.begin(), vec.end());
-        ASSERT_EQUAL(2u, vec2.size());
-        ASSERT_EQUAL(4u, TestObject::get_total_instances());
-    }
-}
+        STDROMANO_REQUIRE_EQ(vec.size(), 2u);
+        STDROMANO_CHECK_EQ(vec[0].value(), "test1");
+        STDROMANO_CHECK_EQ(vec[1].value(), "test2");
+        STDROMANO_CHECK_EQ(Tracked::live(), live + 2);
 
-TEST_CASE(test_push_back_and_pop_back)
-{
-    stdromano::Vector<TestObject> vec;
+        Vector<Tracked> vec2(vec.begin(), vec.end());
 
-    // Push back
-    vec.push_back(TestObject("first"));
-    ASSERT_EQUAL(1u, vec.size());
-    ASSERT_EQUAL("first", vec[0].get_data());
-
-    vec.push_back(TestObject("second"));
-    ASSERT_EQUAL(2u, vec.size());
-    ASSERT_EQUAL("second", vec[1].get_data());
-
-    // Pop back
-    vec.pop_back();
-    ASSERT_EQUAL(1u, vec.size());
-    ASSERT_EQUAL("first", vec[0].get_data());
-}
-
-TEST_CASE(test_copy_and_move)
-{
-    stdromano::Vector<TestObject> vec1;
-    vec1.push_back(TestObject("test1"));
-    vec1.push_back(TestObject("test2"));
-
-    // Test copy constructor
-    stdromano::Vector<TestObject> vec2(vec1);
-    ASSERT_EQUAL(vec1.size(), vec2.size());
-    ASSERT_EQUAL(vec1[0].get_data(), vec2[0].get_data());
-
-    // Test move constructor
-    stdromano::Vector<TestObject> vec3(std::move(vec1));
-    ASSERT_EQUAL(2u, vec3.size());
-    ASSERT_EQUAL(0u, vec1.size()); // vec1 should be empty after move
-
-    // Test copy assignment
-    stdromano::Vector<TestObject> vec4;
-    vec4 = vec2;
-    ASSERT_EQUAL(vec2.size(), vec4.size());
-    ASSERT_EQUAL(vec2[0].get_data(), vec4[0].get_data());
-
-    // Test move assignment
-    stdromano::Vector<TestObject> vec5;
-    vec5 = std::move(vec2);
-    ASSERT_EQUAL(2u, vec5.size());
-    ASSERT_EQUAL(0u, vec2.size()); // vec2 should be empty after move
-}
-
-TEST_CASE(test_element_access)
-{
-    stdromano::Vector<TestObject> vec;
-    vec.push_back(TestObject("first"));
-    vec.push_back(TestObject("second"));
-
-    // Test operator[]
-    ASSERT_EQUAL("first", vec[0].get_data());
-    ASSERT_EQUAL("second", vec[1].get_data());
-
-    // Test at() with valid index
-    ASSERT_EQUAL("first", vec.at(0)->get_data());
-
-    // Test at() with invalid index
-    // ASSERT_EQUAL(vec.at(2), nullptr);
-}
-
-TEST_CASE(test_capacity)
-{
-    stdromano::Vector<TestObject> vec;
-
-    // Test initial capacity
-    ASSERT_EQUAL(0u, vec.size());
-
-    // Test capacity growth
-    for(int i = 0; i < 100; ++i)
-    {
-        vec.push_back(TestObject(stdromano::to_string(i)));
+        STDROMANO_REQUIRE_EQ(vec2.size(), 2u);
+        STDROMANO_CHECK(vec2[0] == vec[0]);
+        STDROMANO_CHECK(vec2[1] == vec[1]);
+        STDROMANO_CHECK_EQ(Tracked::live(), live + 4);
     }
 
-    ASSERT_EQUAL(100u, vec.size());
-    ASSERT(vec.capacity() >= vec.size());
+    STDROMANO_CHECK_EQ(Tracked::live(), live);
 }
 
-TEST_CASE(test_emplace_back)
+STDROMANO_TEST_CASE(push_back_and_pop_back)
 {
-    stdromano::Vector<TestObject> vec;
+    Vector<Tracked> vec;
+
+    vec.push_back(Tracked("first"));
+    STDROMANO_REQUIRE_EQ(vec.size(), 1u);
+    STDROMANO_CHECK_EQ(vec[0].value(), "first");
+
+    const Tracked second("second");
+    vec.push_back(second);
+    STDROMANO_REQUIRE_EQ(vec.size(), 2u);
+    STDROMANO_CHECK_EQ(vec[1].value(), "second");
+
+    const Tracked popped = vec.pop_back();
+    STDROMANO_CHECK_EQ(popped.value(), "second");
+    STDROMANO_REQUIRE_EQ(vec.size(), 1u);
+    STDROMANO_CHECK_EQ(vec[0].value(), "first");
+}
+
+STDROMANO_TEST_CASE(emplace_back)
+{
+    Vector<Tracked> vec;
 
     vec.emplace_back("emplace1");
-    ASSERT_EQUAL(1u, vec.size());
-    ASSERT_EQUAL("emplace1", vec[0].get_data());
-
     vec.emplace_back("emplace2");
-    ASSERT_EQUAL(2u, vec.size());
-    ASSERT_EQUAL("emplace2", vec[1].get_data());
+
+    STDROMANO_REQUIRE_EQ(vec.size(), 2u);
+    STDROMANO_CHECK_EQ(vec[0].value(), "emplace1");
+    STDROMANO_CHECK_EQ(vec[1].value(), "emplace2");
 }
 
-TEST_CASE(test_front_and_back)
+STDROMANO_TEST_CASE(copy_and_move)
 {
-    stdromano::Vector<TestObject> vec;
-    vec.push_back(TestObject("first"));
-    vec.push_back(TestObject("middle"));
-    vec.push_back(TestObject("last"));
+    const std::int64_t live = Tracked::live();
 
-    ASSERT_EQUAL("first", vec.front().get_data());
-    ASSERT_EQUAL("last", vec.back().get_data());
+    {
+        Vector<Tracked> vec1 = make_tracked({"test1", "test2"});
 
-    // Test const overloads
-    const auto& cvec = vec;
-    ASSERT_EQUAL("first", cvec.front().get_data());
-    ASSERT_EQUAL("last", cvec.back().get_data());
+        Vector<Tracked> vec2(vec1);
+        STDROMANO_REQUIRE_EQ(vec2.size(), vec1.size());
+        STDROMANO_CHECK(vec2[0] == vec1[0]);
+        STDROMANO_CHECK(vec2[1] == vec1[1]);
+
+        Vector<Tracked> vec3(std::move(vec1));
+        STDROMANO_CHECK_EQ(vec3.size(), 2u);
+        STDROMANO_CHECK_EQ(vec1.size(), 0u);
+        STDROMANO_CHECK(vec1.data() == nullptr);
+
+        Vector<Tracked> vec4;
+        vec4 = vec2;
+        STDROMANO_REQUIRE_EQ(vec4.size(), vec2.size());
+        STDROMANO_CHECK(vec4[0] == vec2[0]);
+
+        Vector<Tracked> vec5 = make_tracked({"overwritten"});
+        vec5 = std::move(vec2);
+        STDROMANO_CHECK_EQ(vec5.size(), 2u);
+        STDROMANO_CHECK_EQ(vec2.size(), 0u);
+    }
+
+    STDROMANO_CHECK_EQ(Tracked::live(), live);
 }
 
-TEST_CASE(test_empty)
+STDROMANO_TEST_CASE(copy_and_move_empty)
 {
-    stdromano::Vector<TestObject> vec;
-    ASSERT(vec.empty());
+    Vector<Tracked> empty;
 
-    vec.push_back(TestObject("x"));
-    ASSERT(!vec.empty());
+    Vector<Tracked> copy(empty);
+    STDROMANO_CHECK_EQ(copy.size(), 0u);
+    STDROMANO_CHECK(copy.data() == nullptr);
 
-    vec.pop_back();
-    ASSERT(vec.empty());
+    Vector<Tracked> moved(std::move(empty));
+    STDROMANO_CHECK_EQ(moved.size(), 0u);
+
+    Vector<Tracked> nonempty = make_tracked({"x"});
+    nonempty = copy;
+    STDROMANO_CHECK_EQ(nonempty.size(), 0u);
 }
 
-TEST_CASE(test_clear)
+STDROMANO_TEST_CASE(self_assignment)
 {
-    stdromano::Vector<TestObject> vec;
-    for (int i = 0; i < 10; ++i)
-        vec.push_back(TestObject(stdromano::to_string(i)));
+    Vector<Tracked> vec = make_tracked({"a", "b"});
+    Vector<Tracked>& alias = vec;
 
-    ASSERT_EQUAL(10u, vec.size());
-    size_t cap_before = vec.capacity();
+    vec = alias;
+    STDROMANO_REQUIRE_EQ(vec.size(), 2u);
+    STDROMANO_CHECK_EQ(vec[0].value(), "a");
+
+    vec = std::move(alias);
+    STDROMANO_REQUIRE_EQ(vec.size(), 2u);
+    STDROMANO_CHECK_EQ(vec[1].value(), "b");
+}
+
+STDROMANO_TEST_CASE(element_access)
+{
+    Vector<Tracked> vec = make_tracked({"first", "middle", "last"});
+    const Vector<Tracked>& cvec = vec;
+
+    STDROMANO_CHECK_EQ(vec[0].value(), "first");
+    STDROMANO_CHECK_EQ(vec.at(1)->value(), "middle");
+    STDROMANO_CHECK_EQ(vec.front().value(), "first");
+    STDROMANO_CHECK_EQ(vec.back().value(), "last");
+    STDROMANO_CHECK_EQ(cvec.front().value(), "first");
+    STDROMANO_CHECK_EQ(cvec.back().value(), "last");
+    STDROMANO_CHECK_EQ(cvec.at(2)->value(), "last");
+}
+
+STDROMANO_TEST_CASE(data_pointer)
+{
+    Vector<Tracked> vec;
+    STDROMANO_CHECK(vec.data() == nullptr);
+
+    vec.emplace_back("x");
+    STDROMANO_REQUIRE(vec.data() != nullptr);
+    STDROMANO_CHECK_EQ(vec.data()[0].value(), "x");
+
+    const Vector<Tracked>& cvec = vec;
+    STDROMANO_CHECK(cvec.data() == vec.data());
+}
+
+STDROMANO_TEST_CASE(empty_and_clear)
+{
+    const std::int64_t live = Tracked::live();
+
+    Vector<Tracked> vec;
+    STDROMANO_CHECK(vec.empty());
+    vec.clear();
+    STDROMANO_CHECK_EQ(vec.size(), 0u);
+
+    for(int i = 0; i < 10; ++i)
+        vec.emplace_back(std::to_string(i));
+
+    STDROMANO_CHECK(!vec.empty());
+
+    const std::size_t capacity = vec.capacity();
 
     vec.clear();
-    ASSERT_EQUAL(0u, vec.size());
-    // Capacity should remain unchanged after clear
-    ASSERT_EQUAL(cap_before, vec.capacity());
+    STDROMANO_CHECK(vec.empty());
+    STDROMANO_CHECK_EQ(vec.capacity(), capacity);
+    STDROMANO_CHECK_EQ(Tracked::live(), live);
 }
 
-TEST_CASE(test_clear_empty_vector)
+STDROMANO_TEST_CASE(capacity_growth_keeps_the_elements)
 {
-    stdromano::Vector<TestObject> vec;
-    // Should not crash on empty vector
-    vec.clear();
-    ASSERT_EQUAL(0u, vec.size());
+    Vector<Tracked> vec;
+
+    for(int i = 0; i < 1000; ++i)
+    {
+        vec.emplace_back(std::to_string(i));
+        STDROMANO_REQUIRE_GE(vec.capacity(), vec.size());
+    }
+
+    STDROMANO_REQUIRE_EQ(vec.size(), 1000u);
+
+    for(int i = 0; i < 1000; ++i)
+        STDROMANO_REQUIRE_EQ(vec[i].value(), std::to_string(i));
 }
 
-TEST_CASE(test_resize_and_reserve)
+STDROMANO_TEST_CASE(resize_and_reserve)
 {
-    stdromano::Vector<TestObject> vec;
+    Vector<Tracked> vec;
 
     vec.reserve(50);
-    ASSERT(vec.capacity() >= 50u);
-    ASSERT_EQUAL(0u, vec.size());
+    STDROMANO_CHECK_GE(vec.capacity(), 50u);
+    STDROMANO_CHECK_EQ(vec.size(), 0u);
 
-    // resize should not shrink
-    size_t cap = vec.capacity();
-    vec.resize(cap - 1);
-    ASSERT_EQUAL(cap, vec.capacity());
+    const std::size_t capacity = vec.capacity();
 
-    // resize to larger
-    vec.resize(cap + 100);
-    ASSERT(vec.capacity() >= cap + 100);
+    vec.resize(capacity - 1);
+    STDROMANO_CHECK_EQ(vec.capacity(), capacity);
+
+    vec.resize(capacity + 100);
+    STDROMANO_CHECK_GE(vec.capacity(), capacity + 100);
 }
 
-TEST_CASE(test_insert_single)
+STDROMANO_TEST_CASE(insert_single)
 {
-    stdromano::Vector<TestObject> vec;
-    vec.push_back(TestObject("a"));
-    vec.push_back(TestObject("c"));
+    Vector<Tracked> vec = make_tracked({"a", "c"});
 
-    vec.insert(TestObject("b"), 1);
-    ASSERT_EQUAL(3u, vec.size());
-    ASSERT_EQUAL("a", vec[0].get_data());
-    ASSERT_EQUAL("b", vec[1].get_data());
-    ASSERT_EQUAL("c", vec[2].get_data());
+    vec.insert(Tracked("b"), 1);
+    vec.insert(Tracked("z"), 0);
+    vec.insert(Tracked("end"), vec.size());
 
-    // Insert at front
-    vec.insert(TestObject("z"), 0);
-    ASSERT_EQUAL(4u, vec.size());
-    ASSERT_EQUAL("z", vec[0].get_data());
-
-    // Insert at end
-    vec.insert(TestObject("end"), vec.size());
-    ASSERT_EQUAL(5u, vec.size());
-    ASSERT_EQUAL("end", vec[4].get_data());
+    STDROMANO_CHECK(same_content(vec, std::vector<Tracked>{"z", "a", "b", "c", "end"}));
 }
 
-TEST_CASE(test_insert_count)
+STDROMANO_TEST_CASE(insert_count)
 {
-    stdromano::Vector<TestObject> vec;
-    vec.push_back(TestObject("a"));
-    vec.push_back(TestObject("d"));
+    const std::int64_t live = Tracked::live();
 
-    vec.insert(vec.begin() + 1, 2, TestObject("x"));
+    {
+        Vector<Tracked> vec = make_tracked({"a", "d"});
+        vec.insert(vec.begin() + 1, 2, Tracked("x"));
+        STDROMANO_CHECK(same_content(vec, std::vector<Tracked>{"a", "x", "x", "d"}));
 
-    ASSERT_EQUAL(4u, vec.size());
-    ASSERT_EQUAL("a", vec[0].get_data());
-    ASSERT_EQUAL("x", vec[1].get_data());
-    ASSERT_EQUAL("x", vec[2].get_data());
-    ASSERT_EQUAL("d", vec[3].get_data());
+        Vector<Tracked> tail = make_tracked({"a", "b", "c", "d"});
+        tail.insert(tail.begin() + 1, 2, Tracked("x"));
+        STDROMANO_CHECK(same_content(tail, std::vector<Tracked>{"a", "x", "x", "b", "c", "d"}));
+    }
+
+    STDROMANO_CHECK_EQ(Tracked::live(), live);
 }
 
-TEST_CASE(test_insert_range)
+STDROMANO_TEST_CASE(insert_range)
 {
-    stdromano::Vector<TestObject> src;
-    src.push_back(TestObject("x"));
-    src.push_back(TestObject("y"));
+    const std::int64_t live = Tracked::live();
 
-    stdromano::Vector<TestObject> dst;
-    dst.push_back(TestObject("a"));
-    dst.push_back(TestObject("b"));
+    {
+        const Vector<Tracked> src = make_tracked({"x", "y"});
 
-    dst.insert(dst.begin() + 1, src.begin(), src.end());
-    ASSERT_EQUAL(4u, dst.size());
-    ASSERT_EQUAL("a", dst[0].get_data());
-    ASSERT_EQUAL("x", dst[1].get_data());
-    ASSERT_EQUAL("y", dst[2].get_data());
-    ASSERT_EQUAL("b", dst[3].get_data());
+        Vector<Tracked> middle = make_tracked({"a", "b"});
+        middle.insert(middle.begin() + 1, src.begin(), src.end());
+        STDROMANO_CHECK(same_content(middle, std::vector<Tracked>{"a", "x", "y", "b"}));
+
+        Vector<Tracked> end = make_tracked({"a"});
+        end.insert(end.end(), src.begin(), src.end());
+        STDROMANO_CHECK(same_content(end, std::vector<Tracked>{"a", "x", "y"}));
+
+        Vector<Tracked> long_tail = make_tracked({"a", "b", "c", "d"});
+        long_tail.insert(long_tail.begin(), src.begin(), src.end());
+        STDROMANO_CHECK(same_content(long_tail, std::vector<Tracked>{"x", "y", "a", "b", "c", "d"}));
+
+        Vector<Tracked> list = make_tracked({"a", "d"});
+        list.insert(list.cbegin() + 1, {Tracked("b"), Tracked("c")});
+        STDROMANO_CHECK(same_content(list, std::vector<Tracked>{"a", "b", "c", "d"}));
+    }
+
+    STDROMANO_CHECK_EQ(Tracked::live(), live);
 }
 
-TEST_CASE(test_insert_range_at_end)
+STDROMANO_TEST_CASE(erase)
 {
-    stdromano::Vector<TestObject> src;
-    src.push_back(TestObject("x"));
-    src.push_back(TestObject("y"));
+    const std::int64_t live = Tracked::live();
 
-    stdromano::Vector<TestObject> dst;
-    dst.push_back(TestObject("a"));
+    {
+        Vector<Tracked> single = make_tracked({"a", "b", "c"});
+        single.erase(single.cbegin() + 1);
+        STDROMANO_CHECK(same_content(single, std::vector<Tracked>{"a", "c"}));
 
-    dst.insert(dst.end(), src.begin(), src.end());
-    ASSERT_EQUAL(3u, dst.size());
-    ASSERT_EQUAL("a", dst[0].get_data());
-    ASSERT_EQUAL("x", dst[1].get_data());
-    ASSERT_EQUAL("y", dst[2].get_data());
+        Vector<Tracked> range = make_tracked({"a", "b", "c", "d"});
+        range.erase(range.cbegin() + 1, range.cbegin() + 3);
+        STDROMANO_CHECK(same_content(range, std::vector<Tracked>{"a", "d"}));
+
+        Vector<Tracked> empty_range = make_tracked({"a", "b"});
+        empty_range.erase(empty_range.cbegin() + 1, empty_range.cbegin() + 1);
+        STDROMANO_CHECK_EQ(empty_range.size(), 2u);
+    }
+
+    STDROMANO_CHECK_EQ(Tracked::live(), live);
 }
 
-TEST_CASE(test_insert_initializer_list)
+STDROMANO_TEST_CASE(find_and_cfind)
 {
-    stdromano::Vector<TestObject> vec;
-    vec.push_back(TestObject("a"));
-    vec.push_back(TestObject("d"));
+    Vector<Tracked> vec = make_tracked({"a", "b", "c"});
 
-    vec.insert(vec.cbegin() + 1, {TestObject("b"), TestObject("c")});
-    ASSERT_EQUAL(4u, vec.size());
-    ASSERT_EQUAL("a", vec[0].get_data());
-    ASSERT_EQUAL("b", vec[1].get_data());
-    ASSERT_EQUAL("c", vec[2].get_data());
-    ASSERT_EQUAL("d", vec[3].get_data());
+    auto found = vec.find([](const Tracked& o) { return o.value() == "b"; });
+    STDROMANO_REQUIRE(found != vec.end());
+    STDROMANO_CHECK_EQ((*found).value(), "b");
+
+    STDROMANO_CHECK(vec.find([](const Tracked& o) { return o.value() == "z"; }) == vec.end());
+    STDROMANO_CHECK(vec.find(Tracked("c")) == vec.begin() + 2);
+
+    Vector<Tracked> empty;
+    STDROMANO_CHECK(empty.find([](const Tracked&) { return true; }) == empty.end());
+
+    const Vector<Tracked>& cvec = vec;
+
+    auto cfound = cvec.cfind([](const Tracked& o) { return o.value() == "a"; });
+    STDROMANO_REQUIRE(cfound != cvec.cend());
+    STDROMANO_CHECK_EQ((*cfound).value(), "a");
+
+    STDROMANO_CHECK(cvec.cfind([](const Tracked& o) { return o.value() == "z"; }) == cvec.cend());
 }
 
-TEST_CASE(test_erase_single)
+STDROMANO_TEST_CASE(iterators)
 {
-    stdromano::Vector<TestObject> vec;
-    vec.push_back(TestObject("a"));
-    vec.push_back(TestObject("b"));
-    vec.push_back(TestObject("c"));
+    Vector<Tracked> vec = make_tracked({"a", "b", "c"});
 
-    vec.erase(vec.cbegin() + 1);
-    ASSERT_EQUAL(2u, vec.size());
-    ASSERT_EQUAL("a", vec[0].get_data());
-    ASSERT_EQUAL("c", vec[1].get_data());
-}
+    std::size_t count = 0;
 
-TEST_CASE(test_erase_range)
-{
-    stdromano::Vector<TestObject> vec;
-    vec.push_back(TestObject("a"));
-    vec.push_back(TestObject("b"));
-    vec.push_back(TestObject("c"));
-    vec.push_back(TestObject("d"));
+    for(auto it = vec.begin(); it != vec.end(); ++it)
+        ++count;
 
-    vec.erase(vec.cbegin() + 1, vec.cbegin() + 3);
-    ASSERT_EQUAL(2u, vec.size());
-    ASSERT_EQUAL("a", vec[0].get_data());
-    ASSERT_EQUAL("d", vec[1].get_data());
-}
+    STDROMANO_CHECK_EQ(count, 3u);
 
-TEST_CASE(test_find)
-{
-    stdromano::Vector<TestObject> vec;
-    vec.push_back(TestObject("a"));
-    vec.push_back(TestObject("b"));
-    vec.push_back(TestObject("c"));
+    auto it = vec.begin();
+    auto it2 = it + 2;
 
-    // Find with predicate
-    auto it = vec.find([](const TestObject& o) { return o.get_data() == "b"; });
-    ASSERT(it != vec.end());
-    ASSERT_EQUAL("b", (*it).get_data());
+    STDROMANO_CHECK_EQ((*it).value(), "a");
+    STDROMANO_CHECK_EQ((*it2).value(), "c");
+    STDROMANO_CHECK_EQ(it2 - it, 2);
+    STDROMANO_CHECK(it < it2);
+    STDROMANO_CHECK(it2 > it);
+    STDROMANO_CHECK(it <= it);
+    STDROMANO_CHECK(it >= it);
 
-    // Not found
-    auto it2 = vec.find([](const TestObject& o) { return o.get_data() == "z"; });
-    ASSERT(it2 == vec.end());
+    --it2;
+    STDROMANO_CHECK_EQ((*it2).value(), "b");
+    STDROMANO_CHECK_EQ(it[1].value(), "b");
 
-    // Find on empty vector
-    stdromano::Vector<TestObject> empty_vec;
-    auto it3 = empty_vec.find([](const TestObject& o) { return true; });
-    ASSERT(it3 == empty_vec.end());
-}
+    const Vector<Tracked>& cvec = vec;
 
-TEST_CASE(test_cfind)
-{
-    stdromano::Vector<TestObject> vec;
-    vec.push_back(TestObject("a"));
-    vec.push_back(TestObject("b"));
-
-    const auto& cvec = vec;
-
-    auto it = cvec.cfind([](const TestObject& o) { return o.get_data() == "a"; });
-    ASSERT(it != cvec.cend());
-    ASSERT_EQUAL("a", (*it).get_data());
-
-    auto it2 = cvec.cfind([](const TestObject& o) { return o.get_data() == "z"; });
-    ASSERT(it2 == cvec.cend());
-}
-
-TEST_CASE(test_iterators)
-{
-    stdromano::Vector<TestObject> vec;
-    vec.push_back(TestObject("a"));
-    vec.push_back(TestObject("b"));
-    vec.push_back(TestObject("c"));
-
-    // Forward iteration
-    size_t count = 0;
-    for (auto it = vec.begin(); it != vec.end(); ++it)
-        count++;
-    ASSERT_EQUAL(3u, count);
-
-    // Range-based for
     count = 0;
 
-    for(const auto& elem : vec)
-    {
-        STDROMANO_UNUSED(elem);
-        count++;
-    }
+    for(auto cit = cvec.cbegin(); cit != cvec.cend(); ++cit)
+        ++count;
 
-    ASSERT_EQUAL(3u, count);
+    STDROMANO_CHECK_EQ(count, 3u);
 
-    // Iterator arithmetic
-    auto it = vec.begin();
-    ASSERT_EQUAL("a", (*it).get_data());
-    auto it2 = it + 2;
-    ASSERT_EQUAL("c", (*it2).get_data());
-    ASSERT_EQUAL(2, it2 - it);
+    Vector<Tracked> empty;
 
-    // Comparison operators
-    ASSERT(it < it2);
-    ASSERT(it2 > it);
-    ASSERT(it <= it);
-    ASSERT(it >= it);
-
-    // Decrement
-    --it2;
-    ASSERT_EQUAL("b", (*it2).get_data());
-
-    // Iterator subscript
-    ASSERT_EQUAL("b", it[1].get_data());
-
-    // Empty iterator
-    stdromano::Vector<TestObject> empty_vec;
-
-    for(auto& elem : empty_vec)
-    {
-        STDROMANO_UNUSED(elem);
-        ASSERT(false);
-    }
+    for(const Tracked& item : empty)
+        STDROMANO_FAIL(StringD::make_fmt("empty vector yielded {}", item.value()).c_str());
 }
 
-TEST_CASE(test_const_iterators)
+STDROMANO_TEST_CASE(memory_usage)
 {
-    stdromano::Vector<TestObject> vec;
-    vec.push_back(TestObject("a"));
-    vec.push_back(TestObject("b"));
+    Vector<Tracked> vec;
+    STDROMANO_CHECK_EQ(vec.memory_usage(), 0u);
 
-    const auto& cvec = vec;
+    vec.emplace_back("a");
+    STDROMANO_CHECK_EQ(vec.memory_usage(), sizeof(Tracked));
 
-    size_t count = 0;
-    for (auto it = cvec.begin(); it != cvec.end(); ++it)
-        count++;
-    ASSERT_EQUAL(2u, count);
-
-    auto cit = cvec.cbegin();
-    ASSERT_EQUAL("a", (*cit).get_data());
-    ++cit;
-    ASSERT_EQUAL("b", (*cit).get_data());
+    vec.emplace_back("b");
+    STDROMANO_CHECK_EQ(vec.memory_usage(), sizeof(Tracked) * 2);
 }
 
-TEST_CASE(test_data_pointer)
+STDROMANO_TEST_CASE(fuzz_against_std_vector)
 {
-    stdromano::Vector<TestObject> vec;
-    ASSERT_EQUAL(nullptr, vec.data());
+    const std::int64_t live = Tracked::live();
 
-    vec.push_back(TestObject("x"));
-    ASSERT(vec.data() != nullptr);
-    ASSERT_EQUAL("x", vec.data()[0].get_data());
+    const auto report = fuzz::run_property(fixtures::options("vector_vs_std_vector", 500), [](fuzz::Source& source) {
+        Vector<Tracked> vec;
+        std::vector<Tracked> reference;
 
-    const auto& cvec = vec;
-    ASSERT(cvec.data() != nullptr);
+        const std::size_t steps = source.range<std::size_t>(1, 200);
+
+        for(std::size_t step = 0; step < steps; ++step)
+        {
+            const std::string value = std::to_string(source.range<int>(0, 1000));
+
+            switch(source.index(11))
+            {
+                case 0:
+                    vec.push_back(Tracked(value));
+                    reference.push_back(Tracked(value));
+                    break;
+                case 1:
+                    vec.emplace_back(value);
+                    reference.emplace_back(value);
+                    break;
+                case 2:
+                    if(!reference.empty())
+                    {
+                        const Tracked popped = vec.pop_back();
+                        STDROMANO_FUZZ_CHECK_EQ(popped.value(), reference.back().value());
+                        reference.pop_back();
+                    }
+                    break;
+                case 3:
+                {
+                    const std::size_t position = source.range<std::size_t>(0, reference.size());
+                    vec.insert(Tracked(value), position);
+                    reference.insert(reference.begin() + position, Tracked(value));
+                    break;
+                }
+                case 4:
+                {
+                    const std::size_t position = source.range<std::size_t>(0, reference.size());
+                    const std::size_t count = source.range<std::size_t>(0, 8);
+                    vec.insert(vec.begin() + offset(position), count, Tracked(value));
+                    reference.insert(reference.begin() + position, count, Tracked(value));
+                    break;
+                }
+                case 5:
+                {
+                    std::vector<Tracked> items;
+                    const std::size_t count = source.range<std::size_t>(0, 8);
+
+                    for(std::size_t i = 0; i < count; ++i)
+                        items.emplace_back(value + "_" + std::to_string(i));
+
+                    const std::size_t position = source.range<std::size_t>(0, reference.size());
+                    vec.insert(vec.begin() + offset(position), items.begin(), items.end());
+                    reference.insert(reference.begin() + position, items.begin(), items.end());
+                    break;
+                }
+                case 6:
+                    if(!reference.empty())
+                    {
+                        const std::size_t position = source.index(reference.size());
+                        vec.erase(vec.cbegin() + offset(position));
+                        reference.erase(reference.begin() + position);
+                    }
+                    break;
+                case 7:
+                {
+                    const std::size_t first = source.range<std::size_t>(0, reference.size());
+                    const std::size_t last = source.range<std::size_t>(first, reference.size());
+
+                    if(first < reference.size())
+                    {
+                        vec.erase(vec.cbegin() + offset(first), vec.cbegin() + offset(last));
+                        reference.erase(reference.begin() + first, reference.begin() + last);
+                    }
+                    break;
+                }
+                case 8:
+                    if(source.one_in(8))
+                    {
+                        vec.clear();
+                        reference.clear();
+                    }
+                    break;
+                case 9:
+                {
+                    Vector<Tracked> copy(vec);
+                    vec = std::move(copy);
+                    break;
+                }
+                default:
+                    vec.reserve(source.range<std::size_t>(0, 64));
+                    break;
+            }
+
+            STDROMANO_FUZZ_CHECK_EQ(vec.size(), reference.size());
+        }
+
+        STDROMANO_FUZZ_CHECK(same_content(vec, reference));
+
+        return true;
+    });
+
+    TESTS_REQUIRE_PROPERTY(report);
+    STDROMANO_CHECK_EQ(Tracked::live(), live);
 }
 
-TEST_CASE(test_memory_usage)
+STDROMANO_TEST_CASE(fuzz_trivial_type_against_std_vector)
 {
-    stdromano::Vector<TestObject> vec;
-    ASSERT_EQUAL(0u, vec.memory_usage());
+    const auto report = fuzz::run_property(fixtures::options("vector_int_vs_std_vector", 500), [](fuzz::Source& source) {
+        Vector<std::int64_t> vec;
+        std::vector<std::int64_t> reference;
 
-    vec.push_back(TestObject("a"));
-    ASSERT_EQUAL(sizeof(TestObject) * 1, vec.memory_usage());
+        const std::size_t steps = source.range<std::size_t>(1, 300);
 
-    vec.push_back(TestObject("b"));
-    ASSERT_EQUAL(sizeof(TestObject) * 2, vec.memory_usage());
+        for(std::size_t step = 0; step < steps; ++step)
+        {
+            const std::int64_t value = source.integer<std::int64_t>();
+
+            switch(source.index(5))
+            {
+                case 0:
+                    vec.push_back(value);
+                    reference.push_back(value);
+                    break;
+                case 1:
+                {
+                    const std::size_t position = source.range<std::size_t>(0, reference.size());
+                    const std::size_t count = source.range<std::size_t>(0, 16);
+                    vec.insert(vec.begin() + offset(position), count, value);
+                    reference.insert(reference.begin() + position, count, value);
+                    break;
+                }
+                case 2:
+                {
+                    const std::size_t position = source.range<std::size_t>(0, reference.size());
+                    vec.insert(value, position);
+                    reference.insert(reference.begin() + position, value);
+                    break;
+                }
+                case 3:
+                    if(!reference.empty())
+                    {
+                        const std::size_t position = source.index(reference.size());
+                        vec.erase(vec.cbegin() + offset(position));
+                        reference.erase(reference.begin() + position);
+                    }
+                    break;
+                default:
+                    if(!reference.empty())
+                    {
+                        STDROMANO_FUZZ_CHECK_EQ(vec.pop_back(), reference.back());
+                        reference.pop_back();
+                    }
+                    break;
+            }
+        }
+
+        STDROMANO_FUZZ_CHECK(same_content(vec, reference));
+
+        return true;
+    });
+
+    TESTS_REQUIRE_PROPERTY(report);
 }
 
-TEST_CASE(test_growth_under_pressure)
-{
-    stdromano::Vector<TestObject> vec;
-    // Push many elements to trigger multiple growths
-    for (int i = 0; i < 1000; ++i)
-        vec.push_back(TestObject(stdromano::to_string(i)));
-
-    ASSERT_EQUAL(1000u, vec.size());
-    // Verify data integrity after multiple reallocations
-    for (int i = 0; i < 1000; ++i)
-        ASSERT_EQUAL(stdromano::to_string(i), vec[i].get_data());
-}
-
-TEST_CASE(test_self_assignment)
-{
-    stdromano::Vector<TestObject> vec;
-    vec.push_back(TestObject("a"));
-    vec.push_back(TestObject("b"));
-
-    vec = vec; // Copy self-assignment
-    ASSERT_EQUAL(2u, vec.size());
-    ASSERT_EQUAL("a", vec[0].get_data());
-
-    vec = std::move(vec); // Move self-assignment
-    ASSERT_EQUAL(2u, vec.size());
-    ASSERT_EQUAL("a", vec[0].get_data());
-}
-
-TEST_CASE(test_copy_and_move_empty)
-{
-    stdromano::Vector<TestObject> empty;
-
-    // Copy empty vector
-    stdromano::Vector<TestObject> copy(empty);
-    ASSERT_EQUAL(0u, copy.size());
-    ASSERT_EQUAL(nullptr, copy.data());
-
-    // Move empty vector
-    stdromano::Vector<TestObject> moved(std::move(empty));
-    ASSERT_EQUAL(0u, moved.size());
-
-    // Assign empty to non-empty
-    stdromano::Vector<TestObject> nonempty;
-    nonempty.push_back(TestObject("x"));
-    nonempty = copy;
-    ASSERT_EQUAL(0u, nonempty.size());
-}
-
-TEST_CASE(test_constructor_with_zero_count)
-{
-    stdromano::Vector<TestObject> vec(0, TestObject("x"));
-    ASSERT_EQUAL(0u, vec.size());
-    ASSERT(vec.capacity() > 0u); // Should allocate MIN_SIZE
-}
-
-TEST_CASE(test_pop_back_returns_value)
-{
-    stdromano::Vector<TestObject> vec;
-    vec.push_back(TestObject("val"));
-
-    TestObject popped = vec.pop_back();
-    ASSERT_EQUAL("val", popped.get_data());
-    ASSERT_EQUAL(0u, vec.size());
-}
-
-int main()
-{
-    TestRunner runner;
-
-    runner.add_test("Constructor and Destructor", test_constructor_and_destructor);
-    runner.add_test("Push Back and Pop Back", test_push_back_and_pop_back);
-    runner.add_test("Copy and Move", test_copy_and_move);
-    runner.add_test("Element Access", test_element_access);
-    runner.add_test("Capacity", test_capacity);
-    runner.add_test("Emplace Back", test_emplace_back);
-    runner.add_test("Front and Back", test_front_and_back);
-    runner.add_test("Empty", test_empty);
-    runner.add_test("Clear", test_clear);
-    runner.add_test("Clear Empty Vector", test_clear_empty_vector);
-    runner.add_test("Resize and Reserve", test_resize_and_reserve);
-    runner.add_test("Insert Single", test_insert_single);
-    runner.add_test("Insert Count", test_insert_count);
-    runner.add_test("Insert Range", test_insert_range);
-    runner.add_test("Insert Range at End", test_insert_range_at_end);
-    runner.add_test("Insert Initializer List", test_insert_initializer_list);
-    runner.add_test("Erase Single", test_erase_single);
-    runner.add_test("Erase Range", test_erase_range);
-    runner.add_test("Find", test_find);
-    runner.add_test("CFind", test_cfind);
-    runner.add_test("Iterators", test_iterators);
-    runner.add_test("Const Iterators", test_const_iterators);
-    runner.add_test("Data Pointer", test_data_pointer);
-    runner.add_test("Memory Usage", test_memory_usage);
-    runner.add_test("Growth Under Pressure", test_growth_under_pressure);
-    runner.add_test("Self Assignment", test_self_assignment);
-    runner.add_test("Copy and Move Empty", test_copy_and_move_empty);
-    runner.add_test("Constructor Zero Count", test_constructor_with_zero_count);
-    runner.add_test("Pop Back Returns Value", test_pop_back_returns_value);
-
-    if(runner.run_all() != 0)
-        return 1;
-    return 0;
-}
+STDROMANO_TEST_MAIN()

@@ -13,6 +13,8 @@ set BUILDTYPE=Release
 set RUNTESTS=0
 set REMOVEOLDDIR=0
 set ARCH=x64
+if /I "%PROCESSOR_ARCHITECTURE%" equ "ARM64" set ARCH=ARM64
+if /I "%PROCESSOR_ARCHITEW6432%" equ "ARM64" set ARCH=ARM64
 set VERSION="0.0.0"
 set INSTALLDIR=%CD%\install
 set INSTALL=0
@@ -31,8 +33,7 @@ if not exist "%VCPKG_PATH%" (
         set VCPKG_ROOT=%VCPKG_PATH%
     ) else (
         call :LogInfo "Vcpkg can't be found, cloning and preparing it"
-        git clone https://github.com/romainaugier/vcpkg.git
-        git checkout stdromano
+        git clone -b stdromano https://github.com/romainaugier/vcpkg.git
         cd vcpkg
         call bootstrap-vcpkg.bat
         cd ..
@@ -72,10 +73,21 @@ if %REMOVEOLDDIR% equ 1 (
     )
 )
 
+if /I "%ARCH%" equ "ARM64" (
+    set VCPKG_TRIPLET=arm64-windows
+    if %ADDRSAN% equ 1 (
+        call :LogWarning "MSVC AddressSanitizer is not available on ARM64, disabling it"
+        set ADDRSAN=0
+    )
+) else (
+    set VCPKG_TRIPLET=x64-windows
+)
+
 call :LogInfo "Build type: %BUILDTYPE%"
 call :LogInfo "Build version: %VERSION%"
+call :LogInfo "Build architecture: %ARCH% (vcpkg triplet: %VCPKG_TRIPLET%)"
 
-cmake -S . -B build -DRUN_TESTS=%RUNTESTS% -A="%ARCH%" -DVERSION=%VERSION% -DADDRSAN=%ADDRSAN% -DENABLE_OPENCL=%ENABLE_OPENCL%
+cmake -S . -B build -A %ARCH% -DVCPKG_TARGET_TRIPLET=%VCPKG_TRIPLET% -DRUN_TESTS=%RUNTESTS% -DVERSION=%VERSION% -DADDRSAN=%ADDRSAN% -DENABLE_OPENCL=%ENABLE_OPENCL%
 
 if %errorlevel% neq 0 (
     call :LogError "Error caught during CMake configuration"
@@ -96,7 +108,7 @@ if %RUNTESTS% equ 1 (
 
     if %errorlevel% neq 0 (
         call :LogError "Error caught during CMake testing"
-        type build\Testing\Temporary\LastTest.log
+        type Testing\Temporary\LastTest.log
 
         cd ..
         exit /B 1
@@ -142,6 +154,10 @@ if "%~1" equ "--opencl" (
     call :LogInfo "Building stdromano with OpenCL support"
 )
 
+echo "%~1" | find /I "--arch:">nul && (
+    call :ParseArch %~1
+)
+
 echo "%~1" | find /I "version">nul && (
     call :ParseVersion %~1
 )
@@ -164,6 +180,18 @@ rem Little function to parse the version from the command line arg (ex: --versio
 for /f "tokens=2 delims=:" %%a in ("%~1") do (
     set VERSION=%%a
     call :LogInfo "Version specified by the user: %%a"
+)
+
+exit /B 0
+rem //////////////////////////////////
+
+rem //////////////////////////////////
+rem Little function to parse the target architecture from the command line (ex: --arch:ARM64)
+:ParseArch
+
+for /f "tokens=2 delims=:" %%a in ("%~1") do (
+    set ARCH=%%a
+    call :LogInfo "Architecture specified by the user: %%a"
 )
 
 exit /B 0

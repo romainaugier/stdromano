@@ -22,6 +22,7 @@ add_definitions(-DSTDROMANO_BUILD_SHARED)
 
 if(STDROMANO_BUILD_ASM)
     add_library(${PROJECT_NAME} SHARED ${src_files} $<TARGET_OBJECTS:asm_objects>)
+    target_compile_definitions(${PROJECT_NAME} PRIVATE STDROMANO_ASM_STRCMP)
 else()
     add_library(${PROJECT_NAME} SHARED ${src_files})
 endif()
@@ -65,6 +66,13 @@ target_link_libraries(${PROJECT_NAME} PRIVATE ${MIMALLOC_TARGET})
 
 if(ENABLE_OPENCL)
     target_link_libraries(${PROJECT_NAME} PUBLIC OpenCL::OpenCL)
+
+    add_custom_command(
+        TARGET ${PROJECT_NAME} POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy_directory
+            ${PROJECT_SOURCE_DIR}/src/cl
+            $<TARGET_FILE_DIR:${PROJECT_NAME}>/cl
+    )
 endif()
 
 target_include_directories(${PROJECT_NAME}

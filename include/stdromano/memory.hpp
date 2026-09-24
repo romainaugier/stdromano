@@ -337,12 +337,36 @@ class STDROMANO_API Arena
         return this->_current_block->_offset + (aligned_addr - current_addr);
     }
 
-    STDROMANO_FORCE_INLINE bool check_resize(const std::uint32_t size) const noexcept
+    STDROMANO_FORCE_INLINE std::size_t required_size(const std::size_t size,
+                                                     const std::size_t alignment) const noexcept
+    {
+        return this->align_offset(alignment) - this->_current_block->_offset + size;
+    }
+
+    STDROMANO_FORCE_INLINE bool check_resize(const std::size_t size) const noexcept
     {
         return (this->_current_block->_offset + size) > this->_current_block->_size;
     }
 
-    void grow() noexcept;
+    Block* first_block() const noexcept;
+
+    void grow(const std::size_t min_size) noexcept;
+
+    void* reserve_aligned(const std::size_t size, const std::size_t alignment) noexcept
+    {
+        const std::size_t worst_case = size + alignment - 1;
+
+        if(this->check_resize(this->required_size(size, alignment)))
+            this->grow(worst_case);
+
+        this->_current_block->_offset = this->align_offset(alignment);
+
+        void* address = this->current_address();
+
+        this->_current_block->_offset += size;
+
+        return address;
+    }
 
     template <typename T>
     static void dtor_func(void* ptr)
@@ -356,31 +380,22 @@ public:
 
     ~Arena();
 
+    Arena(const Arena&) = delete;
+    Arena& operator=(const Arena&) = delete;
+
     void clear() noexcept;
 
     template <typename T, typename... Args>
     T* emplace(Args... args) noexcept
     {
-        constexpr bool needs_destructor = !std::is_trivially_destructible<T>::value;
-        constexpr std::size_t object_size = sizeof(T);
-        constexpr std::size_t dtor_size = needs_destructor ? sizeof(Destructor) : 0;
-        constexpr std::size_t total_size = object_size + dtor_size;
-
-        if(this->check_resize(total_size))
-            this->grow();
-
-        this->_current_block->_offset = this->align_offset(alignof(T));
-
-        void* object_address = this->current_address();
-
-        this->_current_block->_offset += object_size;
+        void* object_address = this->reserve_aligned(sizeof(T), alignof(T));
 
         T* object = ::new(object_address) T(args...);
 
-        if(needs_destructor)
+        if constexpr(!std::is_trivially_destructible_v<T>)
         {
-            Destructor* dtor = static_cast<Destructor*>(this->current_address());
-            this->_current_block->_offset += dtor_size;
+            Destructor* dtor = static_cast<Destructor*>(this->reserve_aligned(sizeof(Destructor),
+                                                                              alignof(Destructor)));
 
             dtor->destroy_func = &Arena::dtor_func<T>;
             dtor->object_ptr = object;
@@ -394,8 +409,8 @@ public:
 
     STDROMANO_FORCE_INLINE void* allocate(std::size_t n) noexcept
     {
-        if(this->check_resize(static_cast<std::uint32_t>(n)))
-            this->grow();
+        if(this->check_resize(n))
+            this->grow(n);
 
         void* address = this->current_address();
 
@@ -404,11 +419,16 @@ public:
         return address;
     }
 
+    STDROMANO_FORCE_INLINE void* allocate_aligned(std::size_t n, std::size_t alignment) noexcept
+    {
+        return this->reserve_aligned(n, alignment);
+    }
+
     STDROMANO_FORCE_INLINE void* at(const size_t offset) const noexcept
     {
         STDROMANO_ASSERT(offset < this->_capacity, "Out of bounds access");
 
-        Block* current = this->_current_block;
+        Block* current = this->first_block();
         std::size_t total_capacity = 0;
 
         while(current != nullptr)

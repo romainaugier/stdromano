@@ -13,6 +13,7 @@
 
 #include "spdlog/fmt/fmt.h"
 
+#include <algorithm>
 #include <iterator>
 #include <functional>
 
@@ -1311,9 +1312,10 @@ public:
         if(substring.size() > this->size())
             return -1;
 
-        const char* found = std::strstr(this->c_str(), substring.c_str());
+        const char* end = this->data() + this->size();
+        const char* found = std::search(this->data(), end, substring.data(), substring.data() + substring.size());
 
-        return found != nullptr ? static_cast<int>(found - this->c_str()) : -1;
+        return found != end ? static_cast<int>(found - this->data()) : -1;
     }
 
     bool split(const String& sep, split_iterator& it, String& split_out) const noexcept
@@ -1332,9 +1334,10 @@ public:
         }
 
         const char* current_start = this->data() + it;
-        const char* found_sep = std::strstr(current_start, sep.c_str());
+        const char* end = this->data() + this->_size;
+        const char* found_sep = std::search(current_start, end, sep.data(), sep.data() + sep.size());
 
-        if(found_sep != nullptr)
+        if(found_sep != end)
         {
             split_out = String::make_ref(current_start, static_cast<size_t>(found_sep - current_start));
             it = static_cast<size_t>(found_sep - this->data()) + sep.size();
@@ -1358,9 +1361,10 @@ public:
             return String::make_ref(*this);
         }
 
-        const char* found_sep = std::strstr(this->data(), sep.c_str());
+        const char* end = this->data() + this->size();
+        const char* found_sep = std::search(this->data(), end, sep.data(), sep.data() + sep.size());
 
-        if(found_sep != nullptr)
+        if(found_sep != end)
         {
             const std::size_t lsplit_len = static_cast<std::size_t>(found_sep - this->data());
 
@@ -1387,9 +1391,10 @@ public:
             return String::make_ref(*this);
         }
 
-        const char* found_sep = strrstr(this->data(), sep.c_str());
+        const char* end = this->data() + this->size();
+        const char* found_sep = std::find_end(this->data(), end, sep.data(), sep.data() + sep.size());
 
-        if(found_sep != nullptr)
+        if(found_sep != end)
         {
             const std::size_t rsplit_start_offset = static_cast<std::size_t>(found_sep - this->data()) + sep.size();
             const std::size_t rsplit_len = this->size() - rsplit_start_offset;

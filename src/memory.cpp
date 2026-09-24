@@ -108,20 +108,36 @@ Arena::Block* Arena::allocate_block(const std::size_t size) noexcept
     return static_cast<Block*>(addr);
 }
 
-void Arena::grow() noexcept
+Arena::Block* Arena::first_block() const noexcept
 {
-    Block* next_block;
+    Block* current = this->_current_block;
 
-    if(this->_current_block->_next != nullptr)
+    while(current != nullptr && current->_prev != nullptr)
+        current = current->_prev;
+
+    return current;
+}
+
+void Arena::grow(const std::size_t min_size) noexcept
+{
+    Block* next_block = this->_current_block->_next;
+
+    if(next_block == nullptr || next_block->_size < min_size)
     {
-        next_block = this->_current_block->_next;
-    }
-    else
-    {
-        next_block = Arena::allocate_block(this->_block_size);
-        this->_capacity += this->_block_size;
+        const std::size_t size = std::max(this->_block_size, min_size);
+
+        Block* new_block = Arena::allocate_block(size);
+        this->_capacity += size;
+
+        new_block->_next = next_block;
+
+        if(next_block != nullptr)
+            next_block->_prev = new_block;
+
+        next_block = new_block;
     }
 
+    next_block->_offset = 0;
     next_block->_prev = this->_current_block;
     this->_current_block->_next = next_block;
     this->_current_block = next_block;
@@ -133,24 +149,21 @@ void Arena::clear() noexcept
 
     while(destructor != nullptr)
     {
+        Destructor* next = destructor->next;
         destructor->destroy_func(destructor->object_ptr);
-        destructor = destructor->next;
+        destructor = next;
     }
 
     this->_destructors = nullptr;
 
-    Block* current = this->_current_block;
+    Block* current = this->first_block();
+
+    this->_current_block = current;
 
     while(current != nullptr)
     {
         current->_offset = 0;
-
-        if(current != nullptr)
-        {
-            this->_current_block = current;
-        }
-
-        current = current->_prev;
+        current = current->_next;
     }
 }
 
@@ -158,13 +171,13 @@ Arena::~Arena()
 {
     this->clear();
 
-    Block* current = this->_current_block;
+    Block* current = this->first_block();
 
     while(current != nullptr)
     {
-        Block* tmp = current;
-        current = tmp->_prev;
-        mem_free(tmp);
+        Block* next = current->_next;
+        mem_free(current);
+        current = next;
     }
 }
 

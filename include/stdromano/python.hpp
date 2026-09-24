@@ -25,9 +25,6 @@ STDROMANO_NAMESPACE_BEGIN
 
 PYTHON_NAMESPACE_BEGIN
 
-// Helps debugging the parser
-#define STDROMANO_PYTHON_PARSER_ASSERT_ON_ERROR
-
 // Lexer Token
 
 struct Token

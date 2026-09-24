@@ -273,12 +273,18 @@ public:
             for(size_t i = 0; i < num_workers; i++)
             {
                 this->_workers[i].join();
+                this->_workers[i].~Thread();
             }
 
             mem_free(this->_workers);
 
             this->_workers = nullptr;
         }
+
+        ThreadPoolWork* work = nullptr;
+
+        while(this->_work_queue.try_dequeue(work))
+            delete work;
     }
 
     bool add_work(ThreadPoolWork* work, ThreadPoolWaiter* waiter = nullptr) noexcept
@@ -370,38 +376,38 @@ private:
 
                     while(!tp->_stop.load())
                     {
-                        if(tp->_num_active_workers.load() >= tp->_max_active_workers.load())
+                        if(tp->_num_active_workers.load() >= tp->_max_active_workers.load() ||
+                           tp->_work_queue.size_approx() == 0)
                         {
+                            thread_yield();
                             continue;
                         }
 
-                        if(tp->_work_queue.size_approx() > 0)
+                        ThreadPoolWork* work = nullptr;
+
+                        tp->_num_active_workers++;
+
+                        if(tp->_work_queue.try_dequeue(work) && work != nullptr)
                         {
-                            ThreadPoolWork* work = nullptr;
-
-                            if(tp->_work_queue.try_dequeue(work))
+                            try
                             {
-                                tp->_num_active_workers++;
-
-                                try
-                                {
-                                    if(work != nullptr)
-                                    {
-                                        work->execute();
-
-                                        delete work;
-                                    }
-                                }
-                                catch(const std::exception& e)
-                                {
-                                    std::fprintf(stderr,
-                                                "Error caught while executing threadpool work %s",
-                                                e.what());
-                                }
-
-                                tp->_num_active_workers--;
+                                work->execute();
                             }
+                            catch(const std::exception& e)
+                            {
+                                std::fprintf(stderr,
+                                             "Error caught while executing threadpool work: %s\n",
+                                             e.what());
+                            }
+                            catch(...)
+                            {
+                                std::fprintf(stderr, "Unknown error caught while executing threadpool work\n");
+                            }
+
+                            delete work;
                         }
+
+                        tp->_num_active_workers--;
                     }
                 });
 
@@ -466,12 +472,14 @@ private:
             if(ctx->local_queue.try_dequeue(work))
             {
                 ctx->queue_size.fetch_sub(1, MemoryOrder::Release);
+                this->_active_workers.fetch_add(1, MemoryOrder::Acquire);
                 this->_total_pending_work.fetch_sub(1, MemoryOrder::Release);
                 found_work = true;
             }
             else if(this->_global_queue.try_dequeue(work))
             {
                 this->_global_queue_size.fetch_sub(1, MemoryOrder::Release);
+                this->_active_workers.fetch_add(1, MemoryOrder::Acquire);
                 this->_total_pending_work.fetch_sub(1, MemoryOrder::Release);
                 found_work = true;
             }
@@ -486,6 +494,7 @@ private:
                         if(this->_workers[victim]->local_queue.try_dequeue(work))
                         {
                             this->_workers[victim]->queue_size.fetch_sub(1, MemoryOrder::Release);
+                            this->_active_workers.fetch_add(1, MemoryOrder::Acquire);
                             this->_total_pending_work.fetch_sub(1, MemoryOrder::Release);
                             found_work = true;
                             break;
@@ -502,17 +511,16 @@ private:
                 {
                     std::size_t current_active = this->_active_workers.load(MemoryOrder::Acquire);
 
-                    if(current_active >= max_workers)
+                    if(current_active > max_workers)
                     {
                         ctx->local_queue.enqueue(work);
                         ctx->queue_size.fetch_add(1, MemoryOrder::Release);
                         this->_total_pending_work.fetch_add(1, MemoryOrder::Release);
+                        this->_active_workers.fetch_sub(1, MemoryOrder::Release);
                         thread_yield();
                         continue;
                     }
                 }
-
-                this->_active_workers.fetch_add(1, MemoryOrder::Acquire);
 
                 try
                 {

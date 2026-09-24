@@ -52,8 +52,6 @@ STDROMANO_FORCE_INLINE std::uint64_t rotl(const std::uint64_t x, std::int32_t k)
     return (x << k) | (x >> (64 - k));
 }
 
-const float tofloat32 = bit_cast<std::uint32_t, float>(0x2f800004UL);
-
 std::uint64_t xoshiro_random_uint64(const std::uint64_t seed) noexcept
 {
     std::uint64_t s[4];
@@ -114,7 +112,7 @@ std::uint64_t xoshiro_next_uint64() noexcept
 
 float xoshiro_next_float() noexcept
 {
-    return static_cast<float>(xoshiro_next_uint64() >> 32) * tofloat32;
+    return static_cast<float>(xoshiro_next_uint64() >> 40) * (1.0f / 16777216.0f);
 }
 
 STDROMANO_NAMESPACE_END

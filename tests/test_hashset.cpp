@@ -4,16 +4,16 @@
 
 #include "stdromano/hashset.hpp"
 
-#define STDROMANO_ENABLE_PROFILING
-#include "stdromano/profiling.hpp"
-
-#include "test.hpp"
+#include "fixtures.hpp"
 
 #include <numeric>
 #include <random>
 #include <set>
 #include <string>
+#include <unordered_set>
 #include <vector>
+
+using namespace stdromano;
 
 struct ComplexKey
 {
@@ -22,399 +22,351 @@ struct ComplexKey
 
     bool operator==(const ComplexKey& other) const
     {
-        return id == other.id && name == other.name;
-    }
-
-    bool operator<(const ComplexKey& other) const
-    {
-        if(id != other.id)
-            return id < other.id;
-        return name < other.name;
+        return this->id == other.id && this->name == other.name;
     }
 };
 
 struct ComplexKeyHash
 {
-    size_t operator()(const ComplexKey& key) const
+    std::size_t operator()(const ComplexKey& key) const
     {
-        size_t h1 = std::hash<int>()(key.id);
-        size_t h2 = std::hash<std::string>()(key.name);
-        return h1 ^ (h2 << 1);
+        return std::hash<int>()(key.id) ^ (std::hash<std::string>()(key.name) << 1);
     }
 };
 
-TEST_CASE(test_set_basic_operations)
+struct CollisionHash
 {
-    stdromano::HashSet<int> my_set;
+    std::size_t operator()(int) const
+    {
+        return 1;
+    }
+};
 
-    ASSERT_EQUAL(0u, my_set.size());
-    ASSERT(my_set.empty());
-
-    auto result1 = my_set.insert(1);
-    ASSERT(result1.second);
-    ASSERT_EQUAL(1, *result1.first);
-    ASSERT_EQUAL(1u, my_set.size());
-    ASSERT(!my_set.empty());
-
-    auto result2 = my_set.insert(1);
-    ASSERT(!result2.second);
-    ASSERT_EQUAL(1, *result2.first);
-    ASSERT_EQUAL(1u, my_set.size());
-
-    auto it = my_set.find(1);
-    ASSERT(it != my_set.end());
-    ASSERT_EQUAL(1, *it);
-
-    ASSERT(my_set.find(2) == my_set.end());
-    ASSERT(!my_set.contains(2));
-    ASSERT(my_set.contains(1));
-
-    size_t erased_count = my_set.erase(1);
-    ASSERT_EQUAL(1u, erased_count);
-    ASSERT_EQUAL(0u, my_set.size());
-    ASSERT(my_set.empty());
-    ASSERT(!my_set.contains(1));
-
-    erased_count = my_set.erase(1);
-    ASSERT_EQUAL(0u, erased_count);
-
-    stdromano::HashSet<int> my_int_set({1, 2, 3, 4});
-    ASSERT(my_int_set.size() == 4);
-    ASSERT(my_int_set.contains(1));
-    ASSERT(my_int_set.contains(2));
-    ASSERT(my_int_set.contains(3));
-    ASSERT(my_int_set.contains(4));
+static int stress_size()
+{
+    return fixtures::is_debug_build() ? 10000 : 100000;
 }
 
-TEST_CASE(test_set_complex_key)
+template <typename K, typename H>
+static bool matches_reference(const HashSet<K, H>& set, const std::unordered_set<K>& reference)
 {
-    stdromano::HashSet<ComplexKey, ComplexKeyHash> set;
+    if(set.size() != reference.size())
+        return false;
 
-    ComplexKey key1{1, "one"};
-    ComplexKey key2{2, "two"};
-    ComplexKey key1_dup{1, "one"};
+    for(const K& key : reference)
+        if(!set.contains(key))
+            return false;
 
-    auto res1 = set.insert(key1);
-    ASSERT(res1.second);
-    ASSERT_EQUAL(key1, *res1.first);
+    std::size_t iterated = 0;
 
-    auto res2 = set.insert(key2);
-    ASSERT(res2.second);
-    ASSERT_EQUAL(key2, *res2.first);
+    for(const K& key : set)
+    {
+        if(reference.count(key) != 1)
+            return false;
 
-    ASSERT_EQUAL(2u, set.size());
+        ++iterated;
+    }
 
-    auto res_dup = set.insert(key1_dup);
-    ASSERT(!res_dup.second);
-    ASSERT_EQUAL(key1, *res_dup.first);
-    ASSERT_EQUAL(2u, set.size());
-
-    auto it1 = set.find(key1);
-    ASSERT(it1 != set.end());
-    ASSERT_EQUAL(key1, *it1);
-
-    auto it2 = set.find(key2);
-    ASSERT(it2 != set.end());
-    ASSERT_EQUAL(key2, *it2);
-
-    ASSERT(set.contains(key1));
-    ASSERT(set.contains(key2));
-    ASSERT(!set.contains({3, "three"}));
-
-    ASSERT_EQUAL(1u, set.erase(key1));
-    ASSERT_EQUAL(1u, set.size());
-    ASSERT(!set.contains(key1));
-    ASSERT(set.contains(key2));
+    return iterated == reference.size();
 }
 
-TEST_CASE(test_set_iterator)
+STDROMANO_TEST_CASE(basic_operations)
 {
-    stdromano::HashSet<int> set;
-    const int TEST_SIZE = 10;
-    std::set<int> reference_set;
+    HashSet<int> set;
 
-    for(int i = 0; i < TEST_SIZE; ++i)
+    STDROMANO_CHECK_EQ(set.size(), 0u);
+    STDROMANO_CHECK(set.empty());
+
+    const auto first = set.insert(1);
+    STDROMANO_CHECK(first.second);
+    STDROMANO_CHECK_EQ(*first.first, 1);
+    STDROMANO_CHECK_EQ(set.size(), 1u);
+
+    const auto duplicate = set.insert(1);
+    STDROMANO_CHECK(!duplicate.second);
+    STDROMANO_CHECK_EQ(*duplicate.first, 1);
+    STDROMANO_CHECK_EQ(set.size(), 1u);
+
+    const auto it = set.find(1);
+    STDROMANO_REQUIRE(it != set.end());
+    STDROMANO_CHECK_EQ(*it, 1);
+
+    STDROMANO_CHECK(set.find(2) == set.end());
+    STDROMANO_CHECK(!set.contains(2));
+    STDROMANO_CHECK_EQ(set.count(1), 1u);
+    STDROMANO_CHECK_EQ(set.count(2), 0u);
+
+    STDROMANO_CHECK_EQ(set.erase(1), 1u);
+    STDROMANO_CHECK(set.empty());
+    STDROMANO_CHECK_EQ(set.erase(1), 0u);
+
+    const HashSet<int> list({1, 2, 3, 4});
+    STDROMANO_CHECK_EQ(list.size(), 4u);
+
+    for(int key = 1; key <= 4; ++key)
+        STDROMANO_CHECK(list.contains(key));
+}
+
+STDROMANO_TEST_CASE(complex_key)
+{
+    HashSet<ComplexKey, ComplexKeyHash> set;
+
+    const ComplexKey key1{1, "one"};
+    const ComplexKey key2{2, "two"};
+
+    STDROMANO_CHECK(set.insert(key1).second);
+    STDROMANO_CHECK(set.insert(key2).second);
+
+    const auto duplicate = set.insert(ComplexKey{1, "one"});
+    STDROMANO_CHECK(!duplicate.second);
+    STDROMANO_CHECK(*duplicate.first == key1);
+    STDROMANO_CHECK_EQ(set.size(), 2u);
+
+    STDROMANO_CHECK(set.contains(key1));
+    STDROMANO_CHECK(set.contains(key2));
+    STDROMANO_CHECK(!set.contains(ComplexKey{3, "three"}));
+
+    STDROMANO_CHECK_EQ(set.erase(key1), 1u);
+    STDROMANO_CHECK(!set.contains(key1));
+    STDROMANO_CHECK(set.contains(key2));
+}
+
+STDROMANO_TEST_CASE(iterators_visit_every_key_once)
+{
+    HashSet<int> set;
+    std::set<int> reference;
+
+    for(int i = 0; i < 10; ++i)
     {
         set.insert(i);
-        reference_set.insert(i);
+        reference.insert(i);
     }
-    ASSERT_EQUAL(static_cast<size_t>(TEST_SIZE), set.size());
 
-    size_t count = 0;
+    std::multiset<int> seen;
+
     for(auto it = set.begin(); it != set.end(); ++it)
-    {
+        seen.insert(*it);
 
-        ASSERT(reference_set.count(*it) == 1);
-        ++count;
-    }
-    ASSERT_EQUAL(static_cast<size_t>(TEST_SIZE), count);
+    const HashSet<int>& const_set = set;
 
-    count = 0;
-    for(const auto& key : set)
-    {
-        ASSERT(reference_set.count(key) == 1);
-        count++;
-    }
-    ASSERT_EQUAL(static_cast<size_t>(TEST_SIZE), count);
-
-    const stdromano::HashSet<int>& const_set = set;
-    count = 0;
     for(auto it = const_set.cbegin(); it != const_set.cend(); ++it)
-    {
-        ASSERT(reference_set.count(*it) == 1);
-        ++count;
-    }
-    ASSERT_EQUAL(static_cast<size_t>(TEST_SIZE), count);
+        seen.insert(*it);
+
+    for(const int key : reference)
+        STDROMANO_CHECK_EQ(seen.count(key), 2u);
+
+    STDROMANO_CHECK_EQ(seen.size(), 20u);
 }
 
-TEST_CASE(test_set_load_factor_and_rehashing)
+STDROMANO_TEST_CASE(load_factor_and_rehashing)
 {
+    HashSet<int> set(2);
+    const std::size_t initial_capacity = set.capacity();
+    STDROMANO_CHECK_GE(initial_capacity, 2u);
 
-    stdromano::HashSet<int> set(2);
-    size_t initial_capacity = set.capacity();
-    ASSERT(initial_capacity >= 2);
-
-    const int INSERT_COUNT = 100;
-    for(int i = 0; i < INSERT_COUNT; ++i)
+    for(int i = 0; i < 100; ++i)
     {
         set.insert(i);
-
-        ASSERT(set.load_factor() <= 1.0f);
+        STDROMANO_REQUIRE_LE(set.load_factor(), 1.0f);
     }
 
-    ASSERT_EQUAL(static_cast<size_t>(INSERT_COUNT), set.size());
-    ASSERT(set.capacity() > initial_capacity);
+    STDROMANO_CHECK_EQ(set.size(), 100u);
+    STDROMANO_CHECK_GT(set.capacity(), initial_capacity);
 
-    for(int i = 0; i < INSERT_COUNT; ++i)
-    {
-        ASSERT(set.contains(i));
-    }
+    for(int i = 0; i < 100; ++i)
+        STDROMANO_REQUIRE(set.contains(i));
 }
 
-TEST_CASE(test_set_collisions)
+STDROMANO_TEST_CASE(collisions)
 {
-
-    struct CollisionHash
-    {
-        size_t operator()(int) const
-        {
-            return 1;
-        }
-    };
-
-    stdromano::HashSet<int, CollisionHash> set;
+    HashSet<int, CollisionHash> set;
 
     set.insert(1);
     set.insert(10);
     set.insert(20);
 
-    ASSERT_EQUAL(3u, set.size());
-    ASSERT(set.contains(1));
-    ASSERT(set.contains(10));
-    ASSERT(set.contains(20));
-    ASSERT(!set.contains(5));
+    STDROMANO_CHECK_EQ(set.size(), 3u);
+    STDROMANO_CHECK(set.contains(1));
+    STDROMANO_CHECK(set.contains(10));
+    STDROMANO_CHECK(set.contains(20));
+    STDROMANO_CHECK(!set.contains(5));
 
-    ASSERT_EQUAL(1u, set.erase(10));
-    ASSERT_EQUAL(2u, set.size());
-    ASSERT(set.contains(1));
-    ASSERT(!set.contains(10));
-    ASSERT(set.contains(20));
+    STDROMANO_CHECK_EQ(set.erase(10), 1u);
+    STDROMANO_CHECK(set.contains(1));
+    STDROMANO_CHECK(!set.contains(10));
+    STDROMANO_CHECK(set.contains(20));
 }
 
-TEST_CASE(test_set_clear_and_reserve)
+STDROMANO_TEST_CASE(clear_and_reserve)
 {
-    stdromano::HashSet<int> set;
+    HashSet<int> set;
 
     set.reserve(100);
-    size_t capacity_after_reserve = set.capacity();
-    ASSERT(capacity_after_reserve >= 100);
+    const std::size_t capacity = set.capacity();
+    STDROMANO_CHECK_GE(capacity, 100u);
 
     for(int i = 0; i < 50; ++i)
-    {
         set.insert(i);
-    }
-    ASSERT_EQUAL(50u, set.size());
 
     set.clear();
-    ASSERT_EQUAL(0u, set.size());
-    ASSERT(set.empty());
-
-    ASSERT_EQUAL(capacity_after_reserve, set.capacity());
+    STDROMANO_CHECK(set.empty());
+    STDROMANO_CHECK_EQ(set.capacity(), capacity);
 
     set.insert(100);
-    ASSERT_EQUAL(1u, set.size());
-    ASSERT(set.contains(100));
+    STDROMANO_CHECK_EQ(set.size(), 1u);
+    STDROMANO_CHECK(set.contains(100));
 }
 
-TEST_CASE(test_set_edge_cases)
+STDROMANO_TEST_CASE(edge_cases)
 {
-    stdromano::HashSet<std::string> set;
+    HashSet<std::string> set;
 
-    auto res_empty = set.insert("");
-    ASSERT(res_empty.second);
-    ASSERT_EQUAL(1u, set.size());
-    ASSERT(set.contains(""));
+    STDROMANO_CHECK(set.insert("").second);
+    STDROMANO_CHECK(!set.insert("").second);
+    STDROMANO_CHECK(set.insert("test").second);
+    STDROMANO_CHECK(!set.insert("test").second);
+    STDROMANO_CHECK_EQ(set.size(), 2u);
 
-    res_empty = set.insert("");
-    ASSERT(!res_empty.second);
-    ASSERT_EQUAL(1u, set.size());
+    STDROMANO_CHECK_EQ(set.erase("non-existent"), 0u);
+    STDROMANO_CHECK(set.find("non-existent") == set.end());
 
-    auto res_test = set.insert("test");
-    ASSERT(res_test.second);
-    ASSERT_EQUAL(2u, set.size());
-
-    res_test = set.insert("test");
-    ASSERT(!res_test.second);
-    ASSERT_EQUAL(2u, set.size());
-
-    size_t size_before = set.size();
-    ASSERT_EQUAL(0u, set.erase("non-existent"));
-    ASSERT_EQUAL(size_before, set.size());
-
-    ASSERT(set.find("non-existent") == set.end());
-
-    ASSERT_EQUAL(1u, set.erase(""));
-    ASSERT(!set.contains(""));
-    ASSERT_EQUAL(1u, set.size());
+    STDROMANO_CHECK_EQ(set.erase(""), 1u);
+    STDROMANO_CHECK(!set.contains(""));
+    STDROMANO_CHECK_EQ(set.size(), 1u);
 }
 
-static std::random_device rd;
-static std::mt19937 generator(rd());
-
-std::vector<std::int64_t> get_random_shuffle_range_ints(std::size_t nb_ints)
+STDROMANO_TEST_CASE(erase_by_iterator)
 {
-    std::vector<std::int64_t> random_shuffle_ints(nb_ints);
-    std::iota(random_shuffle_ints.begin(), random_shuffle_ints.end(), 0);
-    std::shuffle(random_shuffle_ints.begin(), random_shuffle_ints.end(), generator);
-    return random_shuffle_ints;
+    HashSet<int> set({1, 2, 3});
+
+    set.erase(set.find(2));
+    STDROMANO_CHECK_EQ(set.size(), 2u);
+    STDROMANO_CHECK(!set.contains(2));
+
+    set.erase(set.end());
+    STDROMANO_CHECK_EQ(set.size(), 2u);
 }
 
-TEST_CASE(test_set_stress)
+STDROMANO_TEST_CASE(copy_and_move)
 {
-    stdromano::HashSet<int64_t> set;
+    HashSet<std::string> set;
 
-#if defined(DEBUG_BUILD)
-    const int TEST_SIZE = 10000;
-#else
-    const int TEST_SIZE = 100000;
-#endif
+    for(int i = 0; i < 100; ++i)
+        set.insert(std::to_string(i));
 
-    std::vector<std::int64_t> keys = get_random_shuffle_range_ints(TEST_SIZE);
+    HashSet<std::string> copy(set);
+    copy.erase("0");
+    STDROMANO_CHECK(set.contains("0"));
+    STDROMANO_CHECK_EQ(copy.size(), 99u);
 
-    SCOPED_PROFILE_START(stdromano::ProfileUnit::MilliSeconds, set_insert);
-    for(int i = 0; i < TEST_SIZE; ++i)
+    HashSet<std::string> moved(std::move(copy));
+    STDROMANO_CHECK_EQ(moved.size(), 99u);
+    STDROMANO_CHECK_EQ(copy.size(), 0u);
+    STDROMANO_CHECK(!copy.contains("1"));
+
+    copy.insert("reused");
+    STDROMANO_CHECK(copy.contains("reused"));
+
+    HashSet<std::string> assigned;
+    assigned = set;
+    STDROMANO_CHECK_EQ(assigned.size(), 100u);
+
+    HashSet<std::string> move_assigned;
+    move_assigned = std::move(assigned);
+    STDROMANO_CHECK_EQ(move_assigned.size(), 100u);
+}
+
+STDROMANO_TEST_CASE(stress)
+{
+    std::mt19937 rng(0x5E7);
+
+    const int count = stress_size();
+
+    std::vector<std::int64_t> keys(count);
+    std::iota(keys.begin(), keys.end(), 0);
+    std::shuffle(keys.begin(), keys.end(), rng);
+
+    HashSet<std::int64_t> set;
+
+    for(const std::int64_t key : keys)
+        set.insert(key);
+
+    STDROMANO_REQUIRE_EQ(set.size(), static_cast<std::size_t>(count));
+
+    for(const std::int64_t key : keys)
     {
-        set.insert(keys[i]);
+        const auto result = set.insert(key);
+        STDROMANO_REQUIRE(!result.second);
+        STDROMANO_REQUIRE_EQ(*result.first, key);
     }
-    SCOPED_PROFILE_STOP(set_insert);
 
-    ASSERT_EQUAL(static_cast<size_t>(TEST_SIZE), set.size());
-    float load_factor = set.load_factor();
-    ASSERT(load_factor > 0.0f && load_factor <= 1.0f);
+    std::shuffle(keys.begin(), keys.end(), rng);
 
-    size_t count = 0;
-    SCOPED_PROFILE_START(stdromano::ProfileUnit::MilliSeconds, set_iterate);
-    for(auto it = set.begin(); it != set.end(); ++it)
-    {
+    std::size_t erased = 0;
 
-        ASSERT(set.contains(*it));
-        ++count;
-    }
-    SCOPED_PROFILE_STOP(set_iterate);
-    ASSERT_EQUAL(count, set.size());
+    for(int i = 0; i < count / 2; ++i)
+        erased += set.erase(keys[i]);
 
-    std::shuffle(keys.begin(), keys.end(), generator);
-    SCOPED_PROFILE_START(stdromano::ProfileUnit::MilliSeconds, set_erase);
-    size_t erase_count = 0;
-    for(int i = 0; i < TEST_SIZE / 2; i++)
-    {
-        erase_count += set.erase(keys[i]);
-    }
-    SCOPED_PROFILE_STOP(set_erase);
-    ASSERT_EQUAL(static_cast<size_t>(TEST_SIZE / 2), erase_count);
-    ASSERT_EQUAL(static_cast<size_t>(TEST_SIZE - TEST_SIZE / 2), set.size());
+    STDROMANO_CHECK_EQ(erased, static_cast<std::size_t>(count / 2));
 
-    std::shuffle(keys.begin(), keys.end(), generator);
-    size_t num_found = 0;
-    size_t num_not_found = 0;
-    SCOPED_PROFILE_START(stdromano::ProfileUnit::MilliSeconds, set_find);
-    for(int i = 0; i < TEST_SIZE; ++i)
-    {
-        if(set.contains(keys[i]))
+    std::size_t found = 0;
+
+    for(const std::int64_t key : keys)
+        found += set.count(key);
+
+    STDROMANO_CHECK_EQ(found, static_cast<std::size_t>(count - count / 2));
+    STDROMANO_CHECK_EQ(set.size(), found);
+}
+
+STDROMANO_TEST_CASE(fuzz_against_unordered_set)
+{
+    const auto report = fuzz::run_property(fixtures::options("hashset_vs_unordered_set", 400), [](fuzz::Source& source) {
+        HashSet<std::int64_t> set;
+        std::unordered_set<std::int64_t> reference;
+
+        const std::size_t steps = source.range<std::size_t>(1, 400);
+        const std::int64_t key_space = source.pick<std::int64_t>({8, 128, 1 << 20});
+
+        for(std::size_t i = 0; i < steps; ++i)
         {
-            num_found++;
-        }
-        else
-        {
-            num_not_found++;
-        }
-    }
-    SCOPED_PROFILE_STOP(set_find);
+            const std::int64_t key = source.range<std::int64_t>(-key_space, key_space);
 
-    ASSERT_EQUAL(num_found, set.size());
-    ASSERT_EQUAL(num_found, static_cast<size_t>(TEST_SIZE - TEST_SIZE / 2));
-    ASSERT_EQUAL(num_not_found, static_cast<size_t>(TEST_SIZE / 2));
+            switch(source.index(5))
+            {
+                case 0:
+                case 1:
+                {
+                    const auto inserted = set.insert(key);
+                    const auto expected = reference.insert(key);
+
+                    STDROMANO_FUZZ_CHECK_EQ(inserted.second, expected.second);
+                    STDROMANO_FUZZ_CHECK_EQ(*inserted.first, key);
+                    break;
+                }
+                case 2:
+                    STDROMANO_FUZZ_CHECK_EQ(set.erase(key), reference.erase(key));
+                    break;
+                case 3:
+                    STDROMANO_FUZZ_CHECK_EQ(set.contains(key), reference.count(key) == 1);
+                    break;
+                default:
+                    if(source.one_in(20))
+                    {
+                        set.clear();
+                        reference.clear();
+                    }
+                    break;
+            }
+
+            STDROMANO_FUZZ_CHECK_EQ(set.size(), reference.size());
+        }
+
+        STDROMANO_FUZZ_CHECK(matches_reference(set, reference));
+
+        return true;
+    });
+
+    TESTS_REQUIRE_PROPERTY(report);
 }
 
-TEST_CASE(test_set_stress_lookup_and_failed_insert)
-{
-    stdromano::HashSet<int64_t> set;
-
-#if defined(DEBUG_BUILD)
-    const int TEST_SIZE = 10000;
-#else
-    const int TEST_SIZE = 100000;
-#endif
-
-    std::vector<int64_t> keys = get_random_shuffle_range_ints(TEST_SIZE);
-
-    for(int i = 0; i < TEST_SIZE; ++i)
-    {
-        set.insert(keys[i]);
-    }
-    ASSERT_EQUAL(static_cast<size_t>(TEST_SIZE), set.size());
-
-    SCOPED_PROFILE_START(stdromano::ProfileUnit::MilliSeconds, set_find_existing);
-    for(int i = 0; i < TEST_SIZE; ++i)
-    {
-        ASSERT(set.find(keys[i]) != set.end());
-    }
-    SCOPED_PROFILE_STOP(set_find_existing);
-
-    SCOPED_PROFILE_START(stdromano::ProfileUnit::MilliSeconds, set_insert_existing);
-    size_t failed_insert_count = 0;
-    for(int i = 0; i < TEST_SIZE; ++i)
-    {
-        auto result = set.insert(keys[i]);
-        ASSERT(!result.second);
-        ASSERT_EQUAL(keys[i], *result.first);
-        if(!result.second)
-        {
-            failed_insert_count++;
-        }
-    }
-    SCOPED_PROFILE_STOP(set_insert_existing);
-    ASSERT_EQUAL(static_cast<size_t>(TEST_SIZE), failed_insert_count);
-    ASSERT_EQUAL(static_cast<size_t>(TEST_SIZE), set.size());
-}
-
-int main()
-{
-    TestRunner runner("hashset");
-
-    runner.add_test("HashSet Basic Operations", test_set_basic_operations);
-    runner.add_test("HashSet Complex Key", test_set_complex_key);
-    runner.add_test("HashSet Iterator", test_set_iterator);
-    runner.add_test("HashSet Load Factor and Rehashing", test_set_load_factor_and_rehashing);
-    runner.add_test("HashSet Collisions", test_set_collisions);
-    runner.add_test("HashSet Clear and Reserve", test_set_clear_and_reserve);
-    runner.add_test("HashSet Edge Cases", test_set_edge_cases);
-    runner.add_test("HashSet Stress Test", test_set_stress);
-    runner.add_test("HashSet Stress Lookup/Failed Insert",
-                    test_set_stress_lookup_and_failed_insert);
-
-    if(runner.run_all() != 0)
-        return 1;
-
-    return 0;
-}
+STDROMANO_TEST_MAIN()

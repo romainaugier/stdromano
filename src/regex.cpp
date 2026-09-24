@@ -8,6 +8,7 @@
 
 #include <cstring>
 #include <limits>
+#include <vector>
 
 STDROMANO_NAMESPACE_BEGIN
 
@@ -548,6 +549,7 @@ void finalize_bytecode(Regex::ByteCode& bytecode) noexcept
             }
 
             case RegexInstrOpCode_TestSingle:
+            case RegexInstrOpCode_TestNegatedSingle:
             case RegexInstrOpCode_SetFlag:
             case RegexInstrOpCode_GroupStart:
             case RegexInstrOpCode_GroupEnd:
@@ -698,9 +700,11 @@ struct RegexVM
     RegexGroup groups[REGEX_MAX_GROUPS];
     std::uint32_t group_count;
 
+    std::vector<std::size_t> loop_positions;
+
     RegexVM(const Regex::ByteCode& bc, const char* s, std::size_t slen, std::uint32_t gc)
         : bytecode(bc), str(s), str_len(slen), sp(0), pc(0),
-          status_flag(false), group_count(gc)
+          status_flag(false), group_count(gc), loop_positions(bc.size(), static_cast<std::size_t>(-1))
     {
         for(std::uint32_t i = 0; i < REGEX_MAX_GROUPS; ++i)
         {
@@ -864,6 +868,19 @@ bool regex_exec(RegexVM* vm) noexcept
                 if(vm->status_flag)
                 {
                     int jmp = decode_jump(&vm->bytecode[vm->pc + 1]);
+
+                    /* A loop iteration that consumed nothing would repeat forever */
+                    if(jmp < 0)
+                    {
+                        if(vm->loop_positions[vm->pc] == vm->sp)
+                        {
+                            vm->pc += 5;
+                            break;
+                        }
+
+                        vm->loop_positions[vm->pc] = vm->sp;
+                    }
+
                     vm->pc = static_cast<std::size_t>(static_cast<int>(vm->pc) + 5 + jmp);
                 }
                 else

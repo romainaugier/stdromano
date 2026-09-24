@@ -87,7 +87,8 @@ private:
         if(this->_data == nullptr)
             this->resize(MIN_SIZE);
         else
-            this->resize(static_cast<size_t>(static_cast<float>(this->capacity()) * GROWTH_RATE));
+            this->resize(std::max(static_cast<size_t>(static_cast<float>(this->capacity()) * GROWTH_RATE),
+                                  this->capacity() + 1));
     }
 
 public:
@@ -725,6 +726,9 @@ public:
         if(position > this->size())
             return this->end();
 
+        if(count == 0)
+            return iterator(this, position);
+
         const std::size_t old_size = this->size();
         const std::size_t tail = old_size - position;
         const std::size_t new_size = old_size + count;
@@ -737,6 +741,8 @@ public:
             std::memmove(this->data() + position + count,
                          this->data() + position,
                          tail * sizeof(T));
+
+            std::uninitialized_fill_n(this->data() + position, count, value);
         }
         else
         {
@@ -747,18 +753,21 @@ public:
                                         this->data() + old_size);
 
                 std::move_backward(this->data() + position,
-                                   this->data() + old_size,
+                                   this->data() + old_size - count,
                                    this->data() + old_size);
+
+                std::fill_n(this->data() + position, count, value);
             }
             else
             {
                 std::uninitialized_move(this->data() + position,
                                         this->data() + old_size,
                                         this->data() + position + count);
+
+                std::fill_n(this->data() + position, tail, value);
+                std::uninitialized_fill_n(this->data() + old_size, count - tail, value);
             }
         }
-
-        std::uninitialized_fill_n(this->data() + position, count, value);
 
         this->set_size(new_size);
 
@@ -810,6 +819,8 @@ public:
                     std::memmove(this->data() + position + count,
                                 this->data() + position,
                                 tail * sizeof(T));
+
+                    std::uninitialized_copy(first, last, this->data() + position);
                 }
                 else
                 {
@@ -822,16 +833,22 @@ public:
                         std::move_backward(this->data() + position,
                                         this->data() + old_size - count,
                                         this->data() + old_size);
+
+                        std::copy(first, last, this->data() + position);
                     }
                     else
                     {
                         std::uninitialized_move(this->data() + position,
                                                 this->data() + old_size,
                                                 this->data() + position + count);
+
+                        InputIt split = first;
+                        std::advance(split, tail);
+
+                        std::copy(first, split, this->data() + position);
+                        std::uninitialized_copy(split, last, this->data() + old_size);
                     }
                 }
-
-                std::uninitialized_copy(first, last, this->data() + position);
 
                 this->set_size(new_size);
             }

@@ -55,7 +55,7 @@ STDROMANO_FORCE_INLINE uint32_t round_u32_to_next_pow2(uint32_t x) noexcept
     x |= x >> 4;
     x |= x >> 8;
     x |= x >> 16;
-    return x++;
+    return x + 1;
 }
 
 STDROMANO_FORCE_INLINE uint64_t round_u64_to_next_pow2(uint64_t x) noexcept
@@ -67,12 +67,14 @@ STDROMANO_FORCE_INLINE uint64_t round_u64_to_next_pow2(uint64_t x) noexcept
     x |= x >> 8;
     x |= x >> 16;
     x |= x >> 32;
-    return x++;
+    return x + 1;
 }
 
 STDROMANO_FORCE_INLINE uint64_t popcount_u32(const uint32_t x) noexcept
 {
-#if defined(STDROMANO_MSVC)
+#if defined(STDROMANO_MSVC) && defined(STDROMANO_AARCH64)
+    return _CountOneBits(x);
+#elif defined(STDROMANO_MSVC)
     return __popcnt(x);
 #elif defined(STDROMANO_GCC) || defined(STDROMANO_CLANG)
     return __builtin_popcountl(x);
@@ -88,7 +90,9 @@ STDROMANO_FORCE_INLINE uint64_t popcount_u32(const uint32_t x) noexcept
 
 STDROMANO_FORCE_INLINE uint64_t popcount_u64(const uint64_t x) noexcept
 {
-#if defined(STDROMANO_MSVC)
+#if defined(STDROMANO_MSVC) && defined(STDROMANO_AARCH64)
+    return _CountOneBits64(x);
+#elif defined(STDROMANO_MSVC)
     return __popcnt64(x);
 #elif defined(STDROMANO_GCC) || defined(STDROMANO_CLANG)
     return __builtin_popcountll(x);
@@ -112,7 +116,7 @@ STDROMANO_FORCE_INLINE uint32_t clz_u64(const uint64_t x) noexcept
         return 63UL - trailing_zero;
     }
 
-    return 32UL;
+    return 64UL;
 #elif defined(STDROMANO_GCC) || defined(STDROMANO_CLANG)
     return __builtin_clzll(x);
 #endif /* defined(STDROMANO_MSVC) */
@@ -128,7 +132,7 @@ STDROMANO_FORCE_INLINE uint32_t ctz_u64(const uint64_t x) noexcept
         return trailing_zero;
     }
 
-    return 63UL;
+    return 64UL;
 #elif defined(STDROMANO_GCC) || defined(STDROMANO_CLANG)
     return __builtin_ctzll(x);
 #endif /* defined(STDROMANO_MSVC) */

@@ -124,8 +124,7 @@ if [[ ! -d "vcpkg" ]]; then
         export VCPKG_ROOT=$VCPKG_PATH
     else
         log_info "Vcpkg can't be found, cloning and preparing it"
-        git clone https://github.com/romainaugier/vcpkg.git
-        git checkout stdromano
+        git clone -b stdromano https://github.com/romainaugier/vcpkg.git
         cd vcpkg
         source_vcpkg_bootstrap
         cd ..
