@@ -64,7 +64,7 @@ static bool vector_add(const std::vector<float>& a, const std::vector<float>& b,
 
     c.resize(count);
 
-    return manager.read_buffer(c_buffer, c.data(), count);
+    return manager.read_buffer(c_buffer, c.data(), count).has_value();
 }
 
 STDROMANO_TEST_CASE(initializes_a_device)

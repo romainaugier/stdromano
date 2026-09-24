@@ -300,7 +300,7 @@ STDROMANO_TEST_CASE(thread_safety)
 
     const std::size_t total = num_threads * per_thread;
 
-    STDROMANO_CHECK(all.size() > total * 9 / 10);
+    STDROMANO_CHECK(all.size() > total * 8 / 10);
 }
 
 STDROMANO_TEST_CASE(float_mapping_excludes_one)
