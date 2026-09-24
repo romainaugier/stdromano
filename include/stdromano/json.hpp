@@ -84,7 +84,7 @@ public:
 
     // Iterators
 
-    class ArrayIterator
+    class STDROMANO_API ArrayIterator
     {
         void* _current;
 
@@ -96,7 +96,7 @@ public:
         bool operator!=(const ArrayIterator& other) const noexcept;
     };
 
-    class DictIterator
+    class STDROMANO_API DictIterator
     {
         void* _current;
 

@@ -12,7 +12,6 @@
 #include "stdromano/stdromano.hpp"
 #include "stdromano/hashmap.hpp"
 #include "stdromano/string.hpp"
-#include "stdromano/logger.hpp"
 #include "stdromano/atomic.hpp"
 #include "stdromano/filesystem.hpp"
 
@@ -146,14 +145,12 @@ public:
 
         if(!this->setup_platform_and_devices())
         {
-            log_error("OpenCL error: Initialization failed");
             this->cleanup();
             return false;
         }
 
         if(!create_context_and_queues())
         {
-            log_error("OpenCL error: Initialization failed");
             this->cleanup();
             return false;
         }
@@ -263,7 +260,7 @@ public:
     }
 
     template <typename T>
-    void write_buffer(const cl::Buffer& buffer,
+    Expected<void> write_buffer(const cl::Buffer& buffer,
                       const T* data,
                       const std::size_t size,
                       std::size_t device_index = 0,
@@ -272,14 +269,10 @@ public:
         STDROMANO_ASSERT(this->is_initialized(), "OpenCL Manager has not been initialized");
 
         if(!this->is_initialized())
-        {
-            return;
-        }
+            return Error("OpenCL is not initialized");
 
         if(device_index >= this->_queues.size())
-        {
-            return;
-        }
+            return Error("Device does not exist");
 
         cl_int err = this->_queues[device_index].enqueueWriteBuffer(buffer,
                                                                     blocking ? CL_TRUE : CL_FALSE,
@@ -288,55 +281,47 @@ public:
                                                                     data);
 
         if(err != CL_SUCCESS)
-        {
-            log_error("OpenCL error: failed to write buffer: {}", get_cl_error_string(err));
-        }
+            return Error("Failed to write buffer: {}",
+                         get_cl_error_string(err));
+
+        return Ok();
     }
 
-    STDROMANO_NO_DISCARD bool copy_buffer(const cl::Buffer& to,
-                                          const cl::Buffer& from,
-                                          std::size_t size,
-                                          std::size_t device_index = 0,
-                                          bool blocking = true) noexcept
+    STDROMANO_NO_DISCARD Expected<void> copy_buffer(const cl::Buffer& to,
+                                                    const cl::Buffer& from,
+                                                    std::size_t size,
+                                                    std::size_t device_index = 0,
+                                                    bool blocking = true) noexcept
     {
         STDROMANO_ASSERT(this->is_initialized(), "OpenCL Manager has not been initialized");
 
         if(device_index >= this->_queues.size())
-        {
-            return false;
-        }
+            return Error("Device {} does not exist", device_index);
 
         cl::Event event;
 
         cl_int err = this->_queues[device_index].enqueueCopyBuffer(from, to, 0, 0, size, nullptr, &event);
 
         if(err != CL_SUCCESS)
-        {
-            log_error("OpenCL error: failed to copy buffer: {}", this->get_cl_error_string(err));
-            return false;
-        }
+            return Error("Failed to copy buffer: {}", this->get_cl_error_string(err));
 
         if(blocking)
-        {
             event.wait();
-        }
 
-        return true;
+        return Ok();
     }
 
     template <typename T>
-    STDROMANO_NO_DISCARD bool read_buffer(const cl::Buffer& buffer,
-                                          T* data,
-                                          std::size_t count,
-                                          std::size_t device_index = 0,
-                                          bool blocking = true)
+    STDROMANO_NO_DISCARD Expected<void> read_buffer(const cl::Buffer& buffer,
+                                                    T* data,
+                                                    std::size_t count,
+                                                    std::size_t device_index = 0,
+                                                    bool blocking = true)
     {
         STDROMANO_ASSERT(this->is_initialized(), "OpenCL Manager has not been initialized");
 
         if(device_index >= this->_queues.size())
-        {
-            return false;
-        }
+            return Error("Device does not exist");
 
         cl_int err = this->_queues[device_index].enqueueReadBuffer(buffer,
                                                                    blocking ? CL_TRUE : CL_FALSE,
@@ -345,18 +330,16 @@ public:
                                                                    data);
 
         if(err != CL_SUCCESS)
-        {
-            log_error("OpenCL error: failed to read buffer: {}", get_cl_error_string(err));
-            return false;
-        }
+            return Error("Failed to read buffer: {}",
+                         get_cl_error_string(err));
 
-        return true;
+        return Ok();
     }
 
-    STDROMANO_NO_DISCARD bool build_program_from_source(cl::Program& ret_program,
-                                                        const StringD& source,
-                                                        const StringD& build_options = "",
-                                                        const cl::Device* specific_device = nullptr) noexcept
+    STDROMANO_NO_DISCARD Expected<void> build_program_from_source(cl::Program& ret_program,
+                                                                  const StringD& source,
+                                                                  const StringD& build_options = "",
+                                                                  const cl::Device* specific_device = nullptr) noexcept
     {
         STDROMANO_ASSERT(this->is_initialized(), "OpenCL Manager has not been initialized");
 
@@ -369,24 +352,20 @@ public:
             if(auto it = this->_program_cache.find(cache_key); it != this->_program_cache.end())
             {
                 ret_program = it->second;
-                return true;
+                return Ok();
             }
         }
 
         ret_program = cl::Program(this->_context,
                                     cl::Program::Sources{{ source.c_str(),
-                                                        source.length() }});
+                                                           source.length() }});
 
         std::vector<cl::Device> build_devices;
 
         if(specific_device)
-        {
             build_devices = { *specific_device };
-        }
         else
-        {
             build_devices = this->_devices;
-        }
 
         cl_int err = ret_program.build(build_devices, build_options.c_str());
 
@@ -410,41 +389,35 @@ public:
                 }
             }
 
-            log_error("OpenCL error: {}", error_log);
-
-            return false;
+            return Error("{}", error_log);
         }
 
         {
             std::lock_guard<std::mutex> lock(this->_cache_mutex);
 
             if(this->_program_cache.size() >= this->_config.max_cache_size)
-            {
                 this->_program_cache.erase(this->_program_cache.begin());
-            }
 
             this->_program_cache[cache_key] = ret_program;
         }
 
-        return true;
+        return Ok();
     }
 
-    STDROMANO_NO_DISCARD bool schedule_task(cl::Event& ret_event,
-                                            const StringD& kernel_source,
-                                            const StringD& kernel_name,
-                                            std::function<void(cl::Kernel&)> set_kernel_args,
-                                            const cl::NDRange& global_size,
-                                            const cl::NDRange& local_size = cl::NullRange,
-                                            const StringD& build_options = "",
-                                            std::size_t device_index = 0,
-                                            const std::vector<cl::Event>* wait_events = nullptr) noexcept
+    STDROMANO_NO_DISCARD Expected<void> schedule_task(cl::Event& ret_event,
+                                                      const StringD& kernel_source,
+                                                      const StringD& kernel_name,
+                                                      std::function<void(cl::Kernel&)> set_kernel_args,
+                                                      const cl::NDRange& global_size,
+                                                      const cl::NDRange& local_size = cl::NullRange,
+                                                      const StringD& build_options = "",
+                                                      std::size_t device_index = 0,
+                                                      const std::vector<cl::Event>* wait_events = nullptr) noexcept
     {
         STDROMANO_ASSERT(this->is_initialized(), "OpenCL Manager has not been initialized");
 
         if(device_index >= this->_queues.size())
-        {
-            return false;
-        }
+            return Error("{} device does not exist", device_index);
 
         cl::CommandQueue& queue = this->_queues[device_index];
         const cl::Device& device = this->_devices[device_index];
@@ -452,9 +425,7 @@ public:
         cl::Program program;
 
         if(!build_program_from_source(program, kernel_source, build_options, &device))
-        {
-            return false;
-        }
+            return Error("Cannot build program");
 
         cl::Kernel kernel(program, kernel_name.c_str());
 
@@ -468,15 +439,11 @@ public:
                                                 &ret_event);
 
         if(err != CL_SUCCESS)
-        {
-            log_error("Failed to schedule_task \"{}\": {}",
-                        kernel_name,
-                        this->get_cl_error_string(err));
+            return Error("Failed to schedule_task \"{}\": {}",
+                         kernel_name,
+                         this->get_cl_error_string(err));
 
-            return false;
-        }
-
-        return true;
+        return Ok();
     }
 
     double get_execution_time_ms(const cl::Event& event) noexcept
@@ -491,18 +458,15 @@ public:
         cl_int err = event.wait();
 
         if(err != CL_SUCCESS)
-        {
-            stdromano::log_error("Failed to get profiling info: {}",
-                                this->get_cl_error_string(err));
             return 0.0;
-        }
 
         auto start = event.getProfilingInfo<CL_PROFILING_COMMAND_START>();
         auto end = event.getProfilingInfo<CL_PROFILING_COMMAND_END>();
+
         return static_cast<double>(end - start) / 1e6;
     }
 
-    void finish_all_queues() noexcept
+    Expected<void> finish_all_queues() noexcept
     {
         STDROMANO_ASSERT(this->is_initialized(), "OpenCL Manager has not been initialized");
 
@@ -512,10 +476,12 @@ public:
 
             if(this->_config.enable_debug_output)
             {
-                log_error("OpenCL error: failed to finish queue: {}",
-                            this->get_cl_error_string(err));
+                return Error("OpenCL error: failed to finish queue: {}",
+                             this->get_cl_error_string(err));
             }
         }
+
+        return Ok();
     }
 
     STDROMANO_FORCE_INLINE size_t get_cache_size() const noexcept
@@ -532,9 +498,8 @@ public:
 
     const StringD& get_kernel_source(const StringD& name) noexcept
     {
-        const StringD kernel_path = fs_expand_from_lib_dir(StringD("cl/{}.cl", name));
+        const StringD kernel_path = fs::expand_from_lib_dir(StringD("cl/{}.cl", name)).unwrap();
 
-        if(!fs_path_exists(kernel_path))
         {
             static const StringD invalid;
 
@@ -542,9 +507,7 @@ public:
         }
 
         if(!this->_kernel_sources.contains(name))
-        {
-            this->_kernel_sources[name] = load_file_content(kernel_path, "r");
-        }
+            this->_kernel_sources[name] = fs::load_file_content(kernel_path, "r").value();
 
         return this->_kernel_sources[name];
     }
@@ -556,9 +519,9 @@ public:
             return true;
         }
 
-        const StringD kernel_path = fs_expand_from_lib_dir(StringD("cl/{}.cl", name));
+        const StringD kernel_path = fs::expand_from_lib_dir(StringD("cl/{}.cl", name)).value();
 
-        return fs_path_exists(kernel_path);
+        return fs::path_exists(kernel_path);
     }
 
 private:
@@ -572,9 +535,7 @@ private:
     void cleanup()
     {
         for(auto& queue : this->_queues)
-        {
             queue.finish();
-        }
 
         this->_queues.clear();
         this->_devices.clear();
@@ -586,11 +547,11 @@ private:
     STDROMANO_NO_DISCARD bool setup_platform_and_devices() noexcept
     {
         std::vector<cl::Platform> platforms;
-        cl::Platform::get(&platforms);
+        cl::Platform::get(std::addressof(platforms));
 
         if(platforms.empty())
         {
-            log_error("OpenCL error: no platforms found");
+            // ("OpenCL error: no platforms found");
             return false;
         }
 
@@ -626,19 +587,19 @@ private:
         {
             if(err == CL_DEVICE_NOT_FOUND)
             {
-                log_error("OpenCL error: No devices of requested type found");
+                // ("OpenCL error: No devices of requested type found");
                 return false;
             }
 
-            log_error("OpenCL error: Failed to get devices: {}",
-                        this->get_cl_error_string(err));
+            // ("OpenCL error: Failed to get devices: {}",
+            //             this->get_cl_error_string(err));
 
             return false;
         }
 
         if(all_devices.empty())
         {
-            log_error("OpenCL error: No suitable devices found");
+            // ("OpenCL error: No suitable devices found");
             return false;
         }
 
@@ -703,19 +664,19 @@ private:
 
     void print_device_info() const noexcept
     {
-        log_info("OpenCL Manager initialized with {} device(s):", this->_devices.size());
+        std::printf("OpenCL Manager initialized with %lu device(s):\n", this->_devices.size());
 
         for(std::size_t i = 0; i < this->_device_info.size(); ++i)
         {
             const auto& info = this->_device_info[i];
 
-            log_info("Device {}: {} ({})", i, info.name, info.vendor);
-            log_info("  Type: {}", this->get_device_type_string(info.type));
-            log_info("  Global Memory: {} MB", (info.global_mem_size / (1024 * 1024)));
-            log_info("  Compute Units: {}", info.compute_units);
-            log_info("  Max Work Group Size: {}", info.max_work_group_size);
-            log_info("  Dedicated: {}", (info.is_dedicated ? "Yes" : "No"));
-            log_info("\n");
+            std::printf("Device %lu: %s (%s)\n", i, info.name.c_str(), info.vendor.c_str());
+            std::printf("  Type: %s\n", this->get_device_type_string(info.type).c_str());
+            std::printf("  Global Memory: %lu MB\n", (info.global_mem_size / (1024 * 1024)));
+            std::printf("  Compute Units: %lu\n", info.compute_units);
+            std::printf("  Max Work Group Size: %lu\n", info.max_work_group_size);
+            std::printf("  Dedicated: %s\n", (info.is_dedicated ? "Yes" : "No"));
+            std::printf("\n");
         }
     }
 
@@ -729,9 +690,7 @@ private:
         const char* error_string = detail::get_cl_error_string(error);
 
         if(error_string == nullptr)
-        {
             return StringD(static_cast<fmt::format_string<cl_int>>("Unknown error ({})"), error);
-        }
 
         return StringD::make_ref(error_string);
     }
