@@ -415,6 +415,17 @@ static void crash_handler(int sig, siginfo_t* info, void*)
     _exit(128 + sig);
 }
 
+#if defined(STDROMANO_LINUX)
+// Sanitizers report UB and exit without raising a signal, so the crash handler never runs
+extern "C" void __sanitizer_set_death_callback(void (*callback)()) __attribute__((weak));
+
+static void sanitizer_death_callback()
+{
+    if(g_guard_active.load())
+        write_crash_message();
+}
+#endif // defined(STDROMANO_LINUX)
+
 #endif // defined(STDROMANO_WIN)
 
 class CrashGuard
@@ -441,6 +452,11 @@ public:
 
         for(std::size_t i = 0; i < NUM_CRASH_SIGNALS; ++i)
             sigaction(CRASH_SIGNALS[i], &action, &g_previous_actions[i]);
+
+#if defined(STDROMANO_LINUX)
+        if(__sanitizer_set_death_callback != nullptr)
+            __sanitizer_set_death_callback(sanitizer_death_callback);
+#endif // defined(STDROMANO_LINUX)
 #endif // defined(STDROMANO_WIN)
 
         this->_installed = true;

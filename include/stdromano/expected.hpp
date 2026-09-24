@@ -192,6 +192,20 @@ inline Expected<void> Ok()
 
 STDROMANO_NAMESPACE_END
 
+template<>
+struct fmt::formatter<stdromano::Error>
+{
+    constexpr auto parse(format_parse_context& ctx)
+    {
+        return ctx.begin();
+    }
+
+    auto format(const stdromano::Error& e, format_context& ctx) const
+    {
+        return format_to(ctx.out(), "{}", e.message);
+    }
+};
+
 template<typename T>
 struct fmt::formatter<stdromano::Expected<T>>
 {

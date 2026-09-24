@@ -369,9 +369,9 @@ public:
 
             if(!opencl_manager.has_kernel_source(kernel_name))
             {
-                return Error(StringD::make_fmt("Matmul error: cannot find opencl kernel \"{}\" (path should be: {})",
-                                               kernel_name,
-                                               fs::expand_from_lib_dir(StringD("cl/{}.cl", kernel_name))));
+                return Error("Matmul error: cannot find opencl kernel \"{}\" (path should be: {})",
+                             kernel_name,
+                             fs::expand_from_lib_dir(StringD("cl/{}.cl", kernel_name)));
             }
 
             const std::size_t global_x = ((N + 15) / 16) * 16;

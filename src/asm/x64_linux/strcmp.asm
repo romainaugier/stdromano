@@ -41,8 +41,8 @@ _simd_sse:
     prefetcht0 byte [rdi + r9 + 96]
     prefetcht0 byte [rsi + r9 + 96]
 
-    movdqa xmm0, [rdi + r9]
-    movdqa xmm1, [rsi + r9]
+    movdqu xmm0, [rdi + r9]
+    movdqu xmm1, [rsi + r9]
     pcmpeqb xmm0, xmm1 ; sse2
     pmovmskb eax, xmm0
     cmp eax, 0000FFFFh
@@ -53,7 +53,8 @@ _simd_sse:
     jb _simd_sse
 
 _tail_sse:
-    sub rdx, r10
+    mov r11, rdx
+    sub r11, r10
     jz _equal_sse
 
 _tail_loop_sse:
@@ -65,12 +66,10 @@ _tail_loop_sse:
     jnz _tail_loop_sse
 
 _equal_sse:
-    vzeroupper
     mov eax, 1
     ret
 
 _mismatch_sse:
-    vzeroupper
     xor eax, eax
     ret
 
