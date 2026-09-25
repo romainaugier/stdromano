@@ -3,13 +3,33 @@
 // All rights reserved.
 
 #include "stdromano/json.hpp"
+#include "stdromano/bits.hpp"
 
+#include <charconv>
 #include <cmath>
 #include <cstdint>
 #include <cstdlib>
 #include <cstring>
 #include <cstdio>
 #include <new>
+
+#if defined(__cpp_lib_to_chars) && __cpp_lib_to_chars >= 201611L
+#define JSON_HAS_FROM_CHARS
+#endif // defined(__cpp_lib_to_chars)
+
+#if defined(STDROMANO_MSVC)
+#define JSON_UNLIKELY(x) (x)
+#define JSON_NO_INLINE __declspec(noinline)
+#else
+#define JSON_UNLIKELY(x) __builtin_expect(!!(x), 0)
+#define JSON_NO_INLINE __attribute__((noinline))
+#endif // defined(STDROMANO_MSVC)
+
+#if defined(STDROMANO_INTEL)
+#include <emmintrin.h>
+#elif defined(STDROMANO_AARCH64)
+#include <arm_neon.h>
+#endif // defined(STDROMANO_INTEL)
 
 STDROMANO_NAMESPACE_BEGIN
 
@@ -92,6 +112,7 @@ struct JsonDictElement
 {
     JsonKeyValue kv;
     JsonDictElement* next;
+    std::size_t key_size;
 };
 
 struct JsonDictInfo
@@ -101,18 +122,99 @@ struct JsonDictInfo
     std::size_t size;
 };
 
+// Element and value share one allocation, used by the parser and by copying appends
+struct JsonArrayNode
+{
+    JsonArrayElement element;
+    JsonObject storage;
+};
+
+struct JsonDictNode
+{
+    JsonDictElement element;
+    JsonObject storage;
+};
+
+/***************************/
+/* Internal string scanning */
+/***************************/
+
+static constexpr bool make_needs_attention_entry(unsigned int c) noexcept
+{
+    return c == '"' || c == '\\' || c < 0x20;
+}
+
+struct StringSpecialTable
+{
+    bool values[256];
+
+    constexpr StringSpecialTable() noexcept : values()
+    {
+        for(unsigned int c = 0; c < 256; ++c)
+            values[c] = make_needs_attention_entry(c);
+    }
+};
+
+static constexpr StringSpecialTable STRING_SPECIAL{};
+
+// First character that is a quote, a backslash or a control character, or end
+STDROMANO_FORCE_INLINE const char* find_string_special(const char* p, const char* end) noexcept
+{
+#if defined(STDROMANO_INTEL)
+    const __m128i quote = _mm_set1_epi8('"');
+    const __m128i backslash = _mm_set1_epi8('\\');
+    const __m128i control = _mm_set1_epi8(0x1F);
+
+    while(end - p >= 16)
+    {
+        const __m128i chunk = _mm_loadu_si128(reinterpret_cast<const __m128i*>(p));
+        const __m128i special = _mm_or_si128(_mm_or_si128(_mm_cmpeq_epi8(chunk, quote),
+                                                          _mm_cmpeq_epi8(chunk, backslash)),
+                                             _mm_cmpeq_epi8(_mm_min_epu8(chunk, control), chunk));
+        const std::uint32_t mask = static_cast<std::uint32_t>(_mm_movemask_epi8(special));
+
+        if(mask != 0)
+            return p + ctz_u64(mask);
+
+        p += 16;
+    }
+#elif defined(STDROMANO_AARCH64)
+    const uint8x16_t quote = vdupq_n_u8('"');
+    const uint8x16_t backslash = vdupq_n_u8('\\');
+    const uint8x16_t control = vdupq_n_u8(0x20);
+
+    while(end - p >= 16)
+    {
+        const uint8x16_t chunk = vld1q_u8(reinterpret_cast<const std::uint8_t*>(p));
+        const uint8x16_t special = vorrq_u8(vorrq_u8(vceqq_u8(chunk, quote), vceqq_u8(chunk, backslash)),
+                                            vcltq_u8(chunk, control));
+        const std::uint64_t mask = vget_lane_u64(vreinterpret_u64_u8(vshrn_n_u16(vreinterpretq_u16_u8(special), 4)), 0);
+
+        if(mask != 0)
+            return p + (ctz_u64(mask) >> 2);
+
+        p += 16;
+    }
+#endif // defined(STDROMANO_INTEL)
+
+    while(p < end && !STRING_SPECIAL.values[static_cast<std::uint8_t>(*p)])
+        ++p;
+
+    return p;
+}
+
 /****************************/
 /* JsonObject: type checks  */
 /****************************/
 
-bool JsonObject::is_null() const noexcept  { return this->_tags & JsonTag_Null; }
-bool JsonObject::is_bool() const noexcept  { return this->_tags & JsonTag_Bool; }
-bool JsonObject::is_u64() const noexcept   { return this->_tags & JsonTag_U64; }
-bool JsonObject::is_i64() const noexcept   { return this->_tags & JsonTag_I64; }
-bool JsonObject::is_f64() const noexcept   { return this->_tags & JsonTag_F64; }
-bool JsonObject::is_str() const noexcept   { return this->_tags & JsonTag_Str; }
+bool JsonObject::is_null() const noexcept { return this->_tags & JsonTag_Null; }
+bool JsonObject::is_bool() const noexcept { return this->_tags & JsonTag_Bool; }
+bool JsonObject::is_u64() const noexcept { return this->_tags & JsonTag_U64; }
+bool JsonObject::is_i64() const noexcept { return this->_tags & JsonTag_I64; }
+bool JsonObject::is_f64() const noexcept { return this->_tags & JsonTag_F64; }
+bool JsonObject::is_str() const noexcept { return this->_tags & JsonTag_Str; }
 bool JsonObject::is_array() const noexcept { return this->_tags & JsonTag_Array; }
-bool JsonObject::is_dict() const noexcept  { return this->_tags & JsonTag_Dict; }
+bool JsonObject::is_dict() const noexcept { return this->_tags & JsonTag_Dict; }
 
 /************************/
 /* JsonObject: getters  */
@@ -188,18 +290,12 @@ JsonObject* JsonObject::dict_find(const char* key) const noexcept
         return nullptr;
 
     const auto* info = static_cast<const JsonDictInfo*>(_value.ptr);
-    auto* current = info->head;
+    const std::size_t key_size = std::strlen(key);
 
-    const std::size_t key_sz = std::strlen(key);
-
-    while(current != nullptr)
+    for(const JsonDictElement* current = info->head; current != nullptr; current = current->next)
     {
-        const std::size_t current_key_sz = std::strlen(current->kv.key);
-
-        if(key_sz == current_key_sz && std::memcmp(current->kv.key, key, key_sz) == 0)
+        if(current->key_size == key_size && std::memcmp(current->kv.key, key, key_size) == 0)
             return current->kv.value;
-
-        current = current->next;
     }
 
     return nullptr;
@@ -281,9 +377,13 @@ JsonObject::DictRange JsonObject::dict_items() const noexcept
 /* Json: construction         */
 /******************************/
 
+static constexpr std::size_t STRING_ARENA_INITIAL_SIZE = 16 * 1024;
+static constexpr std::size_t VALUE_ARENA_INITIAL_SIZE = 16 * 1024;
+static constexpr std::size_t ARENA_BLOCK_SIZE = 256 * 1024;
+
 Json::Json() noexcept : _root(nullptr),
-                        _string_arena(128 * 1024),
-                        _value_arena(1024 * sizeof(JsonObject))
+                        _string_arena(STRING_ARENA_INITIAL_SIZE, ARENA_BLOCK_SIZE),
+                        _value_arena(VALUE_ARENA_INITIAL_SIZE, ARENA_BLOCK_SIZE)
 {
 }
 
@@ -296,6 +396,15 @@ void Json::set_root(JsonObject* root) noexcept { this->_root = root; }
 /******************************/
 /* Json: value creation       */
 /******************************/
+
+static char* copy_c_str(Arena& arena, const char* str, std::size_t& size) noexcept
+{
+    size = std::strlen(str);
+    char* copy = static_cast<char*>(arena.allocate(size + 1));
+    std::memcpy(copy, str, size);
+    copy[size] = '\0';
+    return copy;
+}
 
 JsonObject* Json::make_null() noexcept
 {
@@ -338,17 +447,8 @@ JsonObject* Json::make_f64(double f64) noexcept
 
 JsonObject* Json::make_str(const char* str) noexcept
 {
-    const size_t str_sz = std::strlen(str);
-    char* str_ptr = static_cast<char*>(this->_string_arena.allocate(str_sz + 1));
-
-    std::memcpy(str_ptr, str, str_sz);
-    str_ptr[str_sz] = '\0';
-
     auto* obj = this->_value_arena.emplace<JsonObject>();
-    tag_set_type(obj->_tags, JsonTag_Str);
-    tag_set_sz(obj->_tags, static_cast<std::uint32_t>(str_sz));
-    obj->_value.str = str_ptr;
-
+    this->set_str(obj, str);
     return obj;
 }
 
@@ -417,15 +517,13 @@ void Json::set_f64(JsonObject* obj, double f64) noexcept
 
 void Json::set_str(JsonObject* obj, const char* str) noexcept
 {
-    const size_t str_sz = std::strlen(str);
-    char* str_ptr = static_cast<char*>(this->_string_arena.allocate(str_sz + 1));
-
-    std::memcpy(str_ptr, str, str_sz);
-    str_ptr[str_sz] = '\0';
+    std::size_t str_sz = 0;
+    const char* copy = copy_c_str(this->_string_arena, str, str_sz);
 
     tag_set_type(obj->_tags, JsonTag_Str);
-    tag_set_sz(obj->_tags, static_cast<uint32_t>(str_sz));
-    obj->_value.str = str_ptr;
+    tag_set_sz(obj->_tags, static_cast<std::uint32_t>(str_sz));
+
+    obj->_value.str = copy;
 }
 
 /******************************/
@@ -435,32 +533,29 @@ void Json::set_str(JsonObject* obj, const char* str) noexcept
 void Json::array_append(JsonObject* array, JsonObject* value, bool reference) noexcept
 {
     auto* info = static_cast<JsonArrayInfo*>(array->_value.ptr);
-    auto* element = this->_value_arena.emplace<JsonArrayElement>();
+    JsonArrayElement* element;
+
+    if(reference)
+    {
+        element = this->_value_arena.emplace<JsonArrayElement>();
+        element->value = value;
+    }
+    else
+    {
+        auto* node = this->_value_arena.emplace<JsonArrayNode>();
+        std::memcpy(&node->storage, value, sizeof(JsonObject));
+        element = &node->element;
+        element->value = &node->storage;
+    }
 
     element->next = nullptr;
 
     if(info->head == nullptr)
-    {
         info->head = element;
-        info->tail = element;
-    }
     else
-    {
         info->tail->next = element;
-        info->tail = element;
-    }
 
-    if(!reference)
-    {
-        auto* new_value = _value_arena.emplace<JsonObject>();
-        std::memcpy(new_value, value, sizeof(JsonObject));
-        element->value = new_value;
-    }
-    else
-    {
-        element->value = value;
-    }
-
+    info->tail = element;
     info->size++;
 }
 
@@ -506,53 +601,44 @@ void Json::dict_append(JsonObject* dict,
                        bool reference) noexcept
 {
     auto* info = static_cast<JsonDictInfo*>(dict->_value.ptr);
-    auto* element = _value_arena.emplace<JsonDictElement>();
+    JsonDictElement* element;
 
+    if(reference)
+    {
+        element = this->_value_arena.emplace<JsonDictElement>();
+        element->kv.value = value;
+    }
+    else
+    {
+        auto* node = this->_value_arena.emplace<JsonDictNode>();
+        std::memcpy(&node->storage, value, sizeof(JsonObject));
+        element = &node->element;
+        element->kv.value = &node->storage;
+    }
+
+    element->kv.key = copy_c_str(this->_string_arena, key, element->key_size);
     element->next = nullptr;
 
     if(info->head == nullptr)
-    {
         info->head = element;
-        info->tail = element;
-    }
     else
-    {
         info->tail->next = element;
-        info->tail = element;
-    }
 
-    const size_t key_sz = std::strlen(key);
-    char* new_key = static_cast<char*>(this->_string_arena.allocate(key_sz + 1));
-
-    std::memcpy(new_key, key, key_sz);
-    new_key[key_sz] = '\0';
-
-    if(!reference)
-    {
-        auto* new_value = _value_arena.emplace<JsonObject>();
-        std::memcpy(new_value, value, sizeof(JsonObject));
-        element->kv.value = new_value;
-    }
-    else
-    {
-        element->kv.value = value;
-    }
-
-    element->kv.key = new_key;
-
+    info->tail = element;
     info->size++;
 }
 
 void Json::dict_pop(JsonObject* dict, const char* key) noexcept
 {
     auto* info = static_cast<JsonDictInfo*>(dict->_value.ptr);
+    const std::size_t key_size = std::strlen(key);
 
     JsonDictElement* previous = nullptr;
     auto* current = info->head;
 
     while(current != nullptr)
     {
-        if(std::strcmp(current->kv.key, key) == 0)
+        if(current->key_size == key_size && std::memcmp(current->kv.key, key, key_size) == 0)
             break;
 
         previous = current;
@@ -584,39 +670,20 @@ void Json::dict_pop(JsonObject* dict, const char* key) noexcept
 /* Json parser  */
 /****************/
 
-struct JsonParser_
-{
-    const char* str;
-    std::size_t pos;
-    std::size_t len;
-    Json* json;
+static constexpr std::size_t JSON_MAX_DEPTH = 512;
 
-    STDROMANO_FORCE_INLINE void skip_whitespace() noexcept
-    {
-        static constexpr bool ws[256] = {
-                //  0      1      2      3      4      5      6      7
-                //  NUL    SOH    STX    ETX    EOT    ENQ    ACK    BEL
-                    false, false, false, false, false, false, false, false,
-                //  BS     HT     LF     VT     FF     CR     SO     SI
-                    false, true,  true,  true,  true,  true,  false, false,
-                //  16-31
-                    false, false, false, false, false, false, false, false,
-                    false, false, false, false, false, false, false, false,
-                //  SP     !
-                    true,  false,
-        };
-
-        while(this->pos < this->len && ws[(std::uint8_t)this->str[this->pos]])
-            this->pos++;
-    }
-
-    JsonObject* parse_value() noexcept;
-    JsonObject* parse_string() noexcept;
-    JsonObject* parse_number() noexcept;
-    JsonObject* parse_array() noexcept;
-    JsonObject* parse_dict() noexcept;
-    JsonObject* parse_literal() noexcept;
+static constexpr bool WHITESPACE[256] = {
+    false, false, false, false, false, false, false, false,
+    false, true,  true,  true,  true,  true,  false, false,
+    false, false, false, false, false, false, false, false,
+    false, false, false, false, false, false, false, false,
+    true,
 };
+
+STDROMANO_FORCE_INLINE bool is_ascii_digit(const char c) noexcept
+{
+    return static_cast<unsigned int>(c - '0') < 10u;
+}
 
 static int hex_value(const char c) noexcept
 {
@@ -679,381 +746,530 @@ static std::size_t encode_utf8(std::uint32_t cp, char* out) noexcept
     return 4;
 }
 
-JsonObject* JsonParser_::parse_string() noexcept
+// Decoded output is never longer than the escaped input, so out needs end - src bytes
+static bool decode_escaped(const char* src, const char* end, char* out, std::size_t& out_size) noexcept
 {
-    if(pos >= len || str[pos] != '"')
-        return nullptr;
+    char* const out_start = out;
 
-    pos++;
-
-    const std::size_t start = pos;
-    bool has_escape = false;
-
-    while(pos < len)
+    while(src < end)
     {
-        const char c = str[pos];
+        const char* backslash = static_cast<const char*>(std::memchr(src, '\\', static_cast<std::size_t>(end - src)));
 
-        if(c == '"')
+        if(backslash == nullptr)
+        {
+            std::memcpy(out, src, static_cast<std::size_t>(end - src));
+            out += end - src;
             break;
-
-        if(c == '\\')
-        {
-            has_escape = true;
-            pos++;
-
-            if(pos >= len)
-                return nullptr;
-
-            if(str[pos] == 'u')
-            {
-                std::uint32_t unused;
-
-                if(pos + 4 >= len || !read_hex4(str + pos + 1, unused))
-                    return nullptr;
-
-                pos += 4;
-            }
-            else if(std::strchr("\"\\/bfnrt", str[pos]) == nullptr || str[pos] == '\0')
-            {
-                return nullptr;
-            }
-        }
-        else if(static_cast<unsigned char>(c) < 0x20)
-        {
-            return nullptr;
         }
 
-        pos++;
-    }
+        std::memcpy(out, src, static_cast<std::size_t>(backslash - src));
+        out += backslash - src;
 
-    if(pos >= len)
-        return nullptr;
+        const char escaped = backslash[1];
+        src = backslash + 2;
 
-    const std::size_t raw_len = pos - start;
-
-    JsonObject* obj = json->_value_arena.emplace<JsonObject>();
-    char* s = static_cast<char*>(json->_string_arena.allocate(raw_len + 1));
-    std::size_t slen = 0;
-
-    if(!has_escape)
-    {
-        std::memcpy(s, str + start, raw_len);
-        slen = raw_len;
-    }
-    else
-    {
-        for(std::size_t i = start; i < pos; i++)
+        switch(escaped)
         {
-            if(str[i] != '\\')
+            case '"':  *out++ = '"';  break;
+            case '\\': *out++ = '\\'; break;
+            case '/':  *out++ = '/';  break;
+            case 'b':  *out++ = '\b'; break;
+            case 'f':  *out++ = '\f'; break;
+            case 'n':  *out++ = '\n'; break;
+            case 'r':  *out++ = '\r'; break;
+            case 't':  *out++ = '\t'; break;
+            case 'u':
             {
-                s[slen++] = str[i];
-                continue;
-            }
+                std::uint32_t cp = 0;
 
-            i++;
+                if(end - src < 4 || !read_hex4(src, cp))
+                    return false;
 
-            switch(str[i])
-            {
-                case '"':  s[slen++] = '"';  break;
-                case '\\': s[slen++] = '\\'; break;
-                case '/':  s[slen++] = '/';  break;
-                case 'b':  s[slen++] = '\b'; break;
-                case 'f':  s[slen++] = '\f'; break;
-                case 'n':  s[slen++] = '\n'; break;
-                case 'r':  s[slen++] = '\r'; break;
-                case 't':  s[slen++] = '\t'; break;
-                default:
+                src += 4;
+
+                if(cp >= 0xD800 && cp <= 0xDBFF)
                 {
-                    std::uint32_t cp = 0;
-                    read_hex4(str + i + 1, cp);
-                    i += 4;
+                    std::uint32_t low = 0;
 
-                    if(cp >= 0xD800 && cp <= 0xDBFF)
+                    if(end - src >= 6 && src[0] == '\\' && src[1] == 'u' && read_hex4(src + 2, low) &&
+                       low >= 0xDC00 && low <= 0xDFFF)
                     {
-                        std::uint32_t low = 0;
-
-                        if(i + 6 < pos && str[i + 1] == '\\' && str[i + 2] == 'u' &&
-                           read_hex4(str + i + 3, low) && low >= 0xDC00 && low <= 0xDFFF)
-                        {
-                            cp = 0x10000 + ((cp - 0xD800) << 10) + (low - 0xDC00);
-                            i += 6;
-                        }
-                        else
-                        {
-                            cp = 0xFFFD;
-                        }
+                        cp = 0x10000 + ((cp - 0xD800) << 10) + (low - 0xDC00);
+                        src += 6;
                     }
-                    else if(cp >= 0xDC00 && cp <= 0xDFFF)
+                    else
                     {
                         cp = 0xFFFD;
                     }
-
-                    slen += encode_utf8(cp, s + slen);
-                    break;
                 }
+                else if(cp >= 0xDC00 && cp <= 0xDFFF)
+                {
+                    cp = 0xFFFD;
+                }
+
+                out += encode_utf8(cp, out);
+                break;
             }
+            default:
+                return false;
         }
     }
 
-    s[slen] = '\0';
-
-    pos++;
-
-    tag_set_type(obj->_tags, JsonTag_Str);
-    tag_set_sz(obj->_tags, static_cast<std::uint32_t>(slen));
-    obj->_value.str = s;
-
-    return obj;
+    out_size = static_cast<std::size_t>(out - out_start);
+    return true;
 }
 
-JsonObject* JsonParser_::parse_number() noexcept
+// Out of range values (inf, denormal underflow) and toolchains without floating-point from_chars.
+// Kept out of line so the stack buffer does not add stack protector setup to every number parse.
+JSON_NO_INLINE static bool parse_f64_fallback(const char* start, const char* end, double& out) noexcept
 {
-    const std::size_t start = pos;
-
-    bool is_negative = false;
-    bool is_float = false;
-    bool overflow = false;
-    std::uint64_t magnitude = 0;
-
-    if(pos < len && str[pos] == '-')
-    {
-        is_negative = true;
-        pos++;
-    }
-
-    if(pos >= len || !is_digit(str[pos]))
-        return nullptr;
-
-    while(pos < len && is_digit(str[pos]))
-    {
-        const std::uint64_t digit = static_cast<std::uint64_t>(str[pos] - '0');
-
-        if(magnitude > (UINT64_MAX - digit) / 10)
-            overflow = true;
-        else
-            magnitude = magnitude * 10 + digit;
-
-        pos++;
-    }
-
-    if(pos < len && str[pos] == '.')
-    {
-        is_float = true;
-        pos++;
-
-        if(pos >= len || !is_digit(str[pos]))
-            return nullptr;
-
-        while(pos < len && is_digit(str[pos]))
-            pos++;
-    }
-
-    if(pos < len && (str[pos] == 'e' || str[pos] == 'E'))
-    {
-        is_float = true;
-        pos++;
-
-        if(pos < len && (str[pos] == '-' || str[pos] == '+'))
-            pos++;
-
-        if(pos >= len || !is_digit(str[pos]))
-            return nullptr;
-
-        while(pos < len && is_digit(str[pos]))
-            pos++;
-    }
-
-    constexpr std::uint64_t min_i64_magnitude = static_cast<std::uint64_t>(INT64_MAX) + 1;
-
-    if(!is_float && !overflow)
-    {
-        if(!is_negative)
-            return json->make_u64(magnitude);
-
-        if(magnitude <= min_i64_magnitude)
-            return json->make_i64(magnitude == min_i64_magnitude ? INT64_MIN : -static_cast<std::int64_t>(magnitude));
-    }
-
-    const std::size_t number_len = pos - start;
+    const std::size_t number_len = static_cast<std::size_t>(end - start);
 
     char stack_buffer[64];
     char* buffer = number_len < sizeof(stack_buffer) ? stack_buffer
                                                      : static_cast<char*>(std::malloc(number_len + 1));
 
     if(buffer == nullptr)
-        return nullptr;
+        return false;
 
-    std::memcpy(buffer, str + start, number_len);
+    std::memcpy(buffer, start, number_len);
     buffer[number_len] = '\0';
 
-    const double value = std::strtod(buffer, nullptr);
+    out = std::strtod(buffer, nullptr);
 
     if(buffer != stack_buffer)
         std::free(buffer);
 
-    return json->make_f64(value);
+    return true;
 }
 
-JsonObject* JsonParser_::parse_array() noexcept
+struct JsonParser_
 {
-    if(pos >= len || str[pos] != '[')
-        return nullptr;
+    const char* p;
+    const char* end;
+    Json* json;
+    std::size_t depth;
 
-    pos++;
+    // Values are bump-allocated from chunks taken from the arena, keeping the hot path in registers
+    static constexpr std::size_t CHUNK_SIZE = 4096;
 
-    JsonObject* array = json->make_array();
-    this->skip_whitespace();
+    char* value_cursor;
+    char* value_end;
+    char* string_cursor;
+    char* string_end;
 
-    if(pos < len && str[pos] == ']')
+    template <typename T>
+    STDROMANO_FORCE_INLINE T* allocate() noexcept
     {
-        pos++;
-        return array;
+        static_assert(alignof(T) <= alignof(std::max_align_t) && sizeof(T) % alignof(T) == 0);
+
+        if(JSON_UNLIKELY(static_cast<std::size_t>(value_end - value_cursor) < sizeof(T)))
+            this->refill_values();
+
+        T* object = reinterpret_cast<T*>(value_cursor);
+        value_cursor += sizeof(T);
+
+        return object;
     }
 
-    while(pos < len)
+    STDROMANO_FORCE_INLINE char* allocate_string(const std::size_t size) noexcept
     {
-        JsonObject* element = parse_value();
+        if(JSON_UNLIKELY(static_cast<std::size_t>(string_end - string_cursor) < size))
+            return this->allocate_string_slow(size);
 
-        if(element == nullptr)
-            return nullptr;
+        char* str = string_cursor;
+        string_cursor += size;
 
-        json->array_append(array, element, true);
-        this->skip_whitespace();
+        return str;
+    }
 
-        if(pos >= len)
-            return nullptr;
+    JSON_NO_INLINE void refill_values() noexcept
+    {
+        value_cursor = static_cast<char*>(json->_value_arena.allocate_aligned(CHUNK_SIZE, alignof(std::max_align_t)));
+        value_end = value_cursor + CHUNK_SIZE;
+    }
 
-        if(str[pos] == ',')
+    JSON_NO_INLINE char* allocate_string_slow(const std::size_t size) noexcept
+    {
+        // Large strings get their own allocation so the current chunk is not wasted
+        if(size > CHUNK_SIZE / 4)
+            return static_cast<char*>(json->_string_arena.allocate(size));
+
+        string_cursor = static_cast<char*>(json->_string_arena.allocate(CHUNK_SIZE));
+        string_end = string_cursor + CHUNK_SIZE;
+
+        char* str = string_cursor;
+        string_cursor += size;
+
+        return str;
+    }
+
+    STDROMANO_FORCE_INLINE void skip_whitespace() noexcept
+    {
+        while(p < end && WHITESPACE[static_cast<std::uint8_t>(*p)])
+            ++p;
+    }
+
+    bool parse_string_data(const char*& data, std::size_t& size) noexcept;
+    bool parse_number(JsonObject* out) noexcept;
+    bool parse_array(JsonObject* out) noexcept;
+    bool parse_dict(JsonObject* out) noexcept;
+    bool parse_value(JsonObject* out) noexcept;
+};
+
+bool JsonParser_::parse_string_data(const char*& data, std::size_t& size) noexcept
+{
+    const char* const start = ++p;
+    bool has_escape = false;
+
+    for(;;)
+    {
+        p = find_string_special(p, end);
+
+        if(p == end)
+            return false;
+
+        if(*p == '"')
+            break;
+
+        if(*p != '\\' || end - p < 2)
+            return false;
+
+        has_escape = true;
+        p += 2;
+    }
+
+    const std::size_t raw_size = static_cast<std::size_t>(p - start);
+    ++p;
+
+    if(raw_size > UINT32_MAX)
+        return false;
+
+    char* str = this->allocate_string(raw_size + 1);
+
+    if(!has_escape)
+    {
+        std::memcpy(str, start, raw_size);
+        size = raw_size;
+    }
+    else if(!decode_escaped(start, start + raw_size, str, size))
+    {
+        return false;
+    }
+
+    str[size] = '\0';
+    data = str;
+
+    return true;
+}
+
+bool JsonParser_::parse_number(JsonObject* out) noexcept
+{
+    const char* const start = p;
+    const bool is_negative = *p == '-';
+
+    if(is_negative)
+        ++p;
+
+    if(p == end || !is_ascii_digit(*p))
+        return false;
+
+    const char* const digits = p;
+    std::uint64_t magnitude = 0;
+
+    while(p < end && is_ascii_digit(*p))
+    {
+        magnitude = magnitude * 10 + static_cast<std::uint64_t>(*p - '0');
+        ++p;
+    }
+
+    const char* const digits_end = p;
+    bool is_float = false;
+
+    if(p < end && *p == '.')
+    {
+        is_float = true;
+        ++p;
+
+        if(p == end || !is_ascii_digit(*p))
+            return false;
+
+        while(p < end && is_ascii_digit(*p))
+            ++p;
+    }
+
+    if(p < end && (*p == 'e' || *p == 'E'))
+    {
+        is_float = true;
+        ++p;
+
+        if(p < end && (*p == '-' || *p == '+'))
+            ++p;
+
+        if(p == end || !is_ascii_digit(*p))
+            return false;
+
+        while(p < end && is_ascii_digit(*p))
+            ++p;
+    }
+
+    if(!is_float)
+    {
+        const char* significant = digits;
+
+        while(significant + 1 < digits_end && *significant == '0')
+            ++significant;
+
+        const std::size_t num_digits = static_cast<std::size_t>(digits_end - significant);
+        const bool overflow = num_digits > 20 ||
+                              (num_digits == 20 && std::memcmp(significant, "18446744073709551615", 20) > 0);
+
+        if(!overflow)
         {
-            pos++;
-            this->skip_whitespace();
+            constexpr std::uint64_t min_i64_magnitude = static_cast<std::uint64_t>(INT64_MAX) + 1;
+
+            if(!is_negative)
+            {
+                out->_tags = JsonTag_U64;
+                out->_value.u64 = magnitude;
+                return true;
+            }
+
+            if(magnitude <= min_i64_magnitude)
+            {
+                out->_tags = JsonTag_I64;
+                out->_value.i64 = magnitude == min_i64_magnitude ? INT64_MIN : -static_cast<std::int64_t>(magnitude);
+                return true;
+            }
         }
-        else if(str[pos] == ']')
-        {
-            pos++;
-            return array;
-        }
+    }
+
+    out->_tags = JsonTag_F64;
+
+#if defined(JSON_HAS_FROM_CHARS)
+    const std::from_chars_result result = std::from_chars(start, p, out->_value.f64);
+
+    if(result.ec == std::errc() && result.ptr == p)
+        return true;
+#endif // defined(JSON_HAS_FROM_CHARS)
+
+    return parse_f64_fallback(start, p, out->_value.f64);
+}
+
+bool JsonParser_::parse_array(JsonObject* out) noexcept
+{
+    ++p;
+
+    auto* info = this->allocate<JsonArrayInfo>();
+    info->head = nullptr;
+    info->tail = nullptr;
+    info->size = 0;
+
+    out->_tags = JsonTag_Array;
+    out->_value.ptr = info;
+
+    this->skip_whitespace();
+
+    if(p < end && *p == ']')
+    {
+        ++p;
+        return true;
+    }
+
+    if(++depth > JSON_MAX_DEPTH)
+        return false;
+
+    JsonArrayElement* head = nullptr;
+    JsonArrayElement* tail = nullptr;
+    std::size_t size = 0;
+
+    for(;;)
+    {
+        auto* node = this->allocate<JsonArrayNode>();
+
+        if(!this->parse_value(&node->storage))
+            return false;
+
+        node->element.value = &node->storage;
+        node->element.next = nullptr;
+
+        if(tail == nullptr)
+            head = &node->element;
         else
-        {
-            return nullptr;
-        }
+            tail->next = &node->element;
+
+        tail = &node->element;
+        ++size;
+
+        this->skip_whitespace();
+
+        if(p == end)
+            return false;
+
+        const char c = *p++;
+
+        if(c == ']')
+            break;
+
+        if(c != ',')
+            return false;
     }
 
-    return nullptr;
+    info->head = head;
+    info->tail = tail;
+    info->size = size;
+
+    --depth;
+
+    return true;
 }
 
-JsonObject* JsonParser_::parse_dict() noexcept
+bool JsonParser_::parse_dict(JsonObject* out) noexcept
 {
-    if(pos >= len || str[pos] != '{')
-        return nullptr;
+    ++p;
 
-    pos++;
+    auto* info = this->allocate<JsonDictInfo>();
+    info->head = nullptr;
+    info->tail = nullptr;
+    info->size = 0;
 
-    JsonObject* dict = json->make_dict();
+    out->_tags = JsonTag_Dict;
+    out->_value.ptr = info;
+
     this->skip_whitespace();
 
-    if(pos < len && str[pos] == '}')
+    if(p < end && *p == '}')
     {
-        pos++;
-        return dict;
+        ++p;
+        return true;
     }
 
-    while(pos < len)
+    if(++depth > JSON_MAX_DEPTH)
+        return false;
+
+    JsonDictElement* head = nullptr;
+    JsonDictElement* tail = nullptr;
+    std::size_t size = 0;
+
+    for(;;)
     {
         this->skip_whitespace();
 
-        if(pos >= len || str[pos] != '"')
-            return nullptr;
+        if(p == end || *p != '"')
+            return false;
 
-        JsonObject* key_val = this->parse_string();
+        auto* node = this->allocate<JsonDictNode>();
 
-        if(key_val == nullptr)
-            return nullptr;
-
-        const char* key = key_val->_value.str;
+        if(!this->parse_string_data(node->element.kv.key, node->element.key_size))
+            return false;
 
         this->skip_whitespace();
 
-        if(pos >= len || str[pos] != ':')
-            return nullptr;
+        if(p == end || *p != ':')
+            return false;
 
-        pos++;
-        this->skip_whitespace();
+        ++p;
 
-        JsonObject* value = this->parse_value();
+        if(!this->parse_value(&node->storage))
+            return false;
 
-        if(value == nullptr)
-            return nullptr;
+        node->element.kv.value = &node->storage;
+        node->element.next = nullptr;
 
-        json->dict_append(dict, key, value, true);
-        this->skip_whitespace();
-
-        if(pos >= len)
-            return nullptr;
-
-        if(str[pos] == ',')
-        {
-            pos++;
-            this->skip_whitespace();
-        }
-        else if(str[pos] == '}')
-        {
-            pos++;
-            return dict;
-        }
+        if(tail == nullptr)
+            head = &node->element;
         else
-        {
-            return nullptr;
-        }
+            tail->next = &node->element;
+
+        tail = &node->element;
+        ++size;
+
+        this->skip_whitespace();
+
+        if(p == end)
+            return false;
+
+        const char c = *p++;
+
+        if(c == '}')
+            break;
+
+        if(c != ',')
+            return false;
     }
 
-    return nullptr;
+    info->head = head;
+    info->tail = tail;
+    info->size = size;
+
+    --depth;
+
+    return true;
 }
 
-JsonObject* JsonParser_::parse_literal() noexcept
-{
-    if(pos + 4 <= len && std::memcmp(str + pos, "null", 4) == 0)
-    {
-        pos += 4;
-        return json->make_null();
-    }
-
-    if(pos + 4 <= len && std::memcmp(str + pos, "true", 4) == 0)
-    {
-        pos += 4;
-        return json->make_bool(true);
-    }
-
-    if(pos + 5 <= len && std::memcmp(str + pos, "false", 5) == 0)
-    {
-        pos += 5;
-        return json->make_bool(false);
-    }
-
-    return nullptr;
-}
-
-JsonObject* JsonParser_::parse_value() noexcept
+bool JsonParser_::parse_value(JsonObject* out) noexcept
 {
     this->skip_whitespace();
 
-    if(pos >= len)
-        return nullptr;
+    if(p == end)
+        return false;
 
-    const char c = str[pos];
+    switch(*p)
+    {
+        case '"':
+        {
+            const char* str = nullptr;
+            std::size_t size = 0;
 
-    if(c == '"')
-        return this->parse_string();
-    else if(c == '{')
-        return this->parse_dict();
-    else if(c == '[')
-        return this->parse_array();
-    else if(c == '-' || is_digit(c))
-        return this->parse_number();
-    else if(c == 't' || c == 'f' || c == 'n')
-        return this->parse_literal();
+            if(!this->parse_string_data(str, size))
+                return false;
 
-    return nullptr;
+            out->_tags = JsonTag_Str | (static_cast<std::uint64_t>(size) << 32);
+            out->_value.str = str;
+            return true;
+        }
+
+        case '{':
+            return this->parse_dict(out);
+
+        case '[':
+            return this->parse_array(out);
+
+        case 'n':
+            if(end - p < 4 || std::memcmp(p, "null", 4) != 0)
+                return false;
+
+            p += 4;
+            out->_tags = JsonTag_Null;
+            out->_value.u64 = 0;
+            return true;
+
+        case 't':
+            if(end - p < 4 || std::memcmp(p, "true", 4) != 0)
+                return false;
+
+            p += 4;
+            out->_tags = JsonTag_Bool;
+            out->_value.u64 = 0;
+            out->_value.b = true;
+            return true;
+
+        case 'f':
+            if(end - p < 5 || std::memcmp(p, "false", 5) != 0)
+                return false;
+
+            p += 5;
+            out->_tags = JsonTag_Bool;
+            out->_value.u64 = 0;
+            out->_value.b = false;
+            return true;
+
+        default:
+            if(*p == '-' || is_ascii_digit(*p))
+                return this->parse_number(out);
+
+            return false;
+    }
 }
 
 /****************/
@@ -1062,213 +1278,296 @@ JsonObject* JsonParser_::parse_value() noexcept
 
 struct JsonWriter_
 {
-    const Json* json;
-    StringD* out;
-    std::size_t indent_size;
-    std::size_t indent;
+    static constexpr std::size_t INITIAL_CAPACITY = 64 * 1024;
 
-    STDROMANO_FORCE_INLINE void write_indent() noexcept
+    char* data = nullptr;
+    std::size_t size = 0;
+    std::size_t capacity = 0;
+    std::size_t indent_size = 0;
+    std::size_t indent = 0;
+
+    JsonWriter_() noexcept = default;
+
+    ~JsonWriter_() noexcept
     {
-        out->appendf("{:{}}", "", indent);
+        if(this->data != nullptr)
+            mem_free(this->data);
     }
 
-    bool write_value(const JsonObject* value) noexcept;
-    void write_str(const char* s, const std::size_t size) noexcept;
+    JsonWriter_(const JsonWriter_&) = delete;
+    JsonWriter_& operator=(const JsonWriter_&) = delete;
+
+    bool grow(const std::size_t needed) noexcept
+    {
+        std::size_t new_capacity = this->capacity < INITIAL_CAPACITY ? INITIAL_CAPACITY : this->capacity;
+
+        while(new_capacity < needed)
+            new_capacity *= 2;
+
+        char* new_data = mem_realloc<char>(this->data, new_capacity);
+
+        if(new_data == nullptr)
+            return false;
+
+        this->data = new_data;
+        this->capacity = new_capacity;
+
+        return true;
+    }
+
+    // One spare byte is always kept for the null terminator added by finish()
+    STDROMANO_FORCE_INLINE char* reserve(const std::size_t n) noexcept
+    {
+        if(this->size + n >= this->capacity && !this->grow(this->size + n + 1))
+            return nullptr;
+
+        return this->data + this->size;
+    }
+
+    STDROMANO_FORCE_INLINE bool write(const char* str, const std::size_t n) noexcept
+    {
+        char* dst = this->reserve(n);
+
+        if(dst == nullptr)
+            return false;
+
+        std::memcpy(dst, str, n);
+        this->size += n;
+
+        return true;
+    }
+
+    STDROMANO_FORCE_INLINE bool write(const char c) noexcept
+    {
+        char* dst = this->reserve(1);
+
+        if(dst == nullptr)
+            return false;
+
+        *dst = c;
+        this->size++;
+
+        return true;
+    }
+
+    // Writes the optional separator, then the newline and indentation of the next line
+    STDROMANO_FORCE_INLINE bool write_line_break(const bool separator) noexcept
+    {
+        char* dst = this->reserve(2 + this->indent);
+
+        if(dst == nullptr)
+            return false;
+
+        if(separator)
+            *dst++ = ',';
+
+        *dst++ = '\n';
+        std::memset(dst, ' ', this->indent);
+
+        this->size += (separator ? 2 : 1) + this->indent;
+
+        return true;
+    }
+
+    bool finish() noexcept
+    {
+        char* dst = this->reserve(0);
+
+        if(dst == nullptr)
+            return false;
+
+        *dst = '\0';
+
+        return true;
+    }
+
+    bool write_str(const char* str, std::size_t size) noexcept;
+    bool write_f64(double f64) noexcept;
     bool write_array(const JsonObject* array) noexcept;
     bool write_dict(const JsonObject* dict) noexcept;
+    bool write_value(const JsonObject* value) noexcept;
 };
 
-STDROMANO_FORCE_INLINE bool char_needs_escape(char c) noexcept
+bool JsonWriter_::write_str(const char* str, const std::size_t size) noexcept
 {
-    return c == '"' || c == '\\' || static_cast<unsigned char>(c) < 0x20;
-}
+    static constexpr char HEX_DIGITS[] = "0123456789abcdef";
 
-STDROMANO_FORCE_INLINE char escape_char(char c) noexcept
-{
-    switch(c)
+    const char* const end = str + size;
+
+    if(!this->write('"'))
+        return false;
+
+    while(str < end)
     {
-        case '"':  return '"';
-        case '\\': return '\\';
-        case '\b': return 'b';
-        case '\f': return 'f';
-        case '\n': return 'n';
-        case '\r': return 'r';
-        case '\t': return 't';
-        default:   return c;
-    }
-}
+        const char* special = find_string_special(str, end);
 
-void JsonWriter_::write_str(const char* s, const std::size_t size) noexcept
-{
-    out->appendc("\"", 1);
+        if(!this->write(str, static_cast<std::size_t>(special - str)))
+            return false;
 
-    const char* seg_start = s;
-    const char* p = s;
-    const char* end = s + size;
+        if(special == end)
+            break;
 
-    while(p < end)
-    {
-        if(char_needs_escape(*p))
+        const unsigned char c = static_cast<unsigned char>(*special);
+        char escaped[6] = {'\\', 0, 0, 0, 0, 0};
+        std::size_t escaped_size = 2;
+
+        switch(c)
         {
-            if(p > seg_start)
-                out->appendc(seg_start, static_cast<size_t>(p - seg_start));
-
-            const char escaped = escape_char(*p);
-
-            if(escaped != *p || *p == '"' || *p == '\\')
-            {
-                const char esc[2] = {'\\', escaped};
-                out->appendc(esc, 2);
-            }
-            else
-            {
-                out->appendf("\\u{:04x}", static_cast<unsigned int>(static_cast<unsigned char>(*p)));
-            }
-
-            seg_start = p + 1;
+            case '"':  escaped[1] = '"';  break;
+            case '\\': escaped[1] = '\\'; break;
+            case '\b': escaped[1] = 'b';  break;
+            case '\f': escaped[1] = 'f';  break;
+            case '\n': escaped[1] = 'n';  break;
+            case '\r': escaped[1] = 'r';  break;
+            case '\t': escaped[1] = 't';  break;
+            default:
+                escaped[1] = 'u';
+                escaped[2] = '0';
+                escaped[3] = '0';
+                escaped[4] = HEX_DIGITS[c >> 4];
+                escaped[5] = HEX_DIGITS[c & 0xF];
+                escaped_size = 6;
+                break;
         }
 
-        p++;
+        if(!this->write(escaped, escaped_size))
+            return false;
+
+        str = special + 1;
     }
 
-    if(p > seg_start)
-        out->appendc(seg_start, static_cast<size_t>(p - seg_start));
+    return this->write('"');
+}
 
-    out->appendc("\"", 1);
+bool JsonWriter_::write_f64(const double f64) noexcept
+{
+    if(!std::isfinite(f64))
+        return this->write("null", 4);
+
+    // Shortest round-trip representation is at most 24 characters, plus ".0"
+    char* dst = this->reserve(64);
+
+    if(dst == nullptr)
+        return false;
+
+    char* const number_end = fmt::format_to(dst, "{}", f64);
+    const std::size_t number_size = static_cast<std::size_t>(number_end - dst);
+
+    bool has_float_marker = false;
+
+    for(std::size_t i = 0; i < number_size; ++i)
+    {
+        if(dst[i] == '.' || dst[i] == 'e' || dst[i] == 'E')
+        {
+            has_float_marker = true;
+            break;
+        }
+    }
+
+    this->size += number_size;
+
+    // Keeps the value a float when read back
+    return has_float_marker ? true : this->write(".0", 2);
 }
 
 bool JsonWriter_::write_array(const JsonObject* array) noexcept
 {
-    out->appendc("[", 1);
+    const auto* info = static_cast<const JsonArrayInfo*>(array->_value.ptr);
+    const bool pretty = this->indent_size > 0;
 
-    if(indent_size > 0)
-        indent += indent_size;
+    if(!this->write('['))
+        return false;
 
-    size_t i = 0;
+    this->indent += this->indent_size;
 
-    for(auto* element : array->array_items())
+    for(const JsonArrayElement* element = info->head; element != nullptr; element = element->next)
     {
-        if(i > 0)
-            out->appendc(",", 1);
+        const bool separator = element != info->head;
 
-        if(indent_size > 0)
-        {
-            out->appendc("\n", 1);
-            write_indent();
-        }
-
-        if(!write_value(element))
+        if(pretty ? !this->write_line_break(separator) : (separator && !this->write(',')))
             return false;
 
-        i++;
+        if(!this->write_value(element->value))
+            return false;
     }
 
-    if(indent_size > 0)
-    {
-        out->appendc("\n", 1);
-        indent -= indent_size;
-        write_indent();
-    }
+    this->indent -= this->indent_size;
 
-    out->appendc("]", 1);
-    return true;
+    if(pretty && !this->write_line_break(false))
+        return false;
+
+    return this->write(']');
 }
 
 bool JsonWriter_::write_dict(const JsonObject* dict) noexcept
 {
-    out->appendc("{", 1);
+    const auto* info = static_cast<const JsonDictInfo*>(dict->_value.ptr);
+    const bool pretty = this->indent_size > 0;
 
-    if(indent_size > 0)
-        indent += indent_size;
+    if(!this->write('{'))
+        return false;
 
-    size_t i = 0;
+    this->indent += this->indent_size;
 
-    for(auto [key, value] : dict->dict_items())
+    for(const JsonDictElement* element = info->head; element != nullptr; element = element->next)
     {
-        if(i > 0)
-            out->appendc(",", 1);
+        const bool separator = element != info->head;
 
-        if(indent_size > 0)
-        {
-            out->appendc("\n", 1);
-            write_indent();
-        }
-
-        write_str(key, std::strlen(key));
-        out->appendc(": ", 2);
-
-        if(!write_value(value))
+        if(pretty ? !this->write_line_break(separator) : (separator && !this->write(',')))
             return false;
 
-        i++;
+        if(!this->write_str(element->kv.key, element->key_size) || !this->write(": ", 2))
+            return false;
+
+        if(!this->write_value(element->kv.value))
+            return false;
     }
 
-    if(indent_size > 0)
-    {
-        out->appendc("\n", 1);
-        indent -= indent_size;
-        write_indent();
-    }
+    this->indent -= this->indent_size;
 
-    out->appendc("}", 1);
-    return true;
+    if(pretty && !this->write_line_break(false))
+        return false;
+
+    return this->write('}');
 }
 
 bool JsonWriter_::write_value(const JsonObject* value) noexcept
 {
-    const std::uint64_t tag = value->_tags & JSON_TAGS_MASK;
-
-    switch(tag)
+    switch(value->_tags & JSON_TAGS_MASK)
     {
         case JsonTag_Null:
-            out->appendc("null", 4);
-            return true;
+            return this->write("null", 4);
 
         case JsonTag_Bool:
-            if(value->_value.b)
-                out->appendc("true", 4);
-            else
-                out->appendc("false", 5);
-            return true;
+            return value->_value.b ? this->write("true", 4) : this->write("false", 5);
 
         case JsonTag_U64:
-            out->appendf("{}", value->_value.u64);
-            return true;
-
         case JsonTag_I64:
-            out->appendf("{}", value->_value.i64);
-            return true;
-
-        case JsonTag_F64:
         {
-            const double f64 = value->_value.f64;
+            char* dst = this->reserve(24);
 
-            if(!std::isfinite(f64))
-            {
-                out->appendc("null", 4);
-                return true;
-            }
+            if(dst == nullptr)
+                return false;
 
-            const std::size_t number_start = out->size();
-            out->appendf("{}", f64);
+            const std::to_chars_result result = (value->_tags & JsonTag_U64)
+                                                    ? std::to_chars(dst, dst + 24, value->_value.u64)
+                                                    : std::to_chars(dst, dst + 24, value->_value.i64);
 
-            const char* written = out->c_str() + number_start;
-
-            if(std::strpbrk(written, ".eE") == nullptr)
-                out->appendc(".0", 2);
-
+            this->size += static_cast<std::size_t>(result.ptr - dst);
             return true;
         }
 
+        case JsonTag_F64:
+            return this->write_f64(value->_value.f64);
+
         case JsonTag_Str:
-            write_str(value->_value.str, static_cast<std::size_t>(tag_get_sz(value->_tags)));
-            return true;
+            return this->write_str(value->_value.str, static_cast<std::size_t>(tag_get_sz(value->_tags)));
 
         case JsonTag_Array:
-            return write_array(value);
+            return this->write_array(value);
 
         case JsonTag_Dict:
-            return write_dict(value);
+            return this->write_dict(value);
 
         default:
             return false;
@@ -1281,28 +1580,33 @@ bool JsonWriter_::write_value(const JsonObject* value) noexcept
 
 bool Json::loads(const char* str, size_t len) noexcept
 {
+    // Reuses the arena blocks of the previous document, invalidating its objects
+    this->_root = nullptr;
+    this->_value_arena.clear();
+    this->_string_arena.clear();
+
     if(str == nullptr || len == 0)
         return false;
 
     JsonParser_ parser;
-    parser.str = str;
-    parser.pos = 0;
-    parser.len = len;
+    parser.p = str;
+    parser.end = str + len;
     parser.json = this;
+    parser.depth = 0;
+    parser.value_cursor = nullptr;
+    parser.value_end = nullptr;
+    parser.string_cursor = nullptr;
+    parser.string_end = nullptr;
 
-    JsonObject* root = parser.parse_value();
+    auto* root = parser.allocate<JsonObject>();
 
-    if(root == nullptr)
-    {
+    if(!parser.parse_value(root))
         return false;
-    }
 
     parser.skip_whitespace();
 
-    if(parser.pos != parser.len)
-    {
+    if(parser.p != parser.end)
         return false;
-    }
 
     this->_root = root;
 
@@ -1317,10 +1621,16 @@ bool Json::loadf(const StringD& path) noexcept
         return false;
 
     std::fseek(file, 0, SEEK_END);
-    const auto file_size = static_cast<size_t>(std::ftell(file));
+    const long file_size = std::ftell(file);
     std::rewind(file);
 
-    auto* buffer = static_cast<char*>(std::calloc(file_size, sizeof(char)));
+    if(file_size <= 0)
+    {
+        std::fclose(file);
+        return false;
+    }
+
+    auto* buffer = static_cast<char*>(std::malloc(static_cast<std::size_t>(file_size)));
 
     if(buffer == nullptr)
     {
@@ -1328,16 +1638,10 @@ bool Json::loadf(const StringD& path) noexcept
         return false;
     }
 
-    const size_t read_size = std::fread(buffer, sizeof(char), file_size, file);
+    const std::size_t read_size = std::fread(buffer, sizeof(char), static_cast<std::size_t>(file_size), file);
     std::fclose(file);
 
-    if(read_size != file_size)
-    {
-        std::free(buffer);
-        return false;
-    }
-
-    bool res = loads(buffer, file_size);
+    const bool res = read_size == static_cast<std::size_t>(file_size) && this->loads(buffer, read_size);
 
     std::free(buffer);
 
@@ -1346,36 +1650,35 @@ bool Json::loadf(const StringD& path) noexcept
 
 StringD Json::dumps(size_t indent_size) const noexcept
 {
-    StringD result;
-
     if(this->_root == nullptr)
-        return result;
+        return StringD();
 
     JsonWriter_ writer;
-    writer.json = this;
-    writer.out = &result;
     writer.indent_size = indent_size;
-    writer.indent = 0;
 
-    writer.write_value(this->_root);
+    if(!writer.write_value(this->_root) || !writer.finish())
+        return StringD();
 
-    return result;
+    return StringD(writer.data, writer.size);
 }
 
 bool Json::dumpf(size_t indent_size, const StringD& path) const noexcept
 {
-    StringD written = this->dumps(indent_size);
+    JsonWriter_ writer;
+    writer.indent_size = indent_size;
+
+    if(this->_root != nullptr && !writer.write_value(this->_root))
+        return false;
 
     FILE* file = std::fopen(path.c_str(), "wb");
 
     if(file == nullptr)
         return false;
 
-    const size_t str_sz = written.size();
-    const size_t fwritten = std::fwrite(written.data(), sizeof(char), str_sz, file);
+    const std::size_t written = writer.size > 0 ? std::fwrite(writer.data, sizeof(char), writer.size, file) : 0;
     std::fclose(file);
 
-    return fwritten == str_sz;
+    return written == writer.size;
 }
 
 STDROMANO_NAMESPACE_END

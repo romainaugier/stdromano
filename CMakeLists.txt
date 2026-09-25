@@ -73,6 +73,8 @@ option(ENABLE_OPENCL
        "Builds the OpenCL utilities, and accelerators for linear algebra"
        OFF)
 
+option(BUILD_BENCHMARKS "Builds the benchmarks in benchmarks/" OFF)
+
 # Enable testing
 if(RUN_TESTS EQUAL 1)
     message(STATUS "RUN_TESTS enabled, building and running tests")
@@ -280,8 +282,13 @@ endif()
 
 add_subdirectory(src)
 
-if(RUN_TESTS EQUAL 1)
-    set(TESTS_DATA_DIR "${CMAKE_SOURCE_DIR}/tests_data")
+set(TESTS_DATA_DIR "${CMAKE_SOURCE_DIR}/tests_data")
 
+if(RUN_TESTS EQUAL 1)
     add_subdirectory(tests)
+endif()
+
+if(BUILD_BENCHMARKS)
+    message(STATUS "BUILD_BENCHMARKS enabled, building benchmarks")
+    add_subdirectory(benchmarks)
 endif()

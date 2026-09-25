@@ -22,6 +22,7 @@ set ADDRSAN=0
 set VCPKG_PATH=%CD%\vcpkg
 set VCPKG_USER_DEFINED=0
 set ENABLE_OPENCL=0
+set BUILD_BENCHMARKS=0
 
 for %%x in (%*) do (
     call :ParseArg %%~x
@@ -87,7 +88,7 @@ call :LogInfo "Build type: %BUILDTYPE%"
 call :LogInfo "Build version: %VERSION%"
 call :LogInfo "Build architecture: %ARCH% (vcpkg triplet: %VCPKG_TRIPLET%)"
 
-cmake -S . -B build -A %ARCH% -DVCPKG_TARGET_TRIPLET=%VCPKG_TRIPLET% -DRUN_TESTS=%RUNTESTS% -DVERSION=%VERSION% -DADDRSAN=%ADDRSAN% -DENABLE_OPENCL=%ENABLE_OPENCL%
+cmake -S . -B build -A %ARCH% -DVCPKG_TARGET_TRIPLET=%VCPKG_TRIPLET% -DRUN_TESTS=%RUNTESTS% -DVERSION=%VERSION% -DADDRSAN=%ADDRSAN% -DENABLE_OPENCL=%ENABLE_OPENCL% -DBUILD_BENCHMARKS=%BUILD_BENCHMARKS%
 
 if %errorlevel% neq 0 (
     call :LogError "Error caught during CMake configuration"
@@ -144,6 +145,8 @@ if "%~1" equ "--clean" set REMOVEOLDDIR=1
 if "%~1" equ "--install" set INSTALL=1
 
 if "%~1" equ "--addrsan" set ADDRSAN=1
+
+if "%~1" equ "--benchmarks" set BUILD_BENCHMARKS=1
 
 if "%~1" equ "--export-compile-commands" (
     call :LogWarning "Exporting compile commands is not supported on Windows for now"
