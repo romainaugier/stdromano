@@ -1,5 +1,7 @@
 # stdromano
 
+[![codecov](https://codecov.io/gh/romainaugier/stdromano/branch/main/graph/badge.svg)](https://codecov.io/gh/romainaugier/stdromano)
+
 C++ 17 data structures and utilities.
 
 ## Acknowledgment
@@ -8,7 +10,7 @@ This library is based on the great work of some existing libraries:
  - [FMT](https://github.com/fmtlib/fmt)
  - [spdlog](https://github.com/gabime/spdlog)
  - [MoodyCamel Concurrent Queue](https://github.com/cameron314/concurrentqueue)
- - [jemalloc](https://github.com/jemalloc/jemalloc)
+ - [mimalloc](https://github.com/microsoft/mimalloc)
  - [OpenCL](https://www.khronos.org/opencl/)
 
 ## Build and tests
@@ -26,6 +28,9 @@ The following arguments are used:
  - `--version:<x.x.x>`: specifies the build version (note that is should be used like: `--version:MAJOR.MINOR.FIX`)
  - `--installdir:<path>`: specifies where to install the library
  - `--vcpkgpath:<path>`: specifies an existing vcpkg repository
+ - `--benchmarks`: build the benchmarks in the /benchmarks directory
+ - `--opencl`: builds opencl support
+ - `--coverage`: builds the coverage using gcov (only available on Linux)
 
 Using the buildscript on Windows:
 ```bat

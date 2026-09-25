@@ -75,6 +75,8 @@ option(ENABLE_OPENCL
 
 option(BUILD_BENCHMARKS "Builds the benchmarks in benchmarks/" OFF)
 
+option(COVERAGE "Enable code coverage instrumentation (GCC/Clang)" OFF)
+
 # Enable testing
 if(RUN_TESTS EQUAL 1)
     message(STATUS "RUN_TESTS enabled, building and running tests")

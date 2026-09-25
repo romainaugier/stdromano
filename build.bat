@@ -148,6 +148,10 @@ if "%~1" equ "--addrsan" set ADDRSAN=1
 
 if "%~1" equ "--benchmarks" set BUILD_BENCHMARKS=1
 
+if "%~1" equ "--coverage" (
+    call :LogWarning "Code coverage is only supported with GCC and Clang, ignoring --coverage"
+)
+
 if "%~1" equ "--export-compile-commands" (
     call :LogWarning "Exporting compile commands is not supported on Windows for now"
 )

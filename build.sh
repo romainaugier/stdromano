@@ -19,6 +19,7 @@ VCPKG_PATH="$PWD/vcpkg"
 VCPKG_USER_DEFINED=0
 ENABLE_OPENCL=0
 BUILD_BENCHMARKS=0
+COVERAGE=0
 
 # Little function to parse command line arguments
 parse_args()
@@ -44,6 +45,8 @@ parse_args()
     [[ "$1" == "--opencl" ]] && ENABLE_OPENCL=1
 
     [[ "$1" == "--benchmarks" ]] && BUILD_BENCHMARKS=1
+
+    [[ "$1" == "--coverage" ]] && COVERAGE=1
 
     [[ "$1" == "--export-compile-commands" ]] && EXPORTCOMPILECOMMANDS=1
 
@@ -171,7 +174,8 @@ cmake -S . -B build -DRUN_TESTS=$RUNTESTS \
                     -DADDRSAN=$ADDRSAN \
                     -DLEAKSAN=$LEAKSAN \
                     -DENABLE_OPENCL=$ENABLE_OPENCL \
-                    -DBUILD_BENCHMARKS=$BUILD_BENCHMARKS
+                    -DBUILD_BENCHMARKS=$BUILD_BENCHMARKS \
+                    -DCOVERAGE=$COVERAGE
 
 if [[ $? -ne 0 ]]; then
     log_error "Error during CMake configuration"

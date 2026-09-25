@@ -1,0 +1,66 @@
+name: Coverage
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  coverage:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - uses: lukka/get-cmake@latest
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --fix-missing libgtk2.0-dev nasm autoconf autoconf-archive automake libtool ocl-icd-opencl-dev pocl-opencl-icd 
+          pip install gcovr
+
+      - name: Cache vcpkg
+        uses: actions/cache@v4
+        with:
+          path: vcpkg
+          key: vcpkg-linux-x64-${{ hashFiles('vcpkg.json', 'build.sh', 'cmake/triplets/*') }}
+          restore-keys: vcpkg-linux-x64-
+
+      - name: Build and test with coverage
+        run: ./build.sh --tests --debug --coverage --opencl
+
+      - name: Test log
+        if: failure()
+        run: cat build/Testing/Temporary/LastTest.log || true
+
+      - name: Generate coverage report
+        run: |
+          mkdir -p build/coverage
+          gcovr --root . \
+                --filter 'src/' --filter 'include/' \
+                --print-summary \
+                --xml build/coverage.xml \
+                --html-details build/coverage/index.html \
+                build
+
+      - name: Upload HTML report
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-html
+          path: build/coverage/
+
+      - name: Upload to Codecov
+        uses: codecov/codecov-action@v5
+        with:
+          files: build/coverage.xml
+          token: ${{ secrets.CODECOV_TOKEN }}
+          fail_ci_if_error: true
