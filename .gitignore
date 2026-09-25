@@ -68,6 +68,3 @@ stdromanoConfigVersion.cmake
 # vcpkg repository
 vcpkg
 vcpkg_installed
-
-# Tests data
-tests_data
