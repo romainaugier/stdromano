@@ -61,18 +61,20 @@ include_directories(${stdromano_INCLUDE_DIR})
 target_link_libraries(${EXEC} PUBLIC stdromano::stdromano)
 
 # Runtime dependencies (for Windows)
-add_custom_command(
-    TARGET ${EXEC} POST_BUILD
-    COMMAND ${CMAKE_COMMAND} -E copy
-        ${stdromano_RUNTIME_DEPENDENCIES}
-        $<TARGET_FILE_DIR:${EXEC}>
-    COMMAND_EXPAND_LISTS
-)
+if(stdromano_HAS_RUNTIME_DEPENDENCIES)
+    add_custom_command(
+        TARGET ${EXEC} POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy
+            ${stdromano_RUNTIME_DEPENDENCIES}
+            $<TARGET_FILE_DIR:${EXEC}>
+        COMMAND_EXPAND_LISTS
+    )
 
-install(
-    FILES ${stdromano_RUNTIME_DEPENDENCIES}
-    DESTINATION ${CMAKE_INSTALL_BINDIR}
-)
+    install(
+        FILES ${stdromano_RUNTIME_DEPENDENCIES}
+        DESTINATION ${CMAKE_INSTALL_BINDIR}
+    )
+endif()
 ```
 
 ## Tests

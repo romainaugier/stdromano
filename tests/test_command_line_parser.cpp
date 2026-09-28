@@ -82,6 +82,46 @@ STDROMANO_TEST_CASE(all_assignment_styles)
     STDROMANO_CHECK_EQ(parser.get_command_after_args(), StringD("a_command_after_args --with-flags"));
 }
 
+STDROMANO_TEST_CASE(command_after_args_keeps_quoting)
+{
+    CommandLineParser parser = make_parser();
+
+    Argv args = {"--str_arg=value",
+                 "--",
+                 "program with spaces",
+                 "plain",
+                 "",
+                 "say \"hi\"",
+                 "trailing\\",
+                 "dir with\\trailing\\"};
+
+    STDROMANO_REQUIRE(parser.parse(args.argc(), args.argv()).has_value());
+    STDROMANO_CHECK(parser.has_command_after_args());
+
+#if defined(STDROMANO_WIN)
+    STDROMANO_CHECK_EQ(parser.get_command_after_args(),
+                       StringD("\"program with spaces\" plain \"\" \"say \\\"hi\\\"\" trailing\\ \"dir with\\trailing\\\\\""));
+#else
+    STDROMANO_CHECK_EQ(parser.get_command_after_args(),
+                       StringD(R"('program with spaces' plain '' 'say "hi"' 'trailing\' 'dir with\trailing\')"));
+#endif /* defined(STDROMANO_WIN) */
+}
+
+STDROMANO_TEST_CASE(command_after_args_escapes_single_quotes)
+{
+    CommandLineParser parser = make_parser();
+
+    Argv args = {"--", "echo", "it's"};
+
+    STDROMANO_REQUIRE(parser.parse(args.argc(), args.argv()).has_value());
+
+#if defined(STDROMANO_WIN)
+    STDROMANO_CHECK_EQ(parser.get_command_after_args(), StringD("echo it's"));
+#else
+    STDROMANO_CHECK_EQ(parser.get_command_after_args(), StringD(R"(echo 'it'\''s')"));
+#endif /* defined(STDROMANO_WIN) */
+}
+
 STDROMANO_TEST_CASE(space_separated_value)
 {
     CommandLineParser parser = make_parser();

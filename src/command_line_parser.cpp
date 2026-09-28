@@ -9,7 +9,81 @@
 #include "stdromano/command_line_parser.hpp"
 #include "stdromano/vector.hpp"
 
+#include <cstring>
+
 STDROMANO_NAMESPACE_BEGIN
+
+#if defined(STDROMANO_WIN)
+// Inverse of CommandLineToArgvW: https://learn.microsoft.com/en-us/cpp/c-language/parsing-c-command-line-arguments
+static void append_quoted_argument(StringD& command, const char* arg) noexcept
+{
+    if(*arg != '\0' && std::strpbrk(arg, " \t\n\v\"") == nullptr)
+    {
+        command.appendc(arg);
+        return;
+    }
+
+    command.push_back('"');
+
+    for(const char* c = arg;; c++)
+    {
+        std::size_t backslashes = 0;
+
+        while(*c == '\\')
+        {
+            backslashes++;
+            c++;
+        }
+
+        if(*c == '\0')
+        {
+            // Doubled so the closing quote is not escaped
+            for(std::size_t i = 0; i < backslashes * 2; i++)
+                command.push_back('\\');
+
+            break;
+        }
+
+        if(*c == '"')
+        {
+            for(std::size_t i = 0; i < backslashes * 2 + 1; i++)
+                command.push_back('\\');
+        }
+        else
+        {
+            for(std::size_t i = 0; i < backslashes; i++)
+                command.push_back('\\');
+        }
+
+        command.push_back(*c);
+    }
+
+    command.push_back('"');
+}
+#elif defined(STDROMANO_UNIX)
+static void append_quoted_argument(StringD& command, const char* arg) noexcept
+{
+    const char* safe_chars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789@%+=:,./-_";
+
+    if(*arg != '\0' && arg[std::strspn(arg, safe_chars)] == '\0')
+    {
+        command.appendc(arg);
+        return;
+    }
+
+    command.push_back('\'');
+
+    for(const char* c = arg; *c != '\0'; c++)
+    {
+        if(*c == '\'')
+            command.appendc("'\\''");
+        else
+            command.push_back(*c);
+    }
+
+    command.push_back('\'');
+}
+#endif /* defined(STDROMANO_WIN) */
 
 CommandLineParser::CommandLineParser()
 {
@@ -52,7 +126,7 @@ Expected<void> CommandLineParser::parse(int argc, char** argv) noexcept
                     if(j > i + 1)
                         after_args.push_back(' ');
 
-                    after_args.appendc(argv[j]);
+                    append_quoted_argument(after_args, argv[j]);
                 }
 
                 this->_command_after_args = std::move(after_args);
