@@ -48,16 +48,6 @@ static int stress_size()
     return fixtures::is_debug_build() ? 10000 : 1000000;
 }
 
-static stdromano::Vector<std::int64_t> shuffled_range(const std::size_t count)
-{
-    stdromano::Vector<std::int64_t> values(count);
-
-    for(std::size_t i = 0; i < count; i++)
-        values.push_back(static_cast<std::int64_t>(stdromano::ts_xoshiro_next_random_u64()));
-
-    return values;
-}
-
 template <typename K, typename V, typename H, typename R>
 static bool matches_reference(const HashMap<K, V, H>& map, const R& reference)
 {

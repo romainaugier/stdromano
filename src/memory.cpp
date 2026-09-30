@@ -7,11 +7,54 @@
 #include "mimalloc.h"
 
 #include <algorithm>
+#include <cstdlib>
+#include <cstring>
+
+#if defined(__SANITIZE_THREAD__) || defined(__SANITIZE_ADDRESS__)
+#define STDROMANO_SYSTEM_ALLOCATOR
+#elif defined(__has_feature)
+#if __has_feature(thread_sanitizer) || __has_feature(address_sanitizer)
+#define STDROMANO_SYSTEM_ALLOCATOR
+#endif // __has_feature(thread_sanitizer) || __has_feature(address_sanitizer)
+#endif // defined(__SANITIZE_THREAD__) || defined(__SANITIZE_ADDRESS__)
 
 STDROMANO_NAMESPACE_BEGIN
 
 DETAIL_NAMESPACE_BEGIN
 
+// Avoid tsan false positives
+#if defined(STDROMANO_SYSTEM_ALLOCATOR)
+void* mem_alloc(const size_t size) noexcept
+{
+    return std::malloc(size);
+}
+
+void* mem_calloc(const size_t count, const size_t size) noexcept
+{
+    return std::calloc(count, size);
+}
+
+void* mem_realloc(void* ptr, const size_t size) noexcept
+{
+    return std::realloc(ptr, size);
+}
+
+void mem_free(void* ptr) noexcept
+{
+    std::free(ptr);
+}
+
+void* mem_aligned_alloc(const size_t size, const size_t alignment) noexcept
+{
+    const size_t correct_size = (size + (alignment - 1)) & ~(alignment - 1);
+    return std::aligned_alloc(alignment, correct_size);
+}
+
+void mem_aligned_free(void* ptr) noexcept
+{
+    std::free(ptr);
+}
+#else
 void* mem_alloc(const size_t size) noexcept
 {
     return mi_malloc(size);
@@ -25,18 +68,6 @@ void* mem_calloc(const size_t count, const size_t size) noexcept
 void* mem_realloc(void* ptr, const size_t size) noexcept
 {
     return mi_realloc(ptr, size);
-}
-
-void* mem_crealloc(void* ptr, const size_t size) noexcept
-{
-    void* new_ptr = mi_realloc(ptr, size);
-
-    if(new_ptr != nullptr)
-    {
-        std::memset(new_ptr, 0, size);
-    }
-
-    return new_ptr;
 }
 
 void mem_free(void* ptr) noexcept
@@ -54,6 +85,7 @@ void mem_aligned_free(void* ptr) noexcept
 {
     mi_free(ptr);
 }
+#endif // defined(STDROMANO_SYSTEM_ALLOCATOR)
 
 DETAIL_NAMESPACE_END
 
