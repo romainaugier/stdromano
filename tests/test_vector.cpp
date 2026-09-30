@@ -430,6 +430,25 @@ STDROMANO_TEST_CASE(memory_usage)
     STDROMANO_CHECK_EQ(vec.memory_usage(), sizeof(Tracked) * 2);
 }
 
+STDROMANO_TEST_CASE(iota_and_shuffle_and_sort)
+{
+    Vector<std::uint64_t> vec(100'000);
+    vec.iota(0);
+
+    STDROMANO_CHECK_EQ(vec.front(), 0ull);
+    STDROMANO_CHECK_EQ(vec.back(), 99'999ull);
+
+    vec.shuffle(random_seed_u64());
+
+    STDROMANO_CHECK_NE(vec.front(), 0ull);
+    STDROMANO_CHECK_NE(vec.back(), 99'999ull);
+
+    vec.sort();
+
+    STDROMANO_CHECK_EQ(vec.front(), 0ull);
+    STDROMANO_CHECK_EQ(vec.back(), 99'999ull);
+}
+
 STDROMANO_TEST_CASE(fuzz_against_std_vector)
 {
     const std::int64_t live = Tracked::live();

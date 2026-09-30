@@ -76,7 +76,7 @@ std::uint64_t Source::next_u64() noexcept
         return value;
     }
 
-    // xoshiro256**, one state per source: stdromano's xoshiro functions share a global one
+    // xoshiro256**, one state per source rather than stdromano's thread-local one
     std::uint64_t* s = this->_state;
 
     const std::uint64_t result = rotl(s[1] * 5, 7) * 9;

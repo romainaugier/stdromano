@@ -11,8 +11,10 @@
 #define STDROMANO_NULL_VECTOR_ASSERTIONS 0
 #endif /* !defined(STDROMANO_NULL_VECTOR_ASSERTIONS) */
 
+#include "stdromano/algo.hpp"
 #include "stdromano/memory.hpp"
 #include "stdromano/traits.hpp"
+#include "stdromano/random.hpp"
 
 #include <algorithm>
 #include <cstdint>
@@ -1065,8 +1067,8 @@ public:
         this->set_size(0);
     }
 
-    template <typename F = std::less<T>>
-    STDROMANO_FORCE_INLINE void sort(F&& cmp = F()) noexcept
+    template<typename F = std::less<T>>
+    STDROMANO_FORCE_INLINE void sort(F&& cmp = F())
     {
 #if STDROMANO_NULL_VECTOR_ASSERTIONS
         STDROMANO_ASSERT(this->_data != nullptr, "Vector has not been allocated");
@@ -1078,7 +1080,35 @@ public:
         if(this->_size <= 1)
             return;
 
-        std::qsort(this->data(), this->size(), sizeof(T), std::forward<F>(cmp));
+        algo::sort(this->data(), this->data() + this->size(), cmp);
+    }
+
+    void shuffle(const std::uint64_t seed = 0)
+    {
+        if(this->size() < 2)
+            return;
+
+        std::uint64_t state = seed;
+
+        for(std::size_t i = 0; i < this->size(); i++)
+        {
+            const std::size_t j = random_u64_in_range(state, 0, this->size() - 1);
+
+            if(i != j)
+                std::swap((*this)[i], (*this)[j]);
+        }
+    }
+
+    void iota(const T value)
+    {
+#if STDROMANO_NULL_VECTOR_ASSERTIONS
+        STDROMANO_ASSERT(this->_data != nullptr, "Vector has not been allocated");
+#endif /* STDROMANO_NULL_VECTOR_ASSERTIONS */
+
+        static_assert(std::is_integral_v<T> && !std::is_same_v<T, bool>, "T must be integral and not boolean");
+
+        for(std::size_t i = 0; i < this->size(); i++)
+            (*this)[i] = value + static_cast<T>(i);
     }
 
     STDROMANO_FORCE_INLINE size_t memory_usage() const noexcept

@@ -3,6 +3,8 @@
 // All rights reserved.
 
 #include "stdromano/hashmap.hpp"
+#include "stdromano/random.hpp"
+#include "stdromano/vector.hpp"
 
 #include "fixtures.hpp"
 
@@ -46,11 +48,13 @@ static int stress_size()
     return fixtures::is_debug_build() ? 10000 : 1000000;
 }
 
-static std::vector<std::int64_t> shuffled_range(const std::size_t count, std::mt19937& rng)
+static stdromano::Vector<std::int64_t> shuffled_range(const std::size_t count)
 {
-    std::vector<std::int64_t> values(count);
-    std::iota(values.begin(), values.end(), 0);
-    std::shuffle(values.begin(), values.end(), rng);
+    stdromano::Vector<std::int64_t> values(count);
+
+    for(std::size_t i = 0; i < count; i++)
+        values.push_back(static_cast<std::int64_t>(stdromano::ts_xoshiro_next_random_u64()));
+
     return values;
 }
 
@@ -349,10 +353,9 @@ STDROMANO_TEST_CASE(operator_bracket_after_displacement)
 
 STDROMANO_TEST_CASE(stress)
 {
-    std::mt19937 rng(0x5EED);
-
     const int count = stress_size();
-    std::vector<std::int64_t> keys = shuffled_range(count, rng);
+    Vector<std::int64_t> keys(count);
+    keys.iota(0);
 
     HashMap<std::int64_t, std::int64_t> map;
 
@@ -371,7 +374,7 @@ STDROMANO_TEST_CASE(stress)
 
     STDROMANO_CHECK_EQ(iterated, map.size());
 
-    std::shuffle(keys.begin(), keys.end(), rng);
+    keys.shuffle(random_seed_u64());
 
     for(int i = 0; i < count / 2; ++i)
         map.erase(keys[i]);
@@ -384,6 +387,40 @@ STDROMANO_TEST_CASE(stress)
 
     STDROMANO_CHECK_EQ(found, static_cast<std::size_t>(count - count / 2));
     STDROMANO_CHECK_EQ(map.size(), found);
+}
+
+STDROMANO_TEST_CASE(equals_int)
+{
+    Vector<std::int64_t> keys(10'000);
+    keys.iota(0);
+
+    HashMap<std::int64_t, std::int64_t> map1;
+    HashMap<std::int64_t, std::int64_t> map2;
+
+    for(const std::int64_t key : keys)
+    {
+        map1.insert(std::pair<std::int64_t, std::int64_t>(key, key));
+        map2.insert(std::pair<std::int64_t, std::int64_t>(key, key));
+    }
+
+    STDROMANO_CHECK_EQ(map1, map2);
+
+    std::int64_t i = 0;
+
+    while(map1.contains(i))
+        i++;
+
+    map1.insert(std::pair<std::int64_t, std::int64_t>(i, i));
+
+    STDROMANO_CHECK_NE(map1, map2);
+
+    map1.erase(i);
+
+    STDROMANO_CHECK_EQ(map1, map2);
+}
+
+STDROMANO_TEST_CASE(equals_string)
+{
 }
 
 STDROMANO_TEST_CASE(fuzz_int_keys_against_unordered_map)

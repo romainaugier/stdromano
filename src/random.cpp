@@ -17,9 +17,10 @@
 
 STDROMANO_NAMESPACE_BEGIN
 
-std::uint32_t random_seed() noexcept
+template <typename T>
+static T fill_random_seed() noexcept
 {
-    std::uint32_t value;
+    T value;
 
 #if defined(STDROMANO_WIN)
     NTSTATUS status = BCryptGenRandom(nullptr,
@@ -27,14 +28,14 @@ std::uint32_t random_seed() noexcept
                                       sizeof(value),
                                       BCRYPT_USE_SYSTEM_PREFERRED_RNG);
 
-    if (!BCRYPT_SUCCESS(status))
-        return std::numeric_limits<std::uint32_t>::max();
+    if(!BCRYPT_SUCCESS(status))
+        return std::numeric_limits<T>::max();
 
 #elif defined(STDROMANO_LINUX)
     ssize_t res = getrandom(&value, sizeof(value), 0);
 
     if(res != sizeof(value))
-        return std::numeric_limits<std::uint32_t>::max();
+        return std::numeric_limits<T>::max();
 
 #elif defined(STDROMANO_UNIX)
     /* arc4random_buf is available on macOS and on every bsd, and cannot fail */
@@ -47,72 +48,182 @@ std::uint32_t random_seed() noexcept
     return value;
 }
 
-STDROMANO_FORCE_INLINE std::uint64_t rotl(const std::uint64_t x, std::int32_t k)
+std::uint32_t random_seed_u32() noexcept
 {
-    return (x << k) | (x >> (64 - k));
+    return fill_random_seed<std::uint32_t>();
 }
 
-std::uint64_t xoshiro_random_uint64(const std::uint64_t seed) noexcept
+std::uint64_t random_seed_u64() noexcept
 {
-    std::uint64_t s[4];
-    s[0] = seed;
-
-    for(int i = 1; i < 4; i++)
-    {
-        s[i] = s[i - 1] + 0x9e3779b97f4a7c15ULL;
-        s[i] = (s[i] ^ (s[i] >> 30)) * 0xbf58476d1ce4e5b9ULL;
-        s[i] = (s[i] ^ (s[i] >> 27)) * 0x94d049bb133111ebULL;
-        s[i] = s[i] ^ (s[i] >> 31);
-    }
-
-    const std::uint64_t result = rotl(s[0] + s[3], 23) + s[0];
-    const std::uint64_t t = s[1] << 17;
-
-    s[2] ^= s[0];
-    s[3] ^= s[1];
-    s[1] ^= s[2];
-    s[0] ^= s[3];
-
-    s[2] ^= t;
-    s[3] = rotl(s[3], 45);
-
-    return result;
+    return fill_random_seed<std::uint64_t>();
 }
 
-static thread_local std::uint64_t xoshiro_s[4] = {0x123456789abcdef0ULL, 0x42, 0x1337, 0xdeadbeef};
+static thread_local std::uint64_t ts_splitmix_state = random_seed_u64();
 
-void seed_xoshiro(std::uint64_t seed) noexcept
+static thread_local std::uint32_t ts_wang_state = random_seed_u32();
+
+static thread_local std::uint64_t ts_pcg_state = pcg_seed(random_seed_u64());
+
+static thread_local XoshiroState ts_xoshiro_state = xoshiro_seed(random_seed_u64());
+
+std::uint32_t ts_next_random_u32() noexcept
 {
-    xoshiro_s[0] = seed;
-
-    for(int i = 1; i < 4; i++)
-    {
-        xoshiro_s[i] = xoshiro_s[i - 1] + 0x9e3779b97f4a7c15ULL;
-        xoshiro_s[i] = (xoshiro_s[i] ^ (xoshiro_s[i] >> 30)) * 0xbf58476d1ce4e5b9ULL;
-        xoshiro_s[i] = (xoshiro_s[i] ^ (xoshiro_s[i] >> 27)) * 0x94d049bb133111ebULL;
-        xoshiro_s[i] = xoshiro_s[i] ^ (xoshiro_s[i] >> 31);
-    }
+    return next_random_u32(ts_splitmix_state);
 }
 
-std::uint64_t xoshiro_next_uint64() noexcept
+std::uint64_t ts_next_random_u64() noexcept
 {
-    const std::uint64_t result = rotl(xoshiro_s[0] + xoshiro_s[3], 23) + xoshiro_s[0];
-    const std::uint64_t t = xoshiro_s[1] << 17;
-
-    xoshiro_s[2] ^= xoshiro_s[0];
-    xoshiro_s[3] ^= xoshiro_s[1];
-    xoshiro_s[1] ^= xoshiro_s[2];
-    xoshiro_s[0] ^= xoshiro_s[3];
-
-    xoshiro_s[2] ^= t;
-    xoshiro_s[3] = rotl(xoshiro_s[3], 45);
-
-    return result;
+    return next_random_u64(ts_splitmix_state);
 }
 
-float xoshiro_next_float() noexcept
+float ts_next_random_float() noexcept
 {
-    return static_cast<float>(xoshiro_next_uint64() >> 40) * (1.0f / 16777216.0f);
+    return next_random_float(ts_splitmix_state);
+}
+
+double ts_next_random_double() noexcept
+{
+    return next_random_double(ts_splitmix_state);
+}
+
+std::uint32_t ts_next_random_u32_in_range(const std::uint32_t low, const std::uint32_t high) noexcept
+{
+    return next_random_u32_in_range(ts_splitmix_state, low, high);
+}
+
+std::uint64_t ts_next_random_u64_in_range(const std::uint64_t low, const std::uint64_t high) noexcept
+{
+    return next_random_u64_in_range(ts_splitmix_state, low, high);
+}
+
+float ts_next_random_float_in_range(const float low, const float high) noexcept
+{
+    return next_random_float_in_range(ts_splitmix_state, low, high);
+}
+
+double ts_next_random_double_in_range(const double low, const double high) noexcept
+{
+    return next_random_double_in_range(ts_splitmix_state, low, high);
+}
+
+std::uint32_t ts_wang_next_random_u32() noexcept
+{
+    return wang_next_random_u32(ts_wang_state);
+}
+
+std::uint64_t ts_wang_next_random_u64() noexcept
+{
+    return wang_next_random_u64(ts_wang_state);
+}
+
+float ts_wang_next_random_float() noexcept
+{
+    return wang_next_random_float(ts_wang_state);
+}
+
+double ts_wang_next_random_double() noexcept
+{
+    return wang_next_random_double(ts_wang_state);
+}
+
+std::uint32_t ts_wang_next_random_u32_in_range(const std::uint32_t low, const std::uint32_t high) noexcept
+{
+    return wang_next_random_u32_in_range(ts_wang_state, low, high);
+}
+
+std::uint64_t ts_wang_next_random_u64_in_range(const std::uint64_t low, const std::uint64_t high) noexcept
+{
+    return wang_next_random_u64_in_range(ts_wang_state, low, high);
+}
+
+float ts_wang_next_random_float_in_range(const float low, const float high) noexcept
+{
+    return wang_next_random_float_in_range(ts_wang_state, low, high);
+}
+
+double ts_wang_next_random_double_in_range(const double low, const double high) noexcept
+{
+    return wang_next_random_double_in_range(ts_wang_state, low, high);
+}
+
+std::uint32_t ts_pcg_next_random_u32() noexcept
+{
+    return pcg_next_random_u32(ts_pcg_state);
+}
+
+std::uint64_t ts_pcg_next_random_u64() noexcept
+{
+    return pcg_next_random_u64(ts_pcg_state);
+}
+
+float ts_pcg_next_random_float() noexcept
+{
+    return pcg_next_random_float(ts_pcg_state);
+}
+
+double ts_pcg_next_random_double() noexcept
+{
+    return pcg_next_random_double(ts_pcg_state);
+}
+
+std::uint32_t ts_pcg_next_random_u32_in_range(const std::uint32_t low, const std::uint32_t high) noexcept
+{
+    return pcg_next_random_u32_in_range(ts_pcg_state, low, high);
+}
+
+std::uint64_t ts_pcg_next_random_u64_in_range(const std::uint64_t low, const std::uint64_t high) noexcept
+{
+    return pcg_next_random_u64_in_range(ts_pcg_state, low, high);
+}
+
+float ts_pcg_next_random_float_in_range(const float low, const float high) noexcept
+{
+    return pcg_next_random_float_in_range(ts_pcg_state, low, high);
+}
+
+double ts_pcg_next_random_double_in_range(const double low, const double high) noexcept
+{
+    return pcg_next_random_double_in_range(ts_pcg_state, low, high);
+}
+
+std::uint32_t ts_xoshiro_next_random_u32() noexcept
+{
+    return xoshiro_next_random_u32(ts_xoshiro_state);
+}
+
+std::uint64_t ts_xoshiro_next_random_u64() noexcept
+{
+    return xoshiro_next_random_u64(ts_xoshiro_state);
+}
+
+float ts_xoshiro_next_random_float() noexcept
+{
+    return xoshiro_next_random_float(ts_xoshiro_state);
+}
+
+double ts_xoshiro_next_random_double() noexcept
+{
+    return xoshiro_next_random_double(ts_xoshiro_state);
+}
+
+std::uint32_t ts_xoshiro_next_random_u32_in_range(const std::uint32_t low, const std::uint32_t high) noexcept
+{
+    return xoshiro_next_random_u32_in_range(ts_xoshiro_state, low, high);
+}
+
+std::uint64_t ts_xoshiro_next_random_u64_in_range(const std::uint64_t low, const std::uint64_t high) noexcept
+{
+    return xoshiro_next_random_u64_in_range(ts_xoshiro_state, low, high);
+}
+
+float ts_xoshiro_next_random_float_in_range(const float low, const float high) noexcept
+{
+    return xoshiro_next_random_float_in_range(ts_xoshiro_state, low, high);
+}
+
+double ts_xoshiro_next_random_double_in_range(const double low, const double high) noexcept
+{
+    return xoshiro_next_random_double_in_range(ts_xoshiro_state, low, high);
 }
 
 STDROMANO_NAMESPACE_END

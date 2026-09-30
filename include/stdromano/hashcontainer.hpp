@@ -226,7 +226,7 @@ protected:
         return bit_ceil(this->_buckets.size() + 1);
     }
 
-    STDROMANO_FORCE_INLINE std::uint32_t generate_hash_key() { return next_random_uint32(); }
+    STDROMANO_FORCE_INLINE std::uint32_t generate_hash_key() { return ts_next_random_u32(); }
 
     STDROMANO_FORCE_INLINE void update_grow_threshold()
     {

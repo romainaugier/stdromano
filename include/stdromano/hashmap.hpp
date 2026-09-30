@@ -56,6 +56,30 @@ public:
     HashMap& operator=(const HashMap&) = default;
     HashMap& operator=(HashMap&&) noexcept = default;
 
+    bool operator==(const HashMap& other) const
+    {
+        if(this->size() != other.size())
+            return false;
+
+        for(const auto& [k, v] : *this)
+        {
+            const auto other_it = other.find(k);
+
+            if(other_it == other.end())
+                return false;
+
+            if(other_it->second != v)
+                return false;
+        }
+
+        return true;
+    }
+
+    bool operator!=(const HashMap& other) const
+    {
+        return !this->operator==(other);
+    }
+
     template <typename P>
     void insert(P&& value)
     {
