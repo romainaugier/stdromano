@@ -27,42 +27,42 @@ STDROMANO_NAMESPACE_BEGIN
 
 DETAIL_NAMESPACE_BEGIN
 
-STDROMANO_API void* mem_alloc(const size_t size) noexcept;
+STDROMANO_API void* mem_alloc(const std::size_t size) noexcept;
 
-STDROMANO_API void* mem_calloc(const size_t count, const size_t size) noexcept;
+STDROMANO_API void* mem_calloc(const std::size_t count, const std::size_t size) noexcept;
 
-STDROMANO_API void* mem_realloc(void* ptr, const size_t size) noexcept;
+STDROMANO_API void* mem_realloc(void* ptr, const std::size_t size) noexcept;
 
-STDROMANO_API void* mem_crealloc(void* ptr, const size_t size) noexcept;
+STDROMANO_API void* mem_crealloc(void* ptr, const std::size_t size) noexcept;
 
 STDROMANO_API void mem_free(void* ptr) noexcept;
 
-STDROMANO_API void* mem_aligned_alloc(const size_t size, const size_t alignment) noexcept;
+STDROMANO_API void* mem_aligned_alloc(const std::size_t size, const std::size_t alignment) noexcept;
 
 STDROMANO_API void mem_aligned_free(void* ptr) noexcept;
 
 DETAIL_NAMESPACE_END
 
 template<typename T = void>
-STDROMANO_FORCE_INLINE T* mem_alloc(const size_t size) noexcept
+STDROMANO_FORCE_INLINE T* mem_alloc(const std::size_t size) noexcept
 {
     return reinterpret_cast<T*>(detail::mem_alloc(size));
 }
 
 template<typename T>
-STDROMANO_FORCE_INLINE T* mem_calloc(const size_t count, const size_t size) noexcept
+STDROMANO_FORCE_INLINE T* mem_calloc(const std::size_t count, const std::size_t size) noexcept
 {
     return reinterpret_cast<T*>(detail::mem_calloc(count, size));
 }
 
 template<typename T>
-STDROMANO_FORCE_INLINE T* mem_realloc(T* ptr, const size_t size) noexcept
+STDROMANO_FORCE_INLINE T* mem_realloc(T* ptr, const std::size_t size) noexcept
 {
     return reinterpret_cast<T*>(detail::mem_realloc(reinterpret_cast<void*>(ptr), size));
 }
 
 template<typename T>
-STDROMANO_FORCE_INLINE T* mem_crealloc(T* ptr, const size_t size) noexcept
+STDROMANO_FORCE_INLINE T* mem_crealloc(T* ptr, const std::size_t size) noexcept
 {
     return reinterpret_cast<T*>(detail::mem_crealloc(reinterpret_cast<void*>(ptr), size));
 }
@@ -74,7 +74,7 @@ STDROMANO_FORCE_INLINE void mem_free(T* ptr) noexcept
 }
 
 template<typename T = void>
-STDROMANO_FORCE_INLINE T* mem_aligned_alloc(const size_t size, const size_t alignment) noexcept
+STDROMANO_FORCE_INLINE T* mem_aligned_alloc(const std::size_t size, const std::size_t alignment) noexcept
 {
     return reinterpret_cast<T*>(detail::mem_aligned_alloc(size, alignment));
 }

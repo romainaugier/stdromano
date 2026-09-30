@@ -24,17 +24,17 @@ DETAIL_NAMESPACE_BEGIN
 
 // Avoid tsan false positives
 #if defined(STDROMANO_SYSTEM_ALLOCATOR)
-void* mem_alloc(const size_t size) noexcept
+void* mem_alloc(const std::size_t size) noexcept
 {
     return std::malloc(size);
 }
 
-void* mem_calloc(const size_t count, const size_t size) noexcept
+void* mem_calloc(const std::size_t count, const std::size_t size) noexcept
 {
     return std::calloc(count, size);
 }
 
-void* mem_realloc(void* ptr, const size_t size) noexcept
+void* mem_realloc(void* ptr, const std::size_t size) noexcept
 {
     return std::realloc(ptr, size);
 }
@@ -44,28 +44,42 @@ void mem_free(void* ptr) noexcept
     std::free(ptr);
 }
 
-void* mem_aligned_alloc(const size_t size, const size_t alignment) noexcept
+void* mem_aligned_alloc(const std::size_t size, const std::size_t alignment) noexcept
 {
+#if defined(STDROMANO_MSVC)
+    return _aligned_malloc(size, alignment);
+#elif defined(STDROMANO_UNIX)
+    void* ptr;
+    if(posix_memalign(std::addressof(ptr), alignment, size) != 0)
+        return nullptr;
+
+    return ptr;
+#else
     const size_t correct_size = (size + (alignment - 1)) & ~(alignment - 1);
     return std::aligned_alloc(alignment, correct_size);
+#endif // defined(STDROMANO_MSVC)
 }
 
 void mem_aligned_free(void* ptr) noexcept
 {
+#if defined(STDROMANO_MSVC)
+    return _aligned_free(ptr);
+#else
     std::free(ptr);
+#endif // defined(STDROMANO_MSVC)
 }
 #else
-void* mem_alloc(const size_t size) noexcept
+void* mem_alloc(const std::size_t size) noexcept
 {
     return mi_malloc(size);
 }
 
-void* mem_calloc(const size_t count, const size_t size) noexcept
+void* mem_calloc(const std::size_t count, const std::size_t size) noexcept
 {
     return mi_calloc(count, size);
 }
 
-void* mem_realloc(void* ptr, const size_t size) noexcept
+void* mem_realloc(void* ptr, const std::size_t size) noexcept
 {
     return mi_realloc(ptr, size);
 }
@@ -75,9 +89,9 @@ void mem_free(void* ptr) noexcept
     mi_free(ptr);
 }
 
-void* mem_aligned_alloc(const size_t size, const size_t alignment) noexcept
+void* mem_aligned_alloc(const std::size_t size, const std::size_t alignment) noexcept
 {
-    const size_t correct_size = (size + (alignment - 1)) & ~(alignment - 1);
+    const std::size_t correct_size = (size + (alignment - 1)) & ~(alignment - 1);
     return mi_malloc_aligned(correct_size, alignment);
 }
 
