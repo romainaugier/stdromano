@@ -693,20 +693,24 @@ public:
         return this->_is_local ? this->_local_data : this->_heap_data;
     }
 
-    constexpr STDROMANO_FORCE_INLINE const char* back() const noexcept
+    constexpr STDROMANO_FORCE_INLINE const char& front() const noexcept
     {
-        STDROMANO_ASSERT(this->_size > 0 || (this->_is_local || this->_heap_data != nullptr),
-                         "String must be valid to get back's address");
-
-        return this->data() + this->_size;
+        return (*this)[0];
     }
 
-    constexpr STDROMANO_FORCE_INLINE char* back() noexcept
+    constexpr STDROMANO_FORCE_INLINE char& front() noexcept
     {
-        STDROMANO_ASSERT(this->_size > 0 || (this->_is_local || this->_heap_data != nullptr),
-                         "String must be valid to get back's address");
+        return (*this)[0];
+    }
 
-        return this->data() + this->_size;
+    constexpr STDROMANO_FORCE_INLINE const char& back() const noexcept
+    {
+        return (*this)[this->size() - 1];
+    }
+
+    constexpr STDROMANO_FORCE_INLINE char& back() noexcept
+    {
+        return (*this)[this->size() - 1];
     }
 
     /* Number of code units */

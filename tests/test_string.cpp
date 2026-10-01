@@ -962,6 +962,24 @@ STDROMANO_TEST_CASE(fuzz_edits_match_std_string)
     TESTS_REQUIRE_PROPERTY(report);
 }
 
+STDROMANO_TEST_CASE(fuzz_front_and_back)
+{
+    const auto report = fuzz::run_property(fixtures::options("front_and_back", 1000), [](fuzz::Source& source) {
+        const stdromano::StringD s1 = source.string(source.range(1, 512), "abcdefghijklmnopqrstuvwxyz");
+        const std::string std_s1 = to_std(s1);
+
+        if(s1.size() == 0)
+            return true;
+
+        STDROMANO_FUZZ_CHECK_EQ(s1.front(), std_s1.front());
+        STDROMANO_FUZZ_CHECK_EQ(s1.back(), std_s1.back());
+
+        return true;
+    });
+
+    TESTS_REQUIRE_PROPERTY(report);
+}
+
 STDROMANO_TEST_CASE(fuzz_integer_conversions_round_trip)
 {
     const auto report = fuzz::run_property(fixtures::options("string_integers", 1000), [](fuzz::Source& source) {
