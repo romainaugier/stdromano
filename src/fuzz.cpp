@@ -478,8 +478,7 @@ public:
         g_guard_active.store(false);
     }
 
-    CrashGuard(const CrashGuard&) = delete;
-    CrashGuard& operator=(const CrashGuard&) = delete;
+    STDROMANO_NON_COPYABLE(CrashGuard);
 
     void set(const char* name, std::uint64_t iteration, std::uint64_t seed, const char* what) noexcept
     {

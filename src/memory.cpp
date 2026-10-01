@@ -3,6 +3,7 @@
 // All rights reserved.
 
 #include "stdromano/memory.hpp"
+#include "stdromano/bits.hpp"
 
 #include "mimalloc.h"
 
@@ -50,7 +51,9 @@ void* mem_aligned_alloc(const std::size_t size, const std::size_t alignment) noe
     return _aligned_malloc(size, alignment);
 #elif defined(STDROMANO_UNIX)
     void* ptr;
-    if(posix_memalign(std::addressof(ptr), alignment, size) != 0)
+    if(posix_memalign(std::addressof(ptr),
+                      std::max(sizeof(void*), round_u64_to_next_pow2(alignment)),
+                      size) != 0)
         return nullptr;
 
     return ptr;

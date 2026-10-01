@@ -63,11 +63,11 @@ private:
     static bool is_unicode_id_start(unsigned int c) noexcept { return c >= 128; }
     static bool is_unicode_id_continue(unsigned int c) noexcept { if(c < 128) return isalnum(c) | (c == '_'); return true; }
 
-    char  peek(std::uint32_t ahead = 0) const noexcept;
-    char  advance() noexcept;
-    void  advance_n(std::uint32_t n) noexcept;
-    bool  at_end() const noexcept;
-    bool  match(char expected) noexcept;
+    char peek(std::uint32_t ahead = 0) const noexcept;
+    char advance() noexcept;
+    void advance_n(std::uint32_t n) noexcept;
+    bool at_end() const noexcept;
+    bool match(char expected) noexcept;
 
     bool lex_string(Vector<Token>& out) noexcept;
     bool lex_number(Vector<Token>& out) noexcept;
@@ -2907,18 +2907,16 @@ struct Parser
             return nullptr;
         }
 
-        const char* start = this->current().value.c_str();
-        std::size_t count = this->current().value.size();
+        StringD module = StringD::make_from_c_str(this->current().value.c_str(),
+                                                  this->current().value.size());
 
         this->advance();
 
         while(!this->at_end() && (this->check(Token::Kind::Identifier) || this->match_delimiter(Delimiter::Dot)))
         {
-            count += this->current().value.size();
+            module.appendc(this->current().value.c_str(), this->current().value.size());
             this->advance();
         }
-
-        StringD module = std::move(StringD::make_from_c_str(start, count));
 
         if(!this->expect_keyword(Keyword::Import))
             return nullptr;
