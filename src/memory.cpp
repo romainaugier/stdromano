@@ -52,7 +52,8 @@ void* mem_aligned_alloc(const std::size_t size, const std::size_t alignment) noe
 #elif defined(STDROMANO_UNIX)
     void* ptr;
     if(posix_memalign(std::addressof(ptr),
-                      std::max(sizeof(void*), round_u64_to_next_pow2(alignment)),
+                      std::max(static_cast<std::size_t>(sizeof(void*)),
+                               static_cast<std::size_t>(round_u64_to_next_pow2(alignment))),
                       size) != 0)
         return nullptr;
 
