@@ -21,18 +21,12 @@
 
 void STDROMANO_LIB_ENTRY lib_entry(void)
 {
-#if STDROMANO_DEBUG
-    std::printf("stdromano entry\n");
-#endif // STDROMANO_DEBUG
     stdromano::cpu_check();
     stdromano::simd_check_vectorization();
 }
 
 void STDROMANO_LIB_EXIT lib_exit(void)
 {
-#if STDROMANO_DEBUG
-    std::printf("stdromano exit\n");
-#endif // STDROMANO_DEBUG
 }
 
 #if defined(STDROMANO_WIN)
