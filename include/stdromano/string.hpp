@@ -1343,6 +1343,16 @@ public:
         return found != end ? static_cast<int>(found - this->data()) : -1;
     }
 
+    constexpr std::size_t count(const char c) const noexcept
+    {
+        std::size_t total = 0;
+
+        for(std::size_t i = 0; i < this->size(); i++)
+            total += static_cast<std::size_t>((*this)[i] == c);
+
+        return total;
+    }
+
     bool split(const String& sep, split_iterator& it, String& split_out) const noexcept
     {
         if(sep.empty())

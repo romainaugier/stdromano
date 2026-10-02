@@ -321,6 +321,18 @@ STDROMANO_TEST_CASE(find)
     STDROMANO_CHECK_EQ(prefix.find("Hel"), 0);
 }
 
+STDROMANO_TEST_CASE(count)
+{
+    const String<> str("####    aaaabbbbcccc");
+
+    STDROMANO_CHECK_EQ(str.count('#'), 4);
+    STDROMANO_CHECK_EQ(str.count(' '), 4);
+    STDROMANO_CHECK_EQ(str.count('a'), 4);
+    STDROMANO_CHECK_EQ(str.count('b'), 4);
+    STDROMANO_CHECK_EQ(str.count('c'), 4);
+    STDROMANO_CHECK_EQ(str.count('d'), 0);
+}
+
 STDROMANO_TEST_CASE(split)
 {
     const String<> str("Hello,World,Test");
