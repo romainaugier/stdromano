@@ -39,9 +39,7 @@ constexpr STDROMANO_FORCE_INLINE bool is_letter_lower(unsigned int c) noexcept
 constexpr STDROMANO_FORCE_INLINE char to_lower(unsigned int c) noexcept
 {
     if(is_letter(c))
-    {
         return static_cast<char>(c | 0x60);
-    }
 
     return static_cast<char>(c);
 }
@@ -49,11 +47,19 @@ constexpr STDROMANO_FORCE_INLINE char to_lower(unsigned int c) noexcept
 constexpr STDROMANO_FORCE_INLINE char to_upper(unsigned int c) noexcept
 {
     if(is_letter(c))
-    {
         return static_cast<char>(c & ~0x20);
-    }
 
     return static_cast<char>(c);
+}
+
+constexpr STDROMANO_FORCE_INLINE bool is_whitespace(char c) noexcept
+{
+    return c == ' ' ||
+           c == '\t' ||
+           c == '\n' ||
+           c == '\r' ||
+           c == '\v' ||
+           c == '\f';
 }
 
 STDROMANO_NAMESPACE_END

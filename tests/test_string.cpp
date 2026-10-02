@@ -282,6 +282,9 @@ STDROMANO_TEST_CASE(strip)
     STDROMANO_CHECK_EQ(to_std(custom.strip('#')), "Hello");
     STDROMANO_CHECK_EQ(to_std(String<>::make_ref(custom).strip('#')), "Hello");
     STDROMANO_CHECK_EQ(to_std(String<>::make_ref("Hello", 5).strip('#')), "Hello");
+
+    const String<> many(" #\n\t Hello #\r\n\v ## ");
+    STDROMANO_CHECK_EQ(many.strip_many(" #\n\t\r\v"), "Hello");
 }
 
 STDROMANO_TEST_CASE(startswith_and_endswith)

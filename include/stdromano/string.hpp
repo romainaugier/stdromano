@@ -1195,13 +1195,13 @@ public:
         return result;
     }
 
-    String lstrip(char c = ' ') const noexcept
+    constexpr String lstrip(char c = ' ') const noexcept
     {
         if(this->empty())
             return String::make_ref(this->data(), 0);
 
         const char* start_ptr = this->data();
-        const char* end_ptr = this->data() + this->_size;
+        const char* end_ptr = this->data() + this->size();
 
         const char* current_ptr = start_ptr;
 
@@ -1211,13 +1211,13 @@ public:
         return String::make_ref(current_ptr, static_cast<size_t>(end_ptr - current_ptr));
     }
 
-    String rstrip(char c = ' ') const noexcept
+    constexpr String rstrip(char c = ' ') const noexcept
     {
         if(this->empty())
             return String::make_ref(this->data(), 0);
 
         const char* start_ptr = this->data();
-        const char* current_end_ptr = this->data() + this->_size;
+        const char* current_end_ptr = this->data() + this->size();
 
         while(current_end_ptr > start_ptr && *(current_end_ptr - 1) == c)
             current_end_ptr--;
@@ -1225,13 +1225,13 @@ public:
         return String::make_ref(start_ptr, static_cast<size_t>(current_end_ptr - start_ptr));
     }
 
-    String strip(char c = ' ') const noexcept
+    constexpr String strip(char c = ' ') const noexcept
     {
         if(this->empty())
             return String::make_ref(this->data(), 0);
 
         const char* original_start_ptr = this->data();
-        const char* original_end_ptr = this->data() + this->_size;
+        const char* original_end_ptr = this->data() + this->size();
 
         const char* new_start_ptr = original_start_ptr;
 
@@ -1249,6 +1249,31 @@ public:
         return String::make_ref(new_start_ptr, static_cast<std::size_t>(new_end_ptr - new_start_ptr));
     }
 
+    String strip_many(const char* c = " ") const noexcept
+    {
+        if(this->empty())
+            return String::make_ref(this->data(), 0);
+
+        const char* original_start_ptr = this->data();
+        const char* original_end_ptr = this->data() + this->size();
+
+        const char* new_start_ptr = original_start_ptr;
+
+        while(new_start_ptr < original_end_ptr &&
+              std::strchr(c, static_cast<int>(*new_start_ptr)) != nullptr)
+            new_start_ptr++;
+
+        if(new_start_ptr == original_end_ptr)
+            return String::make_ref(new_start_ptr, 0);
+
+        const char* new_end_ptr = original_end_ptr;
+
+        while(new_end_ptr > new_start_ptr && 
+              std::strchr(c, static_cast<int>(*(new_end_ptr - 1))) != nullptr)
+            new_end_ptr--;
+
+        return String::make_ref(new_start_ptr, static_cast<std::size_t>(new_end_ptr - new_start_ptr));
+    }
 
     constexpr String substr(const std::size_t position) const noexcept
     {
@@ -1275,7 +1300,7 @@ public:
         return String::make_ref(this->data() + start_pos, actual_length);
     }
 
-    String replace(char occurence, char replacement) const noexcept
+    constexpr String replace(char occurence, char replacement) const noexcept
     {
         String res = this->copy();
 
