@@ -11,11 +11,11 @@
 
 #include <limits>
 
-#if defined(STDROMANO_INTEL)
+#if defined(STDROMANO_X86_64)
 #include <immintrin.h>
 #elif defined(STDROMANO_AARCH64)
 #include <arm_neon.h>
-#endif /* defined(STDROMANO_INTEL) */
+#endif /* defined(STDROMANO_X86_64) */
 
 STDROMANO_NAMESPACE_BEGIN
 
@@ -59,7 +59,7 @@ STDROMANO_API bool simd_force_vectorization_mode(std::uint32_t mode) noexcept;
 
 /* SIMD helper functions */
 
-#if defined(STDROMANO_INTEL)
+#if defined(STDROMANO_X86_64)
 
 STDROMANO_FORCE_INLINE __m128 _mm_abs_ps(const __m128& x) noexcept
 {
@@ -173,7 +173,7 @@ STDROMANO_FORCE_INLINE bool vall_true_u8(const uint8x16_t mask) noexcept
     return vminvq_u8(mask) == 0xFF;
 }
 
-#endif /* defined(STDROMANO_INTEL) */
+#endif /* defined(STDROMANO_X86_64) */
 
 STDROMANO_NAMESPACE_END
 

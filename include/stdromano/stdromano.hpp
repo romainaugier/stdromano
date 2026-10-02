@@ -76,11 +76,9 @@
 #endif /* defined(__x86_64__) || defined(_M_X64) || defined(_M_AMD64) */
 
 /* Umbrella architecture macros */
-#if defined(STDROMANO_X86_64) || defined(STDROMANO_X86)
-#define STDROMANO_INTEL
-#elif defined(STDROMANO_AARCH64) || defined(STDROMANO_AARCH32)
+#if defined(STDROMANO_AARCH64) || defined(STDROMANO_AARCH32)
 #define STDROMANO_ARM
-#endif /* defined(STDROMANO_X86_64) || defined(STDROMANO_X86) */
+#endif /* defined(STDROMANO_AARCH64) || defined(STDROMANO_AARCH32) */
 
 #if STDROMANO_SIZEOF_PTR == 8
 #define STDROMANO_64BITS

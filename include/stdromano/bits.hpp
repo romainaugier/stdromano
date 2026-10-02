@@ -11,7 +11,7 @@
 
 #if defined(STDROMANO_MSVC)
 #include <intrin.h>
-#elif defined(STDROMANO_INTEL)
+#elif defined(STDROMANO_X86_64)
 #include <immintrin.h>
 #endif /* defined(STDROMANO_MSVC) */
 
@@ -136,9 +136,9 @@ STDROMANO_FORCE_INLINE std::uint32_t ctz_u64(const std::uint64_t x) noexcept
     pext is a bmi2 instruction, there is no aarch64 equivalent so we fallback on the
     classic bit gathering loop (also used on x86 when the target has no bmi2)
 */
-#if defined(STDROMANO_INTEL) && (defined(__BMI2__) || defined(STDROMANO_MSVC))
+#if defined(STDROMANO_X86_64) && (defined(__BMI2__) || defined(STDROMANO_MSVC))
 #define STDROMANO_HAS_PEXT
-#endif /* defined(STDROMANO_INTEL) && (defined(__BMI2__) || defined(STDROMANO_MSVC)) */
+#endif /* defined(STDROMANO_X86_64) && (defined(__BMI2__) || defined(STDROMANO_MSVC)) */
 
 STDROMANO_FORCE_INLINE std::uint32_t pext_u32(const std::uint32_t x,
                                               const std::uint32_t y) noexcept

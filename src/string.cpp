@@ -33,7 +33,7 @@ void tolower_scalar_kernel(char* str, std::size_t length) noexcept
         str[i] = to_lower(static_cast<unsigned int>(str[i]));
 }
 
-#if defined(STDROMANO_INTEL)
+#if defined(STDROMANO_X86_64)
 
 STDROMANO_FORCE_INLINE __m128i tolower16(const __m128i c) noexcept
 {
@@ -129,7 +129,7 @@ void tolower_neon_kernel(char* str, std::size_t length) noexcept
         str[i] = to_lower(static_cast<unsigned int>(str[i]));
 }
 
-#endif /* defined(STDROMANO_INTEL) */
+#endif /* defined(STDROMANO_X86_64) */
 
 DETAIL_NAMESPACE_BEGIN
 
@@ -137,7 +137,7 @@ void tolower(char* str, std::size_t length) noexcept
 {
     switch(simd_get_vectorization_mode())
     {
-#if defined(STDROMANO_INTEL)
+#if defined(STDROMANO_X86_64)
         case VectorizationMode_SSE:
             return tolower_sse_kernel(str, length);
         case VectorizationMode_AVX:
@@ -146,7 +146,7 @@ void tolower(char* str, std::size_t length) noexcept
 #elif defined(STDROMANO_AARCH64)
         case VectorizationMode_NEON:
             return tolower_neon_kernel(str, length);
-#endif /* defined(STDROMANO_INTEL) */
+#endif /* defined(STDROMANO_X86_64) */
         default:
         case VectorizationMode_Scalar:
             return tolower_scalar_kernel(str, length);
@@ -178,7 +178,7 @@ bool strcmp_scalar_kernel(const char* __restrict lhs,
     return true;
 }
 
-#if defined(STDROMANO_INTEL)
+#if defined(STDROMANO_X86_64)
 
 bool strcmp_sse_kernel_case_sensitive(const char* __restrict lhs,
                                       const char* __restrict rhs,
@@ -351,7 +351,7 @@ bool strcmp_neon_kernel_case_insensitive(const char* __restrict lhs,
     return true;
 }
 
-#endif /* defined(STDROMANO_INTEL) */
+#endif /* defined(STDROMANO_X86_64) */
 
 DETAIL_NAMESPACE_BEGIN
 
@@ -362,7 +362,7 @@ bool strcmp(const char* __restrict lhs,
 {
     switch(simd_get_vectorization_mode())
     {
-#if defined(STDROMANO_INTEL)
+#if defined(STDROMANO_X86_64)
         case VectorizationMode_SSE:
 #if defined(STDROMANO_ASM_STRCMP)
             return case_sensitive ? asm__detail_strcmp_sse_cs(lhs, rhs, length) :
@@ -384,7 +384,7 @@ bool strcmp(const char* __restrict lhs,
         case VectorizationMode_NEON:
             return case_sensitive ? strcmp_neon_kernel_case_sensitive(lhs, rhs, length) :
                                     strcmp_neon_kernel_case_insensitive(lhs, rhs, length);
-#endif /* defined(STDROMANO_INTEL) */
+#endif /* defined(STDROMANO_X86_64) */
         default:
             return strcmp_scalar_kernel(lhs, rhs, length, case_sensitive);
     }
@@ -470,7 +470,7 @@ bool validate_utf8_scalar(const char* str, std::size_t size) noexcept
     return true;
 }
 
-#if defined(STDROMANO_INTEL)
+#if defined(STDROMANO_X86_64)
 
 constexpr std::uint8_t TOO_SHORT = 1 << 0;
 constexpr std::uint8_t TOO_LONG = 1 << 1;
@@ -732,19 +732,19 @@ bool validate_utf8_avx(const char* str, std::size_t size) noexcept
     return _mm256_testz_si256(err, err) == 1;
 }
 
-#endif /* defined(STDROMANO_INTEL) */
+#endif /* defined(STDROMANO_X86_64) */
 
 bool validate_utf8(const char* str, std::size_t size) noexcept
 {
     switch(simd_get_vectorization_mode())
     {
-#if defined(STDROMANO_INTEL)
+#if defined(STDROMANO_X86_64)
         case VectorizationMode_SSE:
             return validate_utf8_sse(str, size);
         case VectorizationMode_AVX:
         case VectorizationMode_AVX2:
             return validate_utf8_avx(str, size);
-#endif /* defined(STDROMANO_INTEL) */
+#endif /* defined(STDROMANO_X86_64) */
         /* TODO: neon kernel */
         default:
             return validate_utf8_scalar(str, size);

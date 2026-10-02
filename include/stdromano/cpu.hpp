@@ -11,7 +11,7 @@
 
 #if defined(STDROMANO_MSVC)
 #include <intrin.h>
-#elif defined(STDROMANO_INTEL)
+#elif defined(STDROMANO_X86_64)
 #include <x86intrin.h>
 #endif /* defined(STDROMANO_MSVC) */
 
@@ -25,7 +25,7 @@ STDROMANO_NAMESPACE_BEGIN
 #define STDROMANO_ARM64_CNTFRQ STDROMANO_ARM64_SYSREG(3, 3, 14, 0, 0)
 #endif /* defined(STDROMANO_MSVC) && defined(STDROMANO_AARCH64) */
 
-#if defined(STDROMANO_INTEL)
+#if defined(STDROMANO_X86_64)
 
 #if defined(STDROMANO_MSVC)
 #define cpuid(__regs, __eax) __cpuid(__regs, __eax)
@@ -41,7 +41,7 @@ STDROMANO_NAMESPACE_BEGIN
                  : "a"(__eax), "c"(__ecx))
 #endif /* defined(STDROMANO_MSVC) */
 
-#endif /* defined(STDROMANO_INTEL) */
+#endif /* defined(STDROMANO_X86_64) */
 
 /*
     Reads the cpu timestamp counter.
@@ -53,7 +53,7 @@ STDROMANO_NAMESPACE_BEGIN
 */
 STDROMANO_FORCE_INLINE std::uint64_t cpu_rdtsc() noexcept
 {
-#if defined(STDROMANO_INTEL)
+#if defined(STDROMANO_X86_64)
     return __rdtsc();
 #elif defined(STDROMANO_AARCH64)
 #if defined(STDROMANO_MSVC)
@@ -65,7 +65,7 @@ STDROMANO_FORCE_INLINE std::uint64_t cpu_rdtsc() noexcept
 #endif /* defined(STDROMANO_MSVC) */
 #else
     return 0;
-#endif /* defined(STDROMANO_INTEL) */
+#endif /* defined(STDROMANO_X86_64) */
 }
 
 /* Returns the tick rate of cpu_rdtsc() in Hz, or 0 when the counter ticks at the cpu frequency */

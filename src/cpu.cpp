@@ -73,7 +73,7 @@ static const char* g_cpu_features_names[CPUFeature_COUNT] = {
 /* Features detection */
 /********************************/
 
-#if defined(STDROMANO_INTEL)
+#if defined(STDROMANO_X86_64)
 
 STDROMANO_FORCE_INLINE std::uint64_t cpu_xgetbv(std::uint32_t index) noexcept
 {
@@ -308,7 +308,7 @@ static void cpu_check_features() noexcept
 
 static void cpu_check_features() noexcept {}
 
-#endif /* defined(STDROMANO_INTEL) */
+#endif /* defined(STDROMANO_X86_64) */
 
 bool cpu_has_feature(std::uint32_t feature) noexcept
 {
@@ -347,7 +347,7 @@ static void cpu_check_name() noexcept
 {
     std::memset(g_cpu_name, 0, sizeof(g_cpu_name));
 
-#if defined(STDROMANO_INTEL)
+#if defined(STDROMANO_X86_64)
     std::int32_t regs[12];
 
     cpuid(&regs[0], 0x80000000);
@@ -410,7 +410,7 @@ static void cpu_check_name() noexcept
     }
 
     std::fclose(f);
-#endif /* defined(STDROMANO_INTEL) */
+#endif /* defined(STDROMANO_X86_64) */
 }
 
 bool cpu_get_name(char* name) noexcept
@@ -473,7 +473,7 @@ static std::uint32_t _get_cpu_frequency() noexcept
         {
             g_frequency = 0;
         }
-#elif defined(STDROMANO_INTEL) && defined(STDROMANO_UNIX)
+#elif defined(STDROMANO_X86_64) && defined(STDROMANO_UNIX)
         const std::uint64_t start = cpu_rdtsc();
 
         struct timespec wait_duration;
@@ -538,7 +538,7 @@ static void cpu_check_caches() noexcept
 {
     std::memset(g_cpu_caches_sizes, 0, sizeof(g_cpu_caches_sizes));
 
-#if defined(STDROMANO_INTEL)
+#if defined(STDROMANO_X86_64)
     std::int32_t regs[4];
     std::memset(regs, 0, sizeof(regs));
 
@@ -663,7 +663,7 @@ static void cpu_check_caches() noexcept
 
         std::fclose(f);
     }
-#endif /* defined(STDROMANO_INTEL) */
+#endif /* defined(STDROMANO_X86_64) */
 }
 
 void cpu_check() noexcept
@@ -672,7 +672,7 @@ void cpu_check() noexcept
     cpu_check_name();
     cpu_check_caches();
 
-#if defined(STDROMANO_INTEL)
+#if defined(STDROMANO_X86_64)
     std::int32_t regs[4];
     std::memset(regs, 0, sizeof(regs));
 
@@ -690,7 +690,7 @@ void cpu_check() noexcept
     }
 #else
     g_cpu_freq_mhz = _get_cpu_frequency();
-#endif /* defined(STDROMANO_INTEL) */
+#endif /* defined(STDROMANO_X86_64) */
 }
 
 std::uint32_t cpu_get_frequency() noexcept

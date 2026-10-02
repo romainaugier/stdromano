@@ -9,11 +9,11 @@
 
 #include "stdromano/stdromano.hpp"
 
-#if defined(STDROMANO_INTEL)
+#if defined(STDROMANO_X86_64)
 #include <immintrin.h>
 #elif defined(STDROMANO_AARCH64)
 #include <arm_neon.h>
-#endif /* defined(STDROMANO_INTEL) */
+#endif /* defined(STDROMANO_X86_64) */
 
 #include <limits>
 #include <cmath>
@@ -26,9 +26,9 @@
     __AVX2__ was used as a proxy for the fma3 intrinsics, but the right macro is __FMA__
     (gcc and clang define it with -mfma, msvc only defines __AVX2__)
 */
-#if defined(STDROMANO_INTEL) && (defined(__FMA__) || defined(__AVX2__))
+#if defined(STDROMANO_X86_64) && (defined(__FMA__) || defined(__AVX2__))
 #define STDROMANO_HAS_FMA_INTRINSICS
-#endif /* defined(STDROMANO_INTEL) && (defined(__FMA__) || defined(__AVX2__)) */
+#endif /* defined(STDROMANO_X86_64) && (defined(__FMA__) || defined(__AVX2__)) */
 
 #define MATHS_NAMESPACE_BEGIN namespace maths {
 #define MATHS_NAMESPACE_END }
@@ -184,7 +184,7 @@ STDROMANO_FORCE_INLINE T rcp(const T x) noexcept;
 template<>
 STDROMANO_FORCE_INLINE float rcp(const float x) noexcept
 {
-#if defined(STDROMANO_INTEL)
+#if defined(STDROMANO_X86_64)
     const __m128 a = _mm_set_ss(x);
     const __m128 r = _mm_rcp_ss(a);
 
@@ -201,7 +201,7 @@ STDROMANO_FORCE_INLINE float rcp(const float x) noexcept
     return r;
 #else
     return 1.0f / x;
-#endif /* defined(STDROMANO_INTEL) */
+#endif /* defined(STDROMANO_X86_64) */
 }
 
 template<>
@@ -311,7 +311,7 @@ STDROMANO_FORCE_INLINE T rsqrt(T x) noexcept;
 template<>
 STDROMANO_FORCE_INLINE float rsqrt(float x) noexcept
 {
-#if defined(STDROMANO_INTEL)
+#if defined(STDROMANO_X86_64)
     const __m128 a = _mm_set_ss(x);
     __m128 r = _mm_rsqrt_ss(a);
     r = _mm_add_ss(_mm_mul_ss(_mm_set_ss(1.5f), r),
@@ -324,7 +324,7 @@ STDROMANO_FORCE_INLINE float rsqrt(float x) noexcept
     return r;
 #else
     return 1.0f / ::sqrtf(x);
-#endif /* defined(STDROMANO_INTEL) */
+#endif /* defined(STDROMANO_X86_64) */
 }
 
 template<>

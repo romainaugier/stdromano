@@ -25,11 +25,11 @@
 #define JSON_NO_INLINE __attribute__((noinline))
 #endif // defined(STDROMANO_MSVC)
 
-#if defined(STDROMANO_INTEL)
+#if defined(STDROMANO_X86_64)
 #include <emmintrin.h>
 #elif defined(STDROMANO_AARCH64)
 #include <arm_neon.h>
-#endif // defined(STDROMANO_INTEL)
+#endif // defined(STDROMANO_X86_64)
 
 STDROMANO_NAMESPACE_BEGIN
 
@@ -160,7 +160,7 @@ static constexpr StringSpecialTable STRING_SPECIAL{};
 // First character that is a quote, a backslash or a control character, or end
 STDROMANO_FORCE_INLINE const char* find_string_special(const char* p, const char* end) noexcept
 {
-#if defined(STDROMANO_INTEL)
+#if defined(STDROMANO_X86_64)
     const __m128i quote = _mm_set1_epi8('"');
     const __m128i backslash = _mm_set1_epi8('\\');
     const __m128i control = _mm_set1_epi8(0x1F);
@@ -195,7 +195,7 @@ STDROMANO_FORCE_INLINE const char* find_string_special(const char* p, const char
 
         p += 16;
     }
-#endif // defined(STDROMANO_INTEL)
+#endif // defined(STDROMANO_X86_64)
 
     while(p < end && !STRING_SPECIAL.values[static_cast<std::uint8_t>(*p)])
         ++p;

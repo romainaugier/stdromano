@@ -38,7 +38,7 @@ static std::uint32_t simd_mode_from_string(const char* name) noexcept
 */
 void simd_check_vectorization() noexcept
 {
-#if defined(STDROMANO_INTEL)
+#if defined(STDROMANO_X86_64)
     g_has_fma = cpu_has_feature(CPUFeature_FMA3);
     g_has_f16c = cpu_has_feature(CPUFeature_F16C);
 
@@ -63,7 +63,7 @@ void simd_check_vectorization() noexcept
     {
         g_max_vectorization_mode = VectorizationMode_NEON;
     }
-#endif /* defined(STDROMANO_INTEL) */
+#endif /* defined(STDROMANO_X86_64) */
 
     g_vectorization_mode = g_max_vectorization_mode;
 
@@ -82,31 +82,31 @@ void simd_check_vectorization() noexcept
 
 bool simd_has_sse() noexcept
 {
-#if defined(STDROMANO_INTEL)
+#if defined(STDROMANO_X86_64)
     return g_max_vectorization_mode >= VectorizationMode_SSE &&
            g_max_vectorization_mode <= VectorizationMode_AVX2;
 #else
     return false;
-#endif /* defined(STDROMANO_INTEL) */
+#endif /* defined(STDROMANO_X86_64) */
 }
 
 bool simd_has_avx() noexcept
 {
-#if defined(STDROMANO_INTEL)
+#if defined(STDROMANO_X86_64)
     return g_max_vectorization_mode >= VectorizationMode_AVX &&
            g_max_vectorization_mode <= VectorizationMode_AVX2;
 #else
     return false;
-#endif /* defined(STDROMANO_INTEL) */
+#endif /* defined(STDROMANO_X86_64) */
 }
 
 bool simd_has_avx2() noexcept
 {
-#if defined(STDROMANO_INTEL)
+#if defined(STDROMANO_X86_64)
     return g_max_vectorization_mode == VectorizationMode_AVX2;
 #else
     return false;
-#endif /* defined(STDROMANO_INTEL) */
+#endif /* defined(STDROMANO_X86_64) */
 }
 
 bool simd_has_neon() noexcept
@@ -133,7 +133,7 @@ bool simd_mode_is_available(std::uint32_t mode) noexcept
     if(mode == VectorizationMode_Scalar)
         return true;
 
-#if defined(STDROMANO_INTEL)
+#if defined(STDROMANO_X86_64)
     if(mode == VectorizationMode_NEON)
         return false;
 #elif defined(STDROMANO_AARCH64)
@@ -141,7 +141,7 @@ bool simd_mode_is_available(std::uint32_t mode) noexcept
         return false;
 #else
     return false;
-#endif /* defined(STDROMANO_INTEL) */
+#endif /* defined(STDROMANO_X86_64) */
 
     return mode <= g_max_vectorization_mode;
 }

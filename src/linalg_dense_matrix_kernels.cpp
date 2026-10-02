@@ -48,7 +48,7 @@ void matmat_mulf_scalar_kernel(const float* __restrict A,
 
 /* AVX2 optimized version borrowed from https://github.com/salykova/sgemm.c */
 
-#if defined(STDROMANO_INTEL)
+#if defined(STDROMANO_X86_64)
 
 alignas(32) static const std::int8_t mask[32] = {-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
                                                  -1, -1, -1, -1, -1, 0,  0,  0,  0,  0,  0,
@@ -1761,7 +1761,7 @@ void matmat_mulf_avx2_kernel(const float* __restrict A,
     mem_aligned_free(blockB_packed);
 }
 
-#endif /* defined(STDROMANO_INTEL) */
+#endif /* defined(STDROMANO_X86_64) */
 
 /* Dispatcher */
 
@@ -1790,11 +1790,11 @@ void detail::matmat_mulf(const float* __restrict A,
 #else
     switch(simd_get_vectorization_mode())
     {
-#if defined(STDROMANO_INTEL)
+#if defined(STDROMANO_X86_64)
         case VectorizationMode_AVX2:
             matmat_mulf_avx2_kernel(A, B, C, M, K, N);
             break;
-#endif /* defined(STDROMANO_INTEL) */
+#endif /* defined(STDROMANO_x86_64) */
 
         /* TODO: neon kernel for non apple aarch64 platforms */
         default:
