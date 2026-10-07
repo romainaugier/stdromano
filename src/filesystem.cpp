@@ -1452,7 +1452,7 @@ bool Lock::try_lock(std::uint32_t timeout) noexcept
     }
 
     const auto deadline = std::chrono::steady_clock::now() + std::chrono::milliseconds(timeout);
-    auto backoff = std::uint32_t(1);
+    auto backoff = std::chrono::milliseconds(1);
 
     while(true)
     {
