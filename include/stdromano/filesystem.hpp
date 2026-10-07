@@ -57,7 +57,7 @@ STDROMANO_API Expected<void> copydir(const StringD& src, const StringD& dst, con
 STDROMANO_API Expected<void> removefile(const StringD& file_path) noexcept;
 
 // Copies the file at src to dst. Returns an error if src does not exist or the operation fails
-STDROMANO_API Expected<void> copyfile(const StringD& src, const StringD& dst) noexcept;
+STDROMANO_API Expected<void> copyfile(const StringD& src, const StringD& dst, bool overwrite = true) noexcept;
 
 // Expands a relative path by prepending the directory of the current executable
 // (e.g. "data/file.txt" -> "/path/to/exe_dir/data/file.txt")

@@ -388,46 +388,30 @@ Expected<void> removefile(const StringD& file_path) noexcept
     return Ok();
 }
 
-Expected<void> copyfile(const StringD& src, const StringD& dst) noexcept
+Expected<void> copyfile(const StringD& src, const StringD& dst, bool overwrite) noexcept
 {
     if(!path_exists(src))
-        return Error(StringD::make_fmt("Cannot find src file for copy: {}", src));
+        return Error("Cannot find src file for copy: {}", src);
 
 #if defined(STDROMANO_WIN)
-    if(!CopyFileA(src.is_ref() ? src.copy().c_str() : src.c_str(), dst.is_ref() ? dst.copy().c_str() : dst.c_str(), true))
-    {
-        DWORD last_err = GetLastError();
-
-        char buffer[STDROMANO_ERR_BUFFER_SZ];
-        std::memset(buffer, 0, STDROMANO_ERR_BUFFER_SZ * sizeof(char));
-
-        DWORD res = FormatMessageA(FORMAT_MESSAGE_FROM_SYSTEM,
-                                   nullptr,
-                                   last_err,
-                                   MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT),
-                                   buffer,
-                                   STDROMANO_ERR_BUFFER_SZ,
-                                   nullptr);
-
-        if(res == 0)
-            return Error(StringD::make_fmt("Cannot format error message (CopyFileA error: {}, FormatMessageA error: {})",
-                                           last_err,
-                                           GetLastError()));
-
-        return Error(StringD::make_fmt("CopyFileA failed (Last error: {} ({}))",
-                                       fmt::string_view(buffer, res),
-                                       last_err));
-    }
+    if(!CopyFileA(src.is_ref() ? src.copy().c_str() : src.c_str(),
+                  dst.is_ref() ? dst.copy().c_str() : dst.c_str(),
+                  !overwrite))
+        return Error::from_win32_last_error();
 #elif defined(STDROMANO_UNIX)
     int input, output;
 
     if((input = open(src.is_ref() ? src.copy().c_str() : src.c_str(), O_RDONLY)) == -1)
-        return Error(StringD::make_fmt("Cannot open src file \"{}\" for copy", src));
+        return Error("Cannot open src file \"{}\" for copy", src);
+
+    if(path_exists(dst) && !overwrite)
+        return Error("copyfile failed, file {} already exists and overwrite is set to false",
+                     dst);
 
     if((output = creat(dst.is_ref() ? dst.copy().c_str() : dst.c_str(), 0660)) == -1)
     {
         close(input);
-        return Error(StringD::make_fmt("Cannot create dst file \"{}\" for copy", dst));
+        return Error("Cannot create dst file \"{}\" for copy", dst);
     }
 
     struct stat file_stat;

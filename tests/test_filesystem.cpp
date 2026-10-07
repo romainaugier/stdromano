@@ -599,6 +599,21 @@ STDROMANO_TEST_CASE(copyfile_nonexistent_src)
     STDROMANO_CHECK(result.has_error());
 }
 
+STDROMANO_TEST_CASE(copyfile_overwrite)
+{
+    const stdromano::StringD tmp = stdromano::fs::tmp_dir().unwrap();
+    const stdromano::StringD src("{}/stdromano_to_copy.txt", tmp);
+    const stdromano::StringD dst("{}/stdromano_to_receive.txt", tmp);
+
+    const auto write_result = stdromano::fs::write_file_content("Hello\n", 6, src);
+
+    STDROMANO_CHECK(!write_result.has_error());
+
+    STDROMANO_CHECK(!stdromano::fs::copyfile(src, dst).has_error());
+    STDROMANO_CHECK(stdromano::fs::copyfile(src, dst, false).has_error());
+    STDROMANO_CHECK(!stdromano::fs::copyfile(src, dst).has_error());
+}
+
 STDROMANO_TEST_CASE(lock)
 {
     const stdromano::StringD file = stdromano::StringD::make_fmt("{}/my_file.txt",
