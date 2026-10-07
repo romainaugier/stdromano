@@ -599,6 +599,26 @@ STDROMANO_TEST_CASE(copyfile_nonexistent_src)
     STDROMANO_CHECK(result.has_error());
 }
 
+STDROMANO_TEST_CASE(lock)
+{
+    const stdromano::StringD file = stdromano::StringD::make_fmt("{}/my_file.txt",
+                                                                 stdromano::fs::tmp_dir().unwrap());
+
+    stdromano::fs::Lock read_lock(file, stdromano::fs::Lock::Type::Read, stdromano::fs::Lock::DeferLock{});
+
+    STDROMANO_CHECK(read_lock.type() == stdromano::fs::Lock::Type::Read);
+    STDROMANO_CHECK(read_lock.lock());
+    STDROMANO_CHECK(read_lock.is_locked());
+
+    stdromano::fs::Lock write_lock(file, stdromano::fs::Lock::Type::Write, stdromano::fs::Lock::DeferLock{});
+
+    STDROMANO_CHECK(write_lock.type() == stdromano::fs::Lock::Type::Write);
+    STDROMANO_CHECK(!write_lock.try_lock(1000));
+
+    STDROMANO_CHECK(read_lock.unlock());    
+    STDROMANO_CHECK(write_lock.lock());
+}
+
 STDROMANO_TEST_CASE(fuzz_binary_write_load_round_trip)
 {
     const auto report = stdromano::fuzz::run_property(fixtures::options("fs_round_trip", 100), [](stdromano::fuzz::Source& source) {

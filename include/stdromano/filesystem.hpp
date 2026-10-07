@@ -320,6 +320,47 @@ private:
 #endif /* defined(STDROMANO_WIN) */
 };
 
+class STDROMANO_API Lock
+{
+public:
+    enum class Type : std::uint8_t
+    {
+        Read,
+        Write
+    };
+
+    struct DeferLock {};
+    
+    Lock(const StringD& path, Type type);
+    Lock(const StringD& path, Type type, DeferLock);
+
+    ~Lock();
+
+    STDROMANO_NON_COPYABLE(Lock);
+    STDROMANO_NON_MOVABLE(Lock);
+
+    bool lock() noexcept;
+    // timeout is in milliseconds
+    bool try_lock(std::uint32_t timeout = 0) noexcept;
+    bool unlock() noexcept;
+
+    bool is_valid() const noexcept;
+    bool is_locked() const noexcept { return this->_locked; }
+    Type type() const noexcept { return this->_type; }
+
+private:
+#if defined(STDROMANO_WIN)
+    void* _handle = nullptr;
+#elif defined(STDROMANO_UNIX)
+    std::int32_t _fd = -1;
+#else
+#error Lock is not implemented on this platform
+#endif // defined(STDROMANO_WIN)
+
+    Type _type;
+    bool _locked = false;
+};
+
 FS_NAMESPACE_END
 
 STDROMANO_NAMESPACE_END

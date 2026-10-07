@@ -27,6 +27,7 @@
 #include <pwd.h>
 #include <sys/stat.h>
 #include <sys/types.h>
+#include <sys/file.h>
 #include <unistd.h>
 #include <fcntl.h>
 #include <ftw.h>
@@ -558,11 +559,11 @@ Expected<StringD> expand_from_lib_dir(const StringD& path_to_expand) noexcept
 #if defined(STDROMANO_WIN)
     HMODULE hm = nullptr;
 
-    if(GetModuleHandleEx(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS |
-                         GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
-                         (LPCSTR)&expand_from_lib_dir,
-                         &hm) == 0)
-        return Error(StringD::make_fmt("Error caught during GetModuleHandleEx: {}", GetLastError()));
+    if(GetModuleHandleExA(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS |
+                          GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
+                          (LPCSTR)&expand_from_lib_dir,
+                          &hm) == 0)
+        return Error(StringD::make_fmt("Error caught during GetModuleHandleExA: {}", GetLastError()));
 
     char sz_path[MAX_PATH];
 
@@ -1254,6 +1255,247 @@ bool WalkIterator::should_skip_entry(const char* name
 
     return false;
 }
+
+// Lock
+
+Lock::Lock(const stdromano::StringD& path, Type type) : Lock(path, type, DeferLock{})
+{
+    this->lock();
+}
+
+Lock::~Lock()
+{
+    if(this->_locked)
+        this->unlock();
+
+#if defined(STDROMANO_WIN)
+    if(this->_handle != nullptr)
+        CloseHandle(static_cast<HANDLE>(this->_handle));
+#elif defined(STDROMANO_UNIX)
+    if(this->_fd >= 0)
+        close(this->_fd);
+#endif // defined(STDROMANO_WIN)
+}
+
+bool Lock::lock() noexcept
+{
+    return this->try_lock(std::numeric_limits<std::uint32_t>::max());
+}
+
+#if defined(STDROMANO_WIN)
+
+Lock::Lock(const stdromano::StringD& path, Type type, DeferLock) : _type(type)
+{
+    stdromano::StringD lock_path(path);
+    lock_path.appendc(".lock");
+
+    HANDLE handle = CreateFileA(lock_path.c_str(),
+                                GENERIC_READ | GENERIC_WRITE,
+                                FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
+                                nullptr,
+                                OPEN_ALWAYS,
+                                FILE_ATTRIBUTE_NORMAL | FILE_FLAG_OVERLAPPED,
+                                nullptr);
+
+    if(handle != INVALID_HANDLE_VALUE)
+        this->_handle = handle;
+}
+
+bool Lock::is_valid() const noexcept
+{
+    return this->_handle != nullptr;
+}
+
+bool Lock::try_lock(std::uint32_t timeout) noexcept
+{
+    if(this->_locked)
+        return true;
+
+    if(!this->is_valid())
+        return false;
+
+    HANDLE handle = static_cast<HANDLE>(this->_handle);
+
+    DWORD flags = this->_type == Type::Write ? LOCKFILE_EXCLUSIVE_LOCK : 0;
+
+    if(timeout == 0)
+        flags |= LOCKFILE_FAIL_IMMEDIATELY;
+
+    OVERLAPPED overlapped = {};
+    overlapped.hEvent = CreateEventW(nullptr, TRUE, FALSE, nullptr);
+
+    if(overlapped.hEvent == nullptr)
+        return false;
+
+    bool locked = LockFileEx(handle, flags, 0, 1, 0, &overlapped) != 0;
+
+    if(!locked && GetLastError() == ERROR_IO_PENDING)
+    {
+        const DWORD wait_ms = timeout >= static_cast<std::uint32_t>(INFINITE) ? INFINITE :
+                                                                                static_cast<DWORD>(timeout);
+
+        DWORD transferred = 0;
+
+        if(WaitForSingleObject(overlapped.hEvent, wait_ms) == WAIT_OBJECT_0)
+        {
+            locked = GetOverlappedResult(handle, &overlapped, &transferred, FALSE) != 0;
+        }
+        else
+        {
+            CancelIoEx(handle, &overlapped);
+            locked = GetOverlappedResult(handle, &overlapped, &transferred, TRUE) != 0;
+        }
+    }
+
+    CloseHandle(overlapped.hEvent);
+
+    this->_locked = locked;
+
+    return locked;
+}
+
+bool Lock::unlock() noexcept
+{
+    if(!this->_locked)
+        return true;
+
+    OVERLAPPED overlapped = {};
+
+    if(UnlockFileEx(static_cast<HANDLE>(this->_handle), 0, 1, 0, &overlapped) == 0)
+        return false;
+
+    this->_locked = false;
+
+    return true;
+}
+
+#elif defined(STDROMANO_UNIX)
+
+enum class LockOp
+{
+    Shared,
+    Exclusive,
+    Unlock,
+};
+
+enum class LockResult
+{
+    Acquired,
+    Busy,
+    Error,
+};
+
+#if defined(STDROMANO_LINUX)
+static LockResult fslock_set(int fd, LockOp op, bool wait) noexcept
+{
+    struct flock fl = {};
+    fl.l_type = op == LockOp::Shared ? F_RDLCK : op == LockOp::Exclusive ? F_WRLCK : F_UNLCK;
+    fl.l_whence = SEEK_SET;
+    fl.l_start = 0;
+    fl.l_len = 1;
+
+    int res;
+
+    while((res = fcntl(fd, wait ? F_OFD_SETLKW : F_OFD_SETLK, &fl)) == -1 && errno == EINTR) {}
+
+    if(res == 0)
+        return LockResult::Acquired;
+
+    return errno == EAGAIN || errno == EACCES ? LockResult::Busy : LockResult::Error;
+}
+#else
+static LockResult fslock_set(int fd, LockOp op, bool wait) noexcept
+{
+    int flags = op == LockOp::Shared ? LOCK_SH : op == LockOp::Exclusive ? LOCK_EX : LOCK_UN;
+
+    if(!wait)
+        flags |= LOCK_NB;
+
+    int res;
+
+    while((res = flock(fd, flags)) == -1 && errno == EINTR) {}
+
+    if(res == 0)
+        return LockResult::Acquired;
+
+    return errno == EWOULDBLOCK ? LockResult::Busy : LockResult::Error;
+}
+#endif // defined(STDROMANO_LINUX)
+
+Lock::Lock(const stdromano::StringD& path, Type type, DeferLock) : _type(type)
+{
+    stdromano::StringD lock_path(path);
+    lock_path.appendc(".lock");
+
+    this->_fd = open(lock_path.c_str(), O_RDWR | O_CREAT | O_CLOEXEC, 0666);
+}
+
+bool Lock::is_valid() const noexcept
+{
+    return this->_fd >= 0;
+}
+
+bool Lock::try_lock(std::uint32_t timeout) noexcept
+{
+    if(this->_locked)
+        return true;
+
+    if(!this->is_valid())
+        return false;
+
+    const LockOp op = this->_type == Type::Write ? LockOp::Exclusive : LockOp::Shared;
+
+    if(timeout == std::numeric_limits<std::uint32_t>::max())
+    {
+        this->_locked = fslock_set(this->_fd, op, true) == LockResult::Acquired;
+        return this->_locked;
+    }
+
+    const auto deadline = std::chrono::steady_clock::now() + std::chrono::milliseconds(timeout);
+    auto backoff = std::uint32_t(1);
+
+    while(true)
+    {
+        const LockResult res = fslock_set(this->_fd, op, false);
+
+        if(res == LockResult::Acquired)
+        {
+            this->_locked = true;
+            return true;
+        }
+
+        if(res == LockResult::Error)
+            return false;
+
+        const auto now = std::chrono::steady_clock::now();
+
+        if(now >= deadline)
+            return false;
+
+        const auto remaining = std::chrono::duration_cast<std::chrono::milliseconds>(deadline - now);
+        std::this_thread::sleep_for(backoff < remaining ? backoff : remaining);
+
+        if(backoff < std::chrono::milliseconds(50))
+            backoff *= 2;
+    }
+}
+
+bool Lock::unlock() noexcept
+{
+    if(!this->_locked)
+        return true;
+
+    if(fslock_set(this->_fd, LockOp::Unlock, true) != LockResult::Acquired)
+        return false;
+
+    this->_locked = false;
+
+    return true;
+}
+
+#else
+#error Lock is not implemented on this platform
+#endif // defined(STDROMANO_WIN)
 
 FS_NAMESPACE_END
 
