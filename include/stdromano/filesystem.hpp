@@ -85,6 +85,28 @@ STDROMANO_API Expected<void> removefile(const StringD& file_path) noexcept;
 // Copies the file at src to dst. Returns an error if src does not exist or the operation fails
 STDROMANO_API Expected<void> copyfile(const StringD& src, const StringD& dst, bool overwrite = true) noexcept;
 
+enum AttributeFlags : std::uint32_t
+{
+    AttributeFlags_None = 0x0,
+    AttributeFlags_ReadOnly = 0x1,
+    AttributeFlags_Hidden = 0x2,
+    AttributeFlags_System = 0x4,
+    AttributeFlags_Archive = 0x8,
+};
+
+// Platform-independent file/directory attributes.
+// mode holds the unix permission bits (07777), 0 when unknown (e.g. read on Windows), in which case
+// set_attributes leaves the permissions untouched and only derives write access from AttributeFlags_ReadOnly
+struct Attributes
+{
+    std::uint32_t flags = AttributeFlags_None;
+    std::uint32_t mode = 0;
+};
+
+STDROMANO_API Expected<Attributes> get_attributes(const StringD& path) noexcept;
+
+STDROMANO_API Expected<void> set_attributes(const StringD& path, const Attributes& attributes) noexcept;
+
 // Expands a relative path by prepending the directory of the current executable
 // (e.g. "data/file.txt" -> "/path/to/exe_dir/data/file.txt")
 STDROMANO_API Expected<StringD> expand_from_executable_dir(const StringD& path_to_expand) noexcept;

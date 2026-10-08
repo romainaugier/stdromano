@@ -6,6 +6,7 @@
 #include "stdromano/loop_guard.hpp"
 #include "stdromano/mutex.hpp"
 #include "stdromano/threading.hpp"
+#include "stdromano/vector.hpp"
 
 #if defined(STDROMANO_WIN)
 #define STRICT_TYPED_ITEMIDS // Better type safety for IDLists
@@ -354,6 +355,126 @@ Expected<void> removedir(const StringD& dir_path, const bool recursive) noexcept
     return Ok();
 }
 
+// attributes
+
+#if defined(STDROMANO_WIN)
+static constexpr DWORD WIN_MANAGED_ATTRIBUTES = FILE_ATTRIBUTE_READONLY |
+                                                FILE_ATTRIBUTE_HIDDEN |
+                                                FILE_ATTRIBUTE_SYSTEM |
+                                                FILE_ATTRIBUTE_ARCHIVE;
+
+static constexpr DWORD WIN_SETTABLE_ATTRIBUTES = WIN_MANAGED_ATTRIBUTES |
+                                                 FILE_ATTRIBUTE_NOT_CONTENT_INDEXED |
+                                                 FILE_ATTRIBUTE_OFFLINE |
+                                                 FILE_ATTRIBUTE_TEMPORARY;
+#endif // defined(STDROMANO_WIN)
+
+Expected<Attributes> get_attributes(const StringD& path) noexcept
+{
+    Attributes attributes;
+
+#if defined(STDROMANO_WIN)
+    const DWORD win_attributes = GetFileAttributesA(path.is_ref() ? path.copy().c_str() : path.c_str());
+
+    if(win_attributes == INVALID_FILE_ATTRIBUTES)
+        return Error::from_win32_last_error();
+
+    if(win_attributes & FILE_ATTRIBUTE_READONLY)
+        attributes.flags |= AttributeFlags_ReadOnly;
+
+    if(win_attributes & FILE_ATTRIBUTE_HIDDEN)
+        attributes.flags |= AttributeFlags_Hidden;
+
+    if(win_attributes & FILE_ATTRIBUTE_SYSTEM)
+        attributes.flags |= AttributeFlags_System;
+
+    if(win_attributes & FILE_ATTRIBUTE_ARCHIVE)
+        attributes.flags |= AttributeFlags_Archive;
+#elif defined(STDROMANO_UNIX)
+    struct stat file_stat;
+
+    if(stat(path.is_ref() ? path.copy().c_str() : path.c_str(), &file_stat) != 0)
+        return Error::from_unix_errno();
+
+    attributes.mode = static_cast<std::uint32_t>(file_stat.st_mode & 07777);
+
+    if((file_stat.st_mode & 0222) == 0)
+        attributes.flags |= AttributeFlags_ReadOnly;
+
+    const StringD name = filename(path);
+
+    if(name.size() > 0 && name[0] == '.')
+        attributes.flags |= AttributeFlags_Hidden;
+
+#if (defined(STDROMANO_APPLE) || defined(STDROMANO_BSD)) && defined(UF_HIDDEN)
+    if(file_stat.st_flags & UF_HIDDEN)
+        attributes.flags |= AttributeFlags_Hidden;
+#endif // (defined(STDROMANO_APPLE) || defined(STDROMANO_BSD)) && defined(UF_HIDDEN)
+#else
+    STDROMANO_NOT_IMPLEMENTED;
+#endif // defined(STDROMANO_WIN)
+
+    return attributes;
+}
+
+Expected<void> set_attributes(const StringD& path, const Attributes& attributes) noexcept
+{
+#if defined(STDROMANO_WIN)
+    const StringD win_path = path.is_ref() ? path.copy() : StringD::make_fmt("{}", path);
+
+    const DWORD current = GetFileAttributesA(win_path.c_str());
+
+    if(current == INVALID_FILE_ATTRIBUTES)
+        return Error::from_win32_last_error();
+
+    DWORD win_attributes = current & WIN_SETTABLE_ATTRIBUTES & ~WIN_MANAGED_ATTRIBUTES;
+
+    if(attributes.flags & AttributeFlags_ReadOnly)
+        win_attributes |= FILE_ATTRIBUTE_READONLY;
+
+    if(attributes.flags & AttributeFlags_Hidden)
+        win_attributes |= FILE_ATTRIBUTE_HIDDEN;
+
+    if(attributes.flags & AttributeFlags_System)
+        win_attributes |= FILE_ATTRIBUTE_SYSTEM;
+
+    if(attributes.flags & AttributeFlags_Archive)
+        win_attributes |= FILE_ATTRIBUTE_ARCHIVE;
+
+    if(!SetFileAttributesA(win_path.c_str(), win_attributes == 0 ? FILE_ATTRIBUTE_NORMAL : win_attributes))
+        return Error::from_win32_last_error();
+#elif defined(STDROMANO_UNIX)
+    const StringD unix_path = path.is_ref() ? path.copy() : StringD::make_fmt("{}", path);
+
+    struct stat file_stat;
+
+    if(stat(unix_path.c_str(), &file_stat) != 0)
+        return Error::from_unix_errno();
+
+    mode_t mode = file_stat.st_mode & 07777;
+
+    if(attributes.mode != 0)
+        mode = static_cast<mode_t>(attributes.mode & 07777);
+    else if(attributes.flags & AttributeFlags_ReadOnly)
+        mode &= ~static_cast<mode_t>(0222);
+
+    if(mode != (file_stat.st_mode & 07777) && chmod(unix_path.c_str(), mode) != 0)
+        return Error::from_unix_errno();
+
+#if (defined(STDROMANO_APPLE) || defined(STDROMANO_BSD)) && defined(UF_HIDDEN)
+    const unsigned long flags = (attributes.flags & AttributeFlags_Hidden) ? (file_stat.st_flags | UF_HIDDEN) :
+                                                                            (file_stat.st_flags & ~UF_HIDDEN);
+
+    if(flags != file_stat.st_flags && chflags(unix_path.c_str(), flags) != 0)
+        return Error::from_unix_errno();
+#endif // (defined(STDROMANO_APPLE) || defined(STDROMANO_BSD)) && defined(UF_HIDDEN)
+#else
+    STDROMANO_NOT_IMPLEMENTED;
+#endif // defined(STDROMANO_WIN)
+
+    return Ok();
+}
+
 // copydir
 
 Expected<void> copydir(const StringD& src, const StringD& dst, const bool recursive) noexcept
@@ -361,15 +482,35 @@ Expected<void> copydir(const StringD& src, const StringD& dst, const bool recurs
     if(!path_exists(src))
         return Error("Cannot find source directory to copy");
 
+    auto dst_res = makedir(dst);
+
+    if(!dst_res)
+        return Error("Cannot create directory {}: {}", dst, dst_res.error().message);
+
     std::uint32_t flags = WalkFlags_ListAll | WalkFlags_ListHidden;
 
     if(recursive)
         flags |= WalkFlags_Recursive;
 
+    // A read-only directory would reject the files copied into it, so their attributes are applied last
+    Vector<std::pair<StringD, StringD>> directories;
+    directories.emplace_back(src.is_ref() ? src.copy() : StringD::make_fmt("{}", src),
+                             dst.is_ref() ? dst.copy() : StringD::make_fmt("{}", dst));
+
     ThreadPoolWaiter waiter;
 
     Atomic<bool> any_err = false;
+    Mutex err_string_mutex;
     StringD err_string;
+
+    const auto set_error = [&](StringD message) {
+        ScopedLock<Mutex> lock(err_string_mutex);
+
+        if(err_string.empty())
+            err_string = std::move(message);
+
+        any_err.store(true);
+    };
 
     for(WalkIterator it = WalkIterator(src, flags); it != WalkIterator(); ++it)
     {
@@ -381,44 +522,61 @@ Expected<void> copydir(const StringD& src, const StringD& dst, const bool recurs
         auto relative_path = relative_to(current_path, src);
 
         if(!relative_path)
-            return relative_path.error();
+        {
+            set_error(StringD::make_fmt("Cannot get the relative path of {}: {}",
+                                        current_path,
+                                        relative_path.error().message));
+            break;
+        }
 
-        const StringD new_path = StringD::make_fmt("{}{}", dst, relative_path.value());
-
-        Mutex err_string_mutex;
+        StringD new_path = StringD::make_fmt("{}{}", dst, relative_path.value());
 
         if(it->is_file())
         {
-            global_threadpool().add_work([&, current_path, new_path]() {
+            global_threadpool().add_work([&set_error, &any_err, current_path, new_path]() {
                 if(any_err.load())
                     return;
 
                 auto res = copyfile(current_path, new_path);
 
                 if(!res)
-                {
-                    any_err.store(true);
-
-                    err_string_mutex.lock();
-                    err_string = StringD::make_fmt("Error while copying file {}: {}",
-                                                   current_path,
-                                                   res.error().message);
-                    err_string_mutex.unlock();
-                }
-
+                    set_error(StringD::make_fmt("Error while copying file {}: {}",
+                                                current_path,
+                                                res.error().message));
             }, &waiter);
         }
         else
         {
-            if(!makedir(new_path))
-                return Error(StringD::make_fmt("Cannot create directory: {}", new_path));
+            auto res = makedir(new_path);
+
+            if(!res)
+            {
+                set_error(StringD::make_fmt("Cannot create directory {}: {}", new_path, res.error().message));
+                break;
+            }
+
+            directories.emplace_back(current_path.copy(), std::move(new_path));
         }
     }
 
+    // Workers reference locals of this frame, never return before they are done
     waiter.wait();
 
     if(any_err.load())
-        return Error("Error during file copy: {}", err_string);
+        return Error("Error during directory copy: {}", err_string);
+
+    for(const auto& [src_dir, dst_dir] : directories)
+    {
+        auto attributes = get_attributes(src_dir);
+
+        if(!attributes)
+            return Error("Cannot get attributes of {}: {}", src_dir, attributes.error().message);
+
+        auto res = set_attributes(dst_dir, attributes.value());
+
+        if(!res)
+            return Error("Cannot set attributes of {}: {}", dst_dir, res.error().message);
+    }
 
     return Ok();
 }
@@ -471,6 +629,23 @@ Expected<void> copyfile(const StringD& src, const StringD& dst, bool overwrite) 
 {
     if(!path_exists(src))
         return Error("Cannot find src file for copy: {}", src);
+
+    if(overwrite && path_exists(dst))
+    {
+        auto dst_attributes = get_attributes(dst);
+
+        if(dst_attributes && (dst_attributes.value().flags & AttributeFlags_ReadOnly))
+        {
+            Attributes writable = dst_attributes.value();
+            writable.flags &= ~AttributeFlags_ReadOnly;
+            writable.mode |= writable.mode != 0 ? 0200 : 0;
+
+            auto res = set_attributes(dst, writable);
+
+            if(!res)
+                return Error("Cannot make read-only file {} writable for overwrite: {}", dst, res.error().message);
+        }
+    }
 
 #if defined(STDROMANO_WIN)
     if(!CopyFileA(src.is_ref() ? src.copy().c_str() : src.c_str(),
@@ -547,6 +722,9 @@ Expected<void> copyfile(const StringD& src, const StringD& dst, bool overwrite) 
             res = -1;
     }
 #endif /* defined(STDROMANO_UNIX) */
+
+    if(res == 0 && fchmod(output, file_stat.st_mode & 07777) != 0)
+        res = -1;
 
     close(input);
     close(output);
