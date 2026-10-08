@@ -72,6 +72,30 @@ public:
     T load(STDROMANO_MAYBE_UNUSED MemoryOrder order = MemoryOrder::SeqCst) const noexcept
     {
 #if defined(STDROMANO_WIN)
+#if defined(STDROMANO_X86_64)
+        // volatile read is already an acquire load (with /volatile:ms)
+        if constexpr (sizeof(T) == 4)
+        {
+            const T value = static_cast<T>(__iso_volatile_load32(reinterpret_cast<const volatile __int32*>(&this->_value)));
+            _ReadWriteBarrier();
+            return value;
+        }
+        else if constexpr (sizeof(T) == 8)
+        {
+            const T value = static_cast<T>(__iso_volatile_load64(reinterpret_cast<const volatile __int64*>(&this->_value)));
+            _ReadWriteBarrier();
+            return value;
+        }
+#elif defined(STDROMANO_AARCH64)
+        if constexpr (sizeof(T) == 4)
+        {
+            return __ldar32(const_cast<volatile unsigned __int32*>(reinterpret_cast<const volatile unsigned __int32*>(&this->_value)));
+        }
+        else if constexpr (sizeof(T) == 8)
+        {
+            return __ldar64(const_cast<volatile unsigned __int64*>(reinterpret_cast<const volatile unsigned __int64*>(&this->_value)));
+        }
+#else
         if constexpr (sizeof(T) == 4)
         {
             return _InterlockedOr(const_cast<volatile long*>(reinterpret_cast<const volatile long*>(&this->_value)), 0);
@@ -80,6 +104,7 @@ public:
         {
             return _InterlockedOr64(const_cast<volatile __int64*>(reinterpret_cast<const volatile __int64*>(&this->_value)), 0);
         }
+#endif // defined(STDROMANO_X86_64)
 #elif defined(STDROMANO_UNIX)
         return __atomic_load_n(&this->_value, to_gcc_memory_order(order));
 #endif /* defined(STDROMANO_WIN) */

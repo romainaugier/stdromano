@@ -47,7 +47,7 @@ if(UNIX)
         target_link_libraries(${PROJECT_NAME} PUBLIC ${GTK_LIBRARIES})
     endif()
 elseif(WIN32)
-    target_link_libraries(${PROJECT_NAME} PUBLIC wsock32 ws2_32 Shlwapi Pathcch PowrProf bcrypt)
+    target_link_libraries(${PROJECT_NAME} PUBLIC wsock32 ws2_32 Shlwapi Pathcch PowrProf bcrypt Synchronization)
 endif()
 
 if(APPLE)
