@@ -3,12 +3,15 @@
 // All rights reserved.
 
 #include "stdromano/filesystem.hpp"
+#include "stdromano/threading.hpp"
 
 #include "fixtures.hpp"
 
 #include <cstring>
 #include <string>
 #include <vector>
+#include <chrono>
+#include <cstdlib>
 
 STDROMANO_TEST_CASE(path_exists_file)
 {
@@ -619,15 +622,15 @@ STDROMANO_TEST_CASE(lock)
     const stdromano::StringD file = stdromano::StringD::make_fmt("{}/my_file.txt",
                                                                  stdromano::fs::tmp_dir().unwrap());
 
-    stdromano::fs::Lock read_lock(file, stdromano::fs::Lock::Type::Read, stdromano::fs::Lock::DeferLock{});
+    stdromano::fs::FileLock read_lock(file, stdromano::fs::FileLock::Type::Read, stdromano::fs::FileLock::DeferLock{});
 
-    STDROMANO_CHECK(read_lock.type() == stdromano::fs::Lock::Type::Read);
+    STDROMANO_CHECK(read_lock.type() == stdromano::fs::FileLock::Type::Read);
     STDROMANO_CHECK(read_lock.lock());
     STDROMANO_CHECK(read_lock.is_locked());
 
-    stdromano::fs::Lock write_lock(file, stdromano::fs::Lock::Type::Write, stdromano::fs::Lock::DeferLock{});
+    stdromano::fs::FileLock write_lock(file, stdromano::fs::FileLock::Type::Write, stdromano::fs::FileLock::DeferLock{});
 
-    STDROMANO_CHECK(write_lock.type() == stdromano::fs::Lock::Type::Write);
+    STDROMANO_CHECK(write_lock.type() == stdromano::fs::FileLock::Type::Write);
     STDROMANO_CHECK(!write_lock.try_lock(1000));
 
     STDROMANO_CHECK(read_lock.unlock());    
@@ -700,6 +703,165 @@ STDROMANO_TEST_CASE(fuzz_filename_and_parent_dir_split_a_path)
     });
 
     TESTS_REQUIRE_PROPERTY(report);
+}
+
+template <typename F>
+static void run_on_threadpool(const std::size_t num_tasks, F&& func)
+{
+    stdromano::ThreadPoolWaiter waiter;
+
+    for(std::size_t i = 0; i < num_tasks; ++i)
+        stdromano::ThreadPool::get_global_threadpool().add_work([&func, i]() { func(i); }, &waiter);
+
+    waiter.wait();
+}
+
+static double elapsed_ms(const std::chrono::steady_clock::time_point start) noexcept
+{
+    return std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - start).count();
+}
+
+STDROMANO_TEST_CASE(ops_lock_blocks_other_threads)
+{
+    stdromano::fs::lock_ops();
+
+    stdromano::Atomic<bool> try_now{true};
+    stdromano::Atomic<bool> try_timeout{true};
+    stdromano::Atomic<bool> try_after_unlock{false};
+    double waited = 0.0;
+
+    run_on_threadpool(1, [&](std::size_t) {
+        try_now.store(stdromano::fs::try_lock_ops(0));
+
+        const auto start = std::chrono::steady_clock::now();
+        try_timeout.store(stdromano::fs::try_lock_ops(30));
+        waited = elapsed_ms(start);
+    });
+
+    STDROMANO_CHECK(!try_now.load());
+    STDROMANO_CHECK(!try_timeout.load());
+    STDROMANO_CHECK_GE(waited, 27.0);
+
+    stdromano::fs::unlock_ops();
+
+    run_on_threadpool(1, [&](std::size_t) {
+        try_after_unlock.store(stdromano::fs::try_lock_ops(1000));
+
+        if(try_after_unlock.load())
+            stdromano::fs::unlock_ops();
+    });
+
+    STDROMANO_CHECK(try_after_unlock.load());
+}
+
+STDROMANO_TEST_CASE(ops_lock_is_recursive)
+{
+    {
+        stdromano::fs::OpsLock outer;
+        stdromano::fs::OpsLock inner;
+
+        STDROMANO_REQUIRE(stdromano::fs::try_lock_ops(0));
+        stdromano::fs::unlock_ops();
+    }
+
+    stdromano::fs::lock_ops();
+    stdromano::fs::lock_ops();
+    stdromano::fs::unlock_ops();
+
+    stdromano::Atomic<bool> other_locked{true};
+
+    run_on_threadpool(1, [&](std::size_t) { other_locked.store(stdromano::fs::try_lock_ops(0)); });
+
+    STDROMANO_CHECK(!other_locked.load());
+
+    stdromano::fs::unlock_ops();
+
+    run_on_threadpool(1, [&](std::size_t) {
+        other_locked.store(stdromano::fs::try_lock_ops(0));
+
+        if(other_locked.load())
+            stdromano::fs::unlock_ops();
+    });
+
+    STDROMANO_CHECK(other_locked.load());
+}
+
+STDROMANO_TEST_CASE(ops_lock_serializes_check_then_create)
+{
+    constexpr std::size_t NUM_ROUNDS = 20;
+
+    const std::size_t num_tasks = stdromano::get_num_procs() * 2;
+    const stdromano::StringD root = stdromano::test::temp_path("stdromano_test_ops_lock_mkdir");
+
+    stdromano::fs::removedir(root, true);
+    STDROMANO_REQUIRE(!stdromano::fs::makedir(root).has_error());
+
+    for(std::size_t round = 0; round < NUM_ROUNDS; ++round)
+    {
+        const stdromano::StringD dir("{}/round_{}", root, round);
+
+        stdromano::Atomic<std::size_t> created{0};
+        stdromano::Atomic<std::size_t> errors{0};
+
+        run_on_threadpool(num_tasks, [&](std::size_t) {
+            stdromano::fs::OpsLock lock;
+
+            if(!stdromano::fs::path_exists(dir))
+            {
+                if(stdromano::fs::makedir(dir).has_error())
+                    ++errors;
+                else
+                    ++created;
+            }
+        });
+
+        STDROMANO_CHECK_EQ(created.load(), 1u);
+        STDROMANO_CHECK_EQ(errors.load(), 0u);
+        STDROMANO_CHECK(stdromano::fs::path_exists(dir));
+    }
+
+    STDROMANO_CHECK(!stdromano::fs::removedir(root, true).has_error());
+}
+
+STDROMANO_TEST_CASE(ops_lock_serializes_read_modify_write)
+{
+    constexpr std::size_t INCREMENTS_PER_TASK = 25;
+
+    const std::size_t num_tasks = stdromano::get_num_procs() * 2;
+    const stdromano::StringD path = stdromano::test::temp_path("stdromano_test_ops_lock_counter.txt");
+
+    STDROMANO_REQUIRE(!stdromano::fs::write_file_content("0", 1, path).has_error());
+
+    stdromano::Atomic<std::size_t> errors{0};
+
+    run_on_threadpool(num_tasks, [&](std::size_t) {
+        for(std::size_t i = 0; i < INCREMENTS_PER_TASK; ++i)
+        {
+            stdromano::fs::OpsLock lock;
+
+            auto content = stdromano::fs::load_file_content(path);
+
+            if(content.has_error())
+            {
+                ++errors;
+                continue;
+            }
+
+            const std::uint64_t value = std::strtoull(content.value().c_str(), nullptr, 10);
+            const stdromano::StringD next = stdromano::StringD::make_fmt("{}", value + 1);
+
+            if(stdromano::fs::write_file_content(next.c_str(), next.size(), path).has_error())
+                ++errors;
+        }
+    });
+
+    STDROMANO_CHECK_EQ(errors.load(), 0u);
+
+    const stdromano::StringD final_content = stdromano::fs::load_file_content(path).unwrap();
+    STDROMANO_CHECK_EQ(std::strtoull(final_content.c_str(), nullptr, 10),
+                       static_cast<unsigned long long>(num_tasks * INCREMENTS_PER_TASK));
+
+    STDROMANO_CHECK(!stdromano::fs::removefile(path).has_error());
 }
 
 STDROMANO_TEST_MAIN()

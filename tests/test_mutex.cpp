@@ -8,6 +8,7 @@
 #include "fixtures.hpp"
 
 #include <atomic>
+#include <chrono>
 #include <cstdint>
 #include <thread>
 #include <vector>
@@ -249,6 +250,134 @@ STDROMANO_TEST_CASE(futex_wake_all_wakes_every_waiter)
         thread.join();
 
     STDROMANO_CHECK_EQ(woken.load(), NUM_THREADS);
+}
+
+static double elapsed_ms(const std::chrono::steady_clock::time_point start) noexcept
+{
+    return std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - start).count();
+}
+
+STDROMANO_TEST_CASE(mutex_try_lock_for_zero_tries_once)
+{
+    Mutex mutex;
+
+    STDROMANO_REQUIRE(mutex.try_lock_for(0));
+    STDROMANO_CHECK(!mutex.try_lock_for(0));
+    mutex.unlock();
+}
+
+STDROMANO_TEST_CASE(mutex_try_lock_for_times_out)
+{
+    Mutex mutex;
+    std::atomic<bool> held{false};
+    std::atomic<bool> release{false};
+
+    std::thread holder([&]() {
+        mutex.lock();
+        held.store(true);
+
+        while(!release.load())
+            thread_yield();
+
+        mutex.unlock();
+    });
+
+    while(!held.load())
+        thread_yield();
+
+    for(const std::uint32_t timeout : {1u, 20u, 100u})
+    {
+        const auto start = std::chrono::steady_clock::now();
+        STDROMANO_CHECK(!mutex.try_lock_for(timeout));
+
+        const double elapsed = elapsed_ms(start);
+        STDROMANO_CHECK_GE(elapsed, static_cast<double>(timeout) * 0.9);
+        STDROMANO_CHECK_LT(elapsed, static_cast<double>(timeout) + 500.0);
+    }
+
+    release.store(true);
+    holder.join();
+
+    STDROMANO_CHECK(mutex.try_lock());
+    mutex.unlock();
+}
+
+STDROMANO_TEST_CASE(mutex_try_lock_for_acquires_when_released_in_time)
+{
+    Mutex mutex;
+    mutex.lock();
+
+    std::thread releaser([&]() {
+        thread_sleep(30);
+        mutex.unlock();
+    });
+
+    const auto start = std::chrono::steady_clock::now();
+    const bool acquired = mutex.try_lock_for(5000);
+    const double elapsed = elapsed_ms(start);
+
+    releaser.join();
+
+    STDROMANO_REQUIRE(acquired);
+    STDROMANO_CHECK_LT(elapsed, 2000.0);
+    STDROMANO_CHECK(!mutex.try_lock());
+    mutex.unlock();
+}
+
+STDROMANO_TEST_CASE(mutex_try_lock_for_infinite)
+{
+    Mutex mutex;
+    mutex.lock();
+
+    std::thread releaser([&]() {
+        thread_sleep(20);
+        mutex.unlock();
+    });
+
+    STDROMANO_CHECK(mutex.try_lock_for(Mutex::INFINITE_TIMEOUT));
+    releaser.join();
+    mutex.unlock();
+}
+
+STDROMANO_TEST_CASE(mutex_try_lock_for_mixed_with_lock_under_contention)
+{
+    constexpr std::size_t NUM_THREADS = 8;
+    constexpr std::size_t NUM_ITERATIONS = 20000;
+
+    Mutex mutex;
+    std::uint64_t counter = 0;
+    std::atomic<std::uint64_t> successes{0};
+
+    std::vector<std::thread> threads;
+
+    for(std::size_t i = 0; i < NUM_THREADS; ++i)
+    {
+        threads.emplace_back([&, i]() {
+            for(std::size_t j = 0; j < NUM_ITERATIONS; ++j)
+            {
+                if(i % 2 == 0)
+                {
+                    ScopedLock lock(mutex);
+                    ++counter;
+                    successes.fetch_add(1);
+                }
+                else if(mutex.try_lock_for(static_cast<std::uint32_t>(j % 3)))
+                {
+                    ScopedLock lock(mutex, adopt_lock);
+                    ++counter;
+                    successes.fetch_add(1);
+                }
+            }
+        });
+    }
+
+    for(std::thread& thread : threads)
+        thread.join();
+
+    STDROMANO_CHECK_EQ(counter, successes.load());
+    STDROMANO_CHECK_GE(counter, (NUM_THREADS / 2) * NUM_ITERATIONS);
+    STDROMANO_CHECK(mutex.try_lock());
+    mutex.unlock();
 }
 
 STDROMANO_TEST_MAIN()

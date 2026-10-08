@@ -22,6 +22,11 @@ DETAIL_NAMESPACE_BEGIN
 // Blocks while *address == expected, can return spuriously
 STDROMANO_API void futex_wait(volatile std::uint32_t* address, std::uint32_t expected) noexcept;
 
+// Blocks while *address == expected for at most timeout_ns, can return spuriously or early
+STDROMANO_API void futex_wait_for(volatile std::uint32_t* address,
+                                  std::uint32_t expected,
+                                  std::uint64_t timeout_ns) noexcept;
+
 STDROMANO_API void futex_wake_one(volatile std::uint32_t* address) noexcept;
 
 STDROMANO_API void futex_wake_all(volatile std::uint32_t* address) noexcept;
@@ -38,6 +43,8 @@ class STDROMANO_API Mutex
 
     void lock_contended() noexcept;
 
+    bool lock_contended_for(const std::uint32_t timeout_ms) noexcept;
+
     std::uint32_t spin() noexcept;
 
     STDROMANO_FORCE_INLINE volatile std::uint32_t* state_address() noexcept
@@ -46,6 +53,8 @@ class STDROMANO_API Mutex
     }
 
 public:
+    static constexpr std::uint32_t INFINITE_TIMEOUT = 0xFFFFFFFFul;
+
     constexpr Mutex() noexcept = default;
 
     Mutex(const Mutex&) = delete;
@@ -74,6 +83,15 @@ public:
                                              LOCKED,
                                              MemoryOrder::Acquire,
                                              MemoryOrder::Relaxed);
+    }
+
+    // timeout_ms == 0 only tries once, INFINITE_TIMEOUT behaves like lock()
+    STDROMANO_NO_DISCARD STDROMANO_FORCE_INLINE bool try_lock_for(const std::uint32_t timeout_ms) noexcept
+    {
+        if(this->try_lock())
+            return true;
+
+        return timeout_ms != 0 && this->lock_contended_for(timeout_ms);
     }
 
     STDROMANO_FORCE_INLINE void unlock() noexcept

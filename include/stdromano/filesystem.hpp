@@ -25,6 +25,24 @@ STDROMANO_NAMESPACE_BEGIN
 
 FS_NAMESPACE_BEGIN
 
+// Lock shared by all operations so you can serialize ops in multithreaded code without worrying about
+// thread-safety. All operations are not thread-safe by default.
+STDROMANO_API void lock_ops() noexcept;
+
+STDROMANO_API bool try_lock_ops(const std::uint32_t timeout = 0) noexcept;
+
+STDROMANO_API void unlock_ops() noexcept;
+
+class OpsLock
+{
+public:
+    OpsLock() noexcept { lock_ops(); }
+    ~OpsLock() { unlock_ops(); }
+
+    OpsLock(const OpsLock&) = delete;
+    OpsLock& operator=(const OpsLock&) = delete;
+};
+
 // Returns true if the given path exists on the filesystem (file or directory), false otherwise
 STDROMANO_API bool path_exists(const StringD& path) noexcept;
 
@@ -320,7 +338,7 @@ private:
 #endif /* defined(STDROMANO_WIN) */
 };
 
-class STDROMANO_API Lock
+class STDROMANO_API FileLock
 {
 public:
     enum class Type : std::uint8_t
@@ -331,13 +349,13 @@ public:
 
     struct DeferLock {};
     
-    Lock(const StringD& path, Type type);
-    Lock(const StringD& path, Type type, DeferLock);
+    FileLock(const StringD& path, Type type);
+    FileLock(const StringD& path, Type type, DeferLock);
 
-    ~Lock();
+    ~FileLock();
 
-    STDROMANO_NON_COPYABLE(Lock);
-    STDROMANO_NON_MOVABLE(Lock);
+    STDROMANO_NON_COPYABLE(FileLock);
+    STDROMANO_NON_MOVABLE(FileLock);
 
     bool lock() noexcept;
     // timeout is in milliseconds

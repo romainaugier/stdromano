@@ -4,6 +4,7 @@
 
 #include "stdromano/filesystem.hpp"
 #include "stdromano/loop_guard.hpp"
+#include "stdromano/mutex.hpp"
 #include "stdromano/threading.hpp"
 
 #if defined(STDROMANO_WIN)
@@ -50,6 +51,63 @@ STDROMANO_NAMESPACE_BEGIN
 
 FS_NAMESPACE_BEGIN
 
+// Lock
+
+static Mutex g_ops_mutex;
+static Atomic<std::uintptr_t> g_ops_owner{0};
+static std::uint32_t g_ops_depth = 0;
+
+static std::uintptr_t ops_thread_tag() noexcept
+{
+    static thread_local char tag;
+    return reinterpret_cast<std::uintptr_t>(std::addressof(tag));
+}
+
+void lock_ops() noexcept
+{
+    const std::uintptr_t self = ops_thread_tag();
+
+    if(g_ops_owner.load(MemoryOrder::Relaxed) == self)
+    {
+        ++g_ops_depth;
+        return;
+    }
+
+    g_ops_mutex.lock();
+    g_ops_owner.store(self, MemoryOrder::Relaxed);
+    g_ops_depth = 1;
+}
+
+bool try_lock_ops(const std::uint32_t timeout) noexcept
+{
+    const std::uintptr_t self = ops_thread_tag();
+
+    if(g_ops_owner.load(MemoryOrder::Relaxed) == self)
+    {
+        ++g_ops_depth;
+        return true;
+    }
+
+    if(!g_ops_mutex.try_lock_for(timeout))
+        return false;
+
+    g_ops_owner.store(self, MemoryOrder::Relaxed);
+    g_ops_depth = 1;
+
+    return true;
+}
+
+void unlock_ops() noexcept
+{
+    if(--g_ops_depth == 0)
+    {
+        g_ops_owner.store(0, MemoryOrder::Relaxed);
+        g_ops_mutex.unlock();
+    }
+}
+
+// path_exist
+
 bool path_exists(const StringD& path) noexcept
 {
     const StringD p = path.is_ref() ? path.copy() : path;
@@ -63,6 +121,8 @@ bool path_exists(const StringD& path) noexcept
 #endif /* defined(STDROMANO_WIN) */
 }
 
+// parent_dir
+
 StringD parent_dir(const StringD& path) noexcept
 {
     std::size_t path_len = path.size() - 1;
@@ -73,6 +133,8 @@ StringD parent_dir(const StringD& path) noexcept
     return StringD::make_from_c_str(path.c_str(), path_len);
 }
 
+// filename
+
 StringD filename(const StringD& path) noexcept
 {
     std::size_t path_len = path.size() - 1;
@@ -82,6 +144,8 @@ StringD filename(const StringD& path) noexcept
 
     return StringD::make_from_c_str(path.c_str() + path_len + 1, path.size() - path_len - 1);
 }
+
+// filesize
 
 Expected<std::size_t> filesize(const StringD& path) noexcept
 {
@@ -148,6 +212,8 @@ Expected<std::size_t> filesize(const StringD& path) noexcept
 #endif // defined(STDROMANO_WIN)
 }
 
+// relative_to
+
 Expected<StringD> relative_to(const StringD& path, const StringD& other) noexcept
 {
     if(path.size() <= other.size())
@@ -160,6 +226,8 @@ Expected<StringD> relative_to(const StringD& path, const StringD& other) noexcep
 
     return StringD::make_from_c_str(path.c_str() + i, path.size() - i);
 }
+
+// current_dir
 
 StringD current_dir() noexcept
 {
@@ -189,6 +257,8 @@ StringD current_dir() noexcept
     STDROMANO_NOT_IMPLEMENTED;
 #endif /* defined(STDROMANO_WIN) */
 }
+
+// makedir
 
 Expected<void> makedir(const StringD& dir_path) noexcept
 {
@@ -237,6 +307,8 @@ Expected<void> makedir(const StringD& dir_path) noexcept
     return Ok();
 }
 
+// removedir
+
 Expected<void> removedir(const StringD& dir_path, const bool recursive) noexcept
 {
     if(!path_exists(dir_path))
@@ -281,6 +353,8 @@ Expected<void> removedir(const StringD& dir_path, const bool recursive) noexcept
 
     return Ok();
 }
+
+// copydir
 
 Expected<void> copydir(const StringD& src, const StringD& dst, const bool recursive) noexcept
 {
@@ -348,6 +422,8 @@ Expected<void> copydir(const StringD& src, const StringD& dst, const bool recurs
     return Ok();
 }
 
+// removefile
+
 Expected<void> removefile(const StringD& file_path) noexcept
 {
     if(!path_exists(file_path))
@@ -387,6 +463,8 @@ Expected<void> removefile(const StringD& file_path) noexcept
 
     return Ok();
 }
+
+// copyfile
 
 Expected<void> copyfile(const StringD& src, const StringD& dst, bool overwrite) noexcept
 {
@@ -479,6 +557,8 @@ Expected<void> copyfile(const StringD& src, const StringD& dst, bool overwrite) 
     return Ok();
 }
 
+// expand_from_executable_dir
+
 Expected<StringD> expand_from_executable_dir(const StringD& path_to_expand) noexcept
 {
     std::size_t size;
@@ -535,6 +615,8 @@ Expected<StringD> expand_from_executable_dir(const StringD& path_to_expand) noex
 
     return StringD("{}/{}", fmt::string_view(sz_path, size), path_to_expand);
 }
+
+// expand_from_lib_dir
 
 Expected<StringD> expand_from_lib_dir(const StringD& path_to_expand) noexcept
 {
@@ -601,6 +683,8 @@ Expected<StringD> expand_from_lib_dir(const StringD& path_to_expand) noexcept
     return StringD::make_fmt("{}/{}", fmt::string_view(sz_path, size), path_to_expand);
 }
 
+// tmp_dir
+
 Expected<StringD> tmp_dir() noexcept
 {
 #if defined(STDROMANO_WIN)
@@ -619,6 +703,8 @@ Expected<StringD> tmp_dir() noexcept
     return StringD::make_ref("/tmp");
 #endif // defined(STDROMANO_WIN)
 }
+
+// home_dir
 
 Expected<StringD> home_dir(bool use_env) noexcept
 {
@@ -679,6 +765,8 @@ Expected<StringD> home_dir(bool use_env) noexcept
 #endif // defined(STDROMANO_WIN)
 }
 
+// load_file_content
+
 Expected<StringD> load_file_content(const StringD& file_path,
                                     const char* mode) noexcept
 {
@@ -698,6 +786,8 @@ Expected<StringD> load_file_content(const StringD& file_path,
 
     return file_content;
 }
+
+// write_file_content
 
 static constexpr std::size_t WRITE_BUFFER_SZ = 16384;
 
@@ -742,6 +832,8 @@ Expected<void> write_file_content(const char* data,
 
     return Ok();
 }
+
+// ListDirIterator
 
 ListDirIterator::~ListDirIterator()
 {
@@ -908,6 +1000,8 @@ bool list_dir(ListDirIterator& it, const StringD& directory_path, const std::uin
 
 #endif /* defined(STDROMANO_WIN) */
 }
+
+// open_file_dialog
 
 StringD open_file_dialog(FileDialogMode_ mode,
                          const StringD& title,
@@ -1082,6 +1176,8 @@ StringD open_file_dialog(FileDialogMode_ mode,
 #endif // defined(STDROMANO_WIN)
 }
 
+// WalkIterator
+
 bool WalkIterator::process_current_directory() noexcept
 {
 #if defined(STDROMANO_WIN)
@@ -1242,12 +1338,12 @@ bool WalkIterator::should_skip_entry(const char* name
 
 // Lock
 
-Lock::Lock(const stdromano::StringD& path, Type type) : Lock(path, type, DeferLock{})
+FileLock::FileLock(const stdromano::StringD& path, Type type) : FileLock(path, type, DeferLock{})
 {
     this->lock();
 }
 
-Lock::~Lock()
+FileLock::~FileLock()
 {
     if(this->_locked)
         this->unlock();
@@ -1261,14 +1357,14 @@ Lock::~Lock()
 #endif // defined(STDROMANO_WIN)
 }
 
-bool Lock::lock() noexcept
+bool FileLock::lock() noexcept
 {
     return this->try_lock(std::numeric_limits<std::uint32_t>::max());
 }
 
 #if defined(STDROMANO_WIN)
 
-Lock::Lock(const stdromano::StringD& path, Type type, DeferLock) : _type(type)
+FileLock::FileLock(const stdromano::StringD& path, Type type, DeferLock) : _type(type)
 {
     stdromano::StringD lock_path(path);
     lock_path.appendc(".lock");
@@ -1285,12 +1381,12 @@ Lock::Lock(const stdromano::StringD& path, Type type, DeferLock) : _type(type)
         this->_handle = handle;
 }
 
-bool Lock::is_valid() const noexcept
+bool FileLock::is_valid() const noexcept
 {
     return this->_handle != nullptr;
 }
 
-bool Lock::try_lock(std::uint32_t timeout) noexcept
+bool FileLock::try_lock(std::uint32_t timeout) noexcept
 {
     if(this->_locked)
         return true;
@@ -1338,7 +1434,7 @@ bool Lock::try_lock(std::uint32_t timeout) noexcept
     return locked;
 }
 
-bool Lock::unlock() noexcept
+bool FileLock::unlock() noexcept
 {
     if(!this->_locked)
         return true;
@@ -1355,14 +1451,14 @@ bool Lock::unlock() noexcept
 
 #elif defined(STDROMANO_UNIX)
 
-enum class LockOp
+enum class FileLockOp
 {
     Shared,
     Exclusive,
     Unlock,
 };
 
-enum class LockResult
+enum class FileLockResult
 {
     Acquired,
     Busy,
@@ -1370,10 +1466,10 @@ enum class LockResult
 };
 
 #if defined(STDROMANO_LINUX)
-static LockResult fslock_set(int fd, LockOp op, bool wait) noexcept
+static FileLockResult fslock_set(int fd, FileLockOp op, bool wait) noexcept
 {
     struct flock fl = {};
-    fl.l_type = op == LockOp::Shared ? F_RDLCK : op == LockOp::Exclusive ? F_WRLCK : F_UNLCK;
+    fl.l_type = op == FileLockOp::Shared ? F_RDLCK : op == FileLockOp::Exclusive ? F_WRLCK : F_UNLCK;
     fl.l_whence = SEEK_SET;
     fl.l_start = 0;
     fl.l_len = 1;
@@ -1383,14 +1479,14 @@ static LockResult fslock_set(int fd, LockOp op, bool wait) noexcept
     while((res = fcntl(fd, wait ? F_OFD_SETLKW : F_OFD_SETLK, &fl)) == -1 && errno == EINTR) {}
 
     if(res == 0)
-        return LockResult::Acquired;
+        return FileLockResult::Acquired;
 
-    return errno == EAGAIN || errno == EACCES ? LockResult::Busy : LockResult::Error;
+    return errno == EAGAIN || errno == EACCES ? FileLockResult::Busy : FileLockResult::Error;
 }
 #else
-static LockResult fslock_set(int fd, LockOp op, bool wait) noexcept
+static FileLockResult fslock_set(int fd, FileLockOp op, bool wait) noexcept
 {
-    int flags = op == LockOp::Shared ? LOCK_SH : op == LockOp::Exclusive ? LOCK_EX : LOCK_UN;
+    int flags = op == FileLockOp::Shared ? LOCK_SH : op == FileLockOp::Exclusive ? LOCK_EX : LOCK_UN;
 
     if(!wait)
         flags |= LOCK_NB;
@@ -1400,13 +1496,13 @@ static LockResult fslock_set(int fd, LockOp op, bool wait) noexcept
     while((res = flock(fd, flags)) == -1 && errno == EINTR) {}
 
     if(res == 0)
-        return LockResult::Acquired;
+        return FileLockResult::Acquired;
 
-    return errno == EWOULDBLOCK ? LockResult::Busy : LockResult::Error;
+    return errno == EWOULDBLOCK ? FileLockResult::Busy : FileLockResult::Error;
 }
 #endif // defined(STDROMANO_LINUX)
 
-Lock::Lock(const stdromano::StringD& path, Type type, DeferLock) : _type(type)
+FileLock::FileLock(const stdromano::StringD& path, Type type, DeferLock) : _type(type)
 {
     stdromano::StringD lock_path(path);
     lock_path.appendc(".lock");
@@ -1414,12 +1510,12 @@ Lock::Lock(const stdromano::StringD& path, Type type, DeferLock) : _type(type)
     this->_fd = open(lock_path.c_str(), O_RDWR | O_CREAT | O_CLOEXEC, 0666);
 }
 
-bool Lock::is_valid() const noexcept
+bool FileLock::is_valid() const noexcept
 {
     return this->_fd >= 0;
 }
 
-bool Lock::try_lock(std::uint32_t timeout) noexcept
+bool FileLock::try_lock(std::uint32_t timeout) noexcept
 {
     if(this->_locked)
         return true;
@@ -1427,11 +1523,11 @@ bool Lock::try_lock(std::uint32_t timeout) noexcept
     if(!this->is_valid())
         return false;
 
-    const LockOp op = this->_type == Type::Write ? LockOp::Exclusive : LockOp::Shared;
+    const FileLockOp op = this->_type == Type::Write ? FileLockOp::Exclusive : FileLockOp::Shared;
 
     if(timeout == std::numeric_limits<std::uint32_t>::max())
     {
-        this->_locked = fslock_set(this->_fd, op, true) == LockResult::Acquired;
+        this->_locked = fslock_set(this->_fd, op, true) == FileLockResult::Acquired;
         return this->_locked;
     }
 
@@ -1440,15 +1536,15 @@ bool Lock::try_lock(std::uint32_t timeout) noexcept
 
     while(true)
     {
-        const LockResult res = fslock_set(this->_fd, op, false);
+        const FileLockResult res = fslock_set(this->_fd, op, false);
 
-        if(res == LockResult::Acquired)
+        if(res == FileLockResult::Acquired)
         {
             this->_locked = true;
             return true;
         }
 
-        if(res == LockResult::Error)
+        if(res == FileLockResult::Error)
             return false;
 
         const auto now = std::chrono::steady_clock::now();
@@ -1464,12 +1560,12 @@ bool Lock::try_lock(std::uint32_t timeout) noexcept
     }
 }
 
-bool Lock::unlock() noexcept
+bool FileLock::unlock() noexcept
 {
     if(!this->_locked)
         return true;
 
-    if(fslock_set(this->_fd, LockOp::Unlock, true) != LockResult::Acquired)
+    if(fslock_set(this->_fd, FileLockOp::Unlock, true) != FileLockResult::Acquired)
         return false;
 
     this->_locked = false;

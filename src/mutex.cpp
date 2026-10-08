@@ -5,6 +5,7 @@
 #include "stdromano/mutex.hpp"
 
 #include <climits>
+#include <ctime>
 
 #if defined(STDROMANO_WIN)
 #include <Windows.h>
@@ -102,6 +103,84 @@ void futex_wait(volatile std::uint32_t* address, std::uint32_t expected) noexcep
 #endif /* defined(STDROMANO_WIN) */
 }
 
+static std::uint64_t monotonic_ns() noexcept
+{
+#if defined(STDROMANO_WIN)
+    static const std::uint64_t frequency = []() {
+        LARGE_INTEGER value;
+        QueryPerformanceFrequency(&value);
+        return static_cast<std::uint64_t>(value.QuadPart);
+    }();
+
+    LARGE_INTEGER counter;
+    QueryPerformanceCounter(&counter);
+
+    const std::uint64_t ticks = static_cast<std::uint64_t>(counter.QuadPart);
+
+    return (ticks / frequency) * 1000000000ull + ((ticks % frequency) * 1000000000ull) / frequency;
+#else
+    struct timespec now;
+    clock_gettime(CLOCK_MONOTONIC, &now);
+
+    return static_cast<std::uint64_t>(now.tv_sec) * 1000000000ull +
+           static_cast<std::uint64_t>(now.tv_nsec);
+#endif /* defined(STDROMANO_WIN) */
+}
+
+#if !defined(STDROMANO_WIN)
+static struct timespec to_timespec(const std::uint64_t ns) noexcept
+{
+    struct timespec ts;
+    ts.tv_sec = static_cast<time_t>(ns / 1000000000ull);
+    ts.tv_nsec = static_cast<long>(ns % 1000000000ull);
+    return ts;
+}
+#endif /* !defined(STDROMANO_WIN) */
+
+void futex_wait_for(volatile std::uint32_t* address,
+                    std::uint32_t expected,
+                    std::uint64_t timeout_ns) noexcept
+{
+#if defined(STDROMANO_WIN)
+    const std::uint64_t timeout_ms = (timeout_ns + 999999ull) / 1000000ull;
+    const DWORD wait_ms = timeout_ms >= INFINITE ? INFINITE - 1 : static_cast<DWORD>(timeout_ms);
+    WaitOnAddress(address, &expected, sizeof(std::uint32_t), wait_ms);
+#elif defined(STDROMANO_LINUX)
+    const struct timespec ts = to_timespec(timeout_ns);
+    syscall(SYS_futex, as_word(address), FUTEX_WAIT_PRIVATE, expected, &ts, nullptr, 0);
+#elif defined(STDROMANO_APPLE)
+    const std::uint64_t timeout_us = (timeout_ns + 999ull) / 1000ull;
+    const std::uint32_t wait_us = timeout_us >= 0xFFFFFFFFull ? 0xFFFFFFFEu
+                                                               : static_cast<std::uint32_t>(timeout_us);
+    __ulock_wait(UL_COMPARE_AND_WAIT | ULF_NO_ERRNO, as_word(address), expected, wait_us);
+#elif defined(STDROMANO_FREEBSD)
+    struct timespec ts = to_timespec(timeout_ns);
+    _umtx_op(as_word(address),
+             UMTX_OP_WAIT_UINT_PRIVATE,
+             static_cast<u_long>(expected),
+             nullptr,
+             &ts);
+#elif defined(STDROMANO_OPENBSD)
+    const struct timespec ts = to_timespec(timeout_ns);
+    futex(address, FUTEX_WAIT | FUTEX_PRIVATE_FLAG, static_cast<int>(expected), &ts, nullptr);
+#elif defined(STDROMANO_NETBSD)
+    const struct timespec ts = to_timespec(timeout_ns);
+    syscall(SYS___futex,
+            as_word(address),
+            FUTEX_WAIT | FUTEX_PRIVATE_FLAG,
+            static_cast<int>(expected),
+            &ts,
+            nullptr,
+            0,
+            0);
+#elif defined(STDROMANO_DRAGONFLY)
+    const std::uint64_t timeout_us = (timeout_ns + 999ull) / 1000ull;
+    const int wait_us = timeout_us >= static_cast<std::uint64_t>(INT_MAX) ? INT_MAX
+                                                                          : static_cast<int>(timeout_us);
+    umtx_sleep(reinterpret_cast<volatile const int*>(address), static_cast<int>(expected), wait_us);
+#endif /* defined(STDROMANO_WIN) */
+}
+
 void futex_wake_one(volatile std::uint32_t* address) noexcept
 {
 #if defined(STDROMANO_WIN)
@@ -184,6 +263,49 @@ void Mutex::lock_contended() noexcept
             return;
 
         detail::futex_wait(this->state_address(), CONTENDED);
+
+        state = this->spin();
+    }
+}
+
+bool Mutex::lock_contended_for(const std::uint32_t timeout_ms) noexcept
+{
+    if(timeout_ms == INFINITE_TIMEOUT)
+    {
+        this->lock_contended();
+        return true;
+    }
+
+    const std::uint64_t deadline = detail::monotonic_ns() +
+                                   static_cast<std::uint64_t>(timeout_ms) * 1000000ull;
+
+    std::uint32_t state = this->spin();
+
+    if(state == UNLOCKED)
+    {
+        if(this->_state.compare_exchange(state, LOCKED, MemoryOrder::Acquire, MemoryOrder::Relaxed))
+        {
+            return true;
+        }
+    }
+
+    // Leaving CONTENDED behind on timeout only costs the next unlock() a useless wake
+    for(;;)
+    {
+        if(state != CONTENDED &&
+           this->_state.exchange(CONTENDED, MemoryOrder::Acquire) == UNLOCKED)
+        {
+            return true;
+        }
+
+        const std::uint64_t now = detail::monotonic_ns();
+
+        if(now >= deadline)
+        {
+            return false;
+        }
+
+        detail::futex_wait_for(this->state_address(), CONTENDED, deadline - now);
 
         state = this->spin();
     }
