@@ -35,12 +35,20 @@ STDROMANO_API void unlock_ops() noexcept;
 
 class OpsLock
 {
-public:
-    OpsLock() noexcept { lock_ops(); }
-    ~OpsLock() { unlock_ops(); }
+    bool _locked;
 
-    OpsLock(const OpsLock&) = delete;
-    OpsLock& operator=(const OpsLock&) = delete;
+public:
+    OpsLock() noexcept : _locked(true) { lock_ops(); }
+    ~OpsLock() { if(this->_locked) unlock_ops(); }
+
+    STDROMANO_NON_COPYABLE(OpsLock);
+    STDROMANO_NON_MOVABLE(OpsLock);
+
+    void unlock() noexcept 
+    {
+        unlock_ops();
+        this->_locked = false;
+    }
 };
 
 // Returns true if the given path exists on the filesystem (file or directory), false otherwise
