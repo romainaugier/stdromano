@@ -361,7 +361,7 @@ Expected<void> copydir(const StringD& src, const StringD& dst, const bool recurs
     if(!path_exists(src))
         return Error("Cannot find source directory to copy");
 
-    std::uint32_t flags = WalkFlags_ListAll;
+    std::uint32_t flags = WalkFlags_ListAll | WalkFlags_ListHidden;
 
     if(recursive)
         flags |= WalkFlags_Recursive;
@@ -385,6 +385,8 @@ Expected<void> copydir(const StringD& src, const StringD& dst, const bool recurs
 
         const StringD new_path = StringD::make_fmt("{}{}", dst, relative_path.value());
 
+        Mutex err_string_mutex;
+
         if(it->is_file())
         {
             global_threadpool().add_work([&, current_path, new_path]() {
@@ -397,12 +399,11 @@ Expected<void> copydir(const StringD& src, const StringD& dst, const bool recurs
                 {
                     any_err.store(true);
 
-                    while(global_threadpool().num_working() > 1)
-                        thread_yield();
-
+                    err_string_mutex.lock();
                     err_string = StringD::make_fmt("Error while copying file {}: {}",
                                                    current_path,
                                                    res.error().message);
+                    err_string_mutex.unlock();
                 }
 
             }, &waiter);
@@ -417,7 +418,7 @@ Expected<void> copydir(const StringD& src, const StringD& dst, const bool recurs
     waiter.wait();
 
     if(any_err.load())
-        return Error("Error during file copy, check the log for more information");
+        return Error("Error during file copy: {}", err_string);
 
     return Ok();
 }
