@@ -1016,14 +1016,22 @@ Expected<void> write_file_content(const char* data,
 
 ListDirIterator::~ListDirIterator()
 {
+    this->close();
+}
+
+void ListDirIterator::close() noexcept
+{
 #if defined(STDROMANO_WIN)
     if(this->_h_find != INVALID_HANDLE_VALUE)
         FindClose(this->_h_find);
 
+    this->_h_find = INVALID_HANDLE_VALUE;
 #elif defined(STDROMANO_UNIX)
     if(this->_dir != nullptr)
         closedir(this->_dir);
 
+    this->_dir = nullptr;
+    this->_entry = nullptr;
 #endif /* defined(STDROMANO_WIN) */
 }
 
@@ -1044,94 +1052,73 @@ StringD ListDirIterator::get_current_path() const noexcept
 
 bool ListDirIterator::is_file() const noexcept
 {
-#if defined(STDROMANO_WIN)
-    return this->_find_data.dwFileAttributes & ~FILE_ATTRIBUTE_DIRECTORY;
-#elif defined(STDROMANO_UNIX)
-    return this->_entry->d_type == DT_REG;
-#else
-    return false;
-#endif /* defined(STDROMANO_WIN) */
+    return this->_is_file;
 }
 
 bool ListDirIterator::is_directory() const noexcept
 {
-#if defined(STDROMANO_WIN)
-    return this->_find_data.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY;
-#elif defined(STDROMANO_UNIX)
-    return this->_entry->d_type == DT_DIR;
-#else
-    return false;
-#endif /* defined(STDROMANO_WIN) */
+    return this->_is_directory;
+}
+
+static bool is_dot_or_dotdot(const char* name) noexcept
+{
+    return name[0] == '.' && (name[1] == '\0' || (name[1] == '.' && name[2] == '\0'));
 }
 
 bool list_dir(ListDirIterator& it, const StringD& directory_path, const std::uint32_t flags) noexcept
 {
-    if(!path_exists(directory_path))
-        return false;
-
 #if defined(STDROMANO_WIN)
+    bool has_entry;
+
     if(it._h_find == INVALID_HANDLE_VALUE)
     {
+        if(!path_exists(directory_path))
+            return false;
+
         it._directory_path = directory_path.copy();
         it._directory_path.appendc("\\*");
         it._h_find = FindFirstFileA(it._directory_path.c_str(), &it._find_data);
 
         if(it._h_find == INVALID_HANDLE_VALUE)
         {
-            DWORD err = GetLastError();
-
-            std::fprintf(stderr, "Error during fs_list_dir. Error code: %lu\n", err);
-
+            std::fprintf(stderr, "Error during fs_list_dir. Error code: %lu\n", GetLastError());
             return false;
         }
 
-        if((it._find_data.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY))
-        {
-            const std::size_t c_file_name_size = std::strlen(it._find_data.cFileName);
-
-            if((it._find_data.cFileName[0] != '.' || c_file_name_size > 2) &&
-               (flags & ListDirFlags_ListDirs))
-            {
-                return true;
-            }
-        }
-        else if(flags & ListDirFlags_ListFiles)
-        {
-            return true;
-        }
+        has_entry = true;
     }
-
-    LoopGuard guard("Cannot find next file", 100000000);
-
-    while(guard--)
+    else
     {
-        if(FindNextFileA(it._h_find, &it._find_data))
-        {
-            if((it._find_data.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY))
-            {
-                const std::size_t c_file_name_size = std::strlen(it._find_data.cFileName);
-
-                if((it._find_data.cFileName[0] != '.' || c_file_name_size > 2) &&
-                   (flags & ListDirFlags_ListDirs))
-                {
-                    return true;
-                }
-            }
-            else if(flags & ListDirFlags_ListFiles)
-            {
-                return true;
-            }
-        }
-        else
-        {
-            DWORD err = GetLastError();
-
-            if(err != ERROR_NO_MORE_FILES)
-                std::fprintf(stderr, "Error during fs_list_dir. Error code: %lu", err);
-
-            return false;
-        }
+        has_entry = FindNextFileA(it._h_find, &it._find_data);
     }
+
+    while(has_entry)
+    {
+        const DWORD attributes = it._find_data.dwFileAttributes;
+
+        const bool skip = is_dot_or_dotdot(it._find_data.cFileName) ||
+                          ((attributes & FILE_ATTRIBUTE_HIDDEN) && !(flags & ListDirFlags_ListHidden));
+
+        if(!skip)
+        {
+            it._is_directory = attributes & FILE_ATTRIBUTE_DIRECTORY;
+            it._is_file = !it._is_directory && !(attributes & FILE_ATTRIBUTE_DEVICE);
+
+            if((it._is_directory && (flags & ListDirFlags_ListDirs)) ||
+               (it._is_file && (flags & ListDirFlags_ListFiles)))
+                return true;
+        }
+
+        has_entry = FindNextFileA(it._h_find, &it._find_data);
+    }
+
+    const DWORD err = GetLastError();
+
+    if(err != ERROR_NO_MORE_FILES)
+        std::fprintf(stderr, "Error during fs_list_dir. Error code: %lu\n", err);
+
+    it._is_file = false;
+    it._is_directory = false;
 
     return false;
 #elif defined(STDROMANO_UNIX)
@@ -1139,44 +1126,49 @@ bool list_dir(ListDirIterator& it, const StringD& directory_path, const std::uin
     {
         it._directory_path = directory_path.copy();
         it._dir = opendir(it._directory_path.c_str());
+
+        if(it._dir == nullptr)
+            return false;
     }
 
     while((it._entry = readdir(it._dir)))
     {
-        bool should_skip = (it._entry->d_name[0] == '.') && (it._entry->d_name[1] == '\0' ||
-                           (it._entry->d_name[1] == '.' && it._entry->d_name[2] == '\0'));
+        const char* name = it._entry->d_name;
 
-        if(should_skip)
-        {
+        if(is_dot_or_dotdot(name) || (name[0] == '.' && !(flags & ListDirFlags_ListHidden)))
             continue;
-        }
-
-        bool is_file = false;
-        bool is_dir = false;
 
         if(it._entry->d_type == DT_UNKNOWN)
         {
             struct stat st;
-            const StringD full_path = it.get_current_path();
 
-            if(stat(full_path.c_str(), &st) == 0)
+            it._is_file = false;
+            it._is_directory = false;
+
+            if(stat(it.get_current_path().c_str(), &st) == 0)
             {
-                is_file = S_ISREG(st.st_mode);
-                is_dir = S_ISDIR(st.st_mode);
+                it._is_file = S_ISREG(st.st_mode);
+                it._is_directory = S_ISDIR(st.st_mode);
             }
         }
         else
         {
-            is_file = (it._entry->d_type == DT_REG);
-            is_dir = (it._entry->d_type == DT_DIR);
+            it._is_file = it._entry->d_type == DT_REG;
+            it._is_directory = it._entry->d_type == DT_DIR;
         }
 
-        return (is_file && (flags & ListDirFlags_ListFiles)) ||
-               (is_dir && (flags & ListDirFlags_ListDirs));
+        if((it._is_directory && (flags & ListDirFlags_ListDirs)) ||
+           (it._is_file && (flags & ListDirFlags_ListFiles)))
+            return true;
     }
 
-    return false;
+    it._is_file = false;
+    it._is_directory = false;
 
+    return false;
+#else
+    STDROMANO_NOT_IMPLEMENTED;
+    return false;
 #endif /* defined(STDROMANO_WIN) */
 }
 
@@ -1449,15 +1441,14 @@ bool WalkIterator::process_current_directory() noexcept
 
     while((entry = readdir(this->_dir)))
     {
-        bool is_hidden = entry->d_name[0] == '.';
-
-        if(is_hidden && !(this->_flags & WalkFlags_ListHidden))
+        if(this->should_skip_entry(entry->d_name))
             continue;
 
         bool is_dir = false;
 
         StringD full_path("{}/{}", this->_current_dir, entry->d_name);
 
+        // Some filesystems (NFS, XFS, ...) don't fill d_type
         if(entry->d_type == DT_UNKNOWN)
         {
             struct stat st;
@@ -1465,13 +1456,13 @@ bool WalkIterator::process_current_directory() noexcept
             if(stat(full_path.c_str(), &st) == 0)
                 is_dir = S_ISDIR(st.st_mode);
         }
-        else if(entry->d_type == DT_DIR)
+        else
         {
-            is_dir = true;
-
-            if(this->_flags & WalkFlags_Recursive)
-                this->_pending_dirs.push(std::move(full_path.copy()));
+            is_dir = entry->d_type == DT_DIR;
         }
+
+        if(is_dir && (this->_flags & WalkFlags_Recursive))
+            this->_pending_dirs.push(std::move(full_path.copy()));
 
         if((is_dir && (this->_flags & WalkFlags_ListDirs)) ||
            (!is_dir && (this->_flags & WalkFlags_ListFiles)))
@@ -1508,7 +1499,10 @@ bool WalkIterator::should_skip_entry(const char* name
         return true;
 
 #if defined(STDROMANO_WIN)
-    if((attrs & FILE_ATTRIBUTE_HIDDEN) && !(this->_flags & ListDirFlags_ListHidden))
+    if((attrs & FILE_ATTRIBUTE_HIDDEN) && !(this->_flags & WalkFlags_ListHidden))
+        return true;
+#else
+    if(name[0] == '.' && !(this->_flags & WalkFlags_ListHidden))
         return true;
 #endif // defined(STDROMANO_WIN)
 

@@ -169,12 +169,20 @@ private:
     struct dirent* _entry = nullptr;
 #endif /* defined(STDROMANO_WIN) */
 
+    // Resolved by list_dir, d_type can be DT_UNKNOWN on some filesystems
+    bool _is_file = false;
+    bool _is_directory = false;
+
+    void close() noexcept;
+
 public:
     ListDirIterator() = default;
 
     STDROMANO_NON_COPYABLE(ListDirIterator);
 
-    ListDirIterator(ListDirIterator&& other) noexcept : _directory_path(std::move(other._directory_path))
+    ListDirIterator(ListDirIterator&& other) noexcept : _directory_path(std::move(other._directory_path)),
+                                                        _is_file(other._is_file),
+                                                        _is_directory(other._is_directory)
     {
 #if defined(STDROMANO_WIN)
         this->_h_find = other._h_find;
@@ -195,7 +203,11 @@ public:
     {
         if(this != &other)
         {
+            this->close();
+
             this->_directory_path = std::move(other._directory_path);
+            this->_is_file = other._is_file;
+            this->_is_directory = other._is_directory;
 
 #if defined(STDROMANO_WIN)
             this->_h_find = other._h_find;
