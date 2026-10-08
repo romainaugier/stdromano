@@ -165,34 +165,30 @@ public:
 #if defined(STDROMANO_WIN)
         if constexpr (sizeof(T) == 4)
         {
-            T orig = static_cast<T>(_InterlockedCompareExchange(reinterpret_cast<volatile long*>(&_value),
+            T orig = static_cast<T>(_InterlockedCompareExchange(reinterpret_cast<volatile long*>(&this->_value),
                                                                 value,
                                                                 expected));
             bool ok = (orig == expected);
 
             if(!ok)
-            {
                 expected = orig;
-            }
 
             return ok;
         }
         else if constexpr (sizeof(T) == 8)
         {
-            T orig = static_cast<T>(_InterlockedCompareExchange64(reinterpret_cast<volatile __int64*>(&_value),
+            T orig = static_cast<T>(_InterlockedCompareExchange64(reinterpret_cast<volatile __int64*>(&this->_value),
                                                                   value,
                                                                   expected));
             bool ok = (orig == expected);
 
             if(!ok)
-            {
                 expected = orig;
-            }
 
             return ok;
         }
 #elif defined(STDROMANO_UNIX)
-        return __atomic_compare_exchange_n(&value,
+        return __atomic_compare_exchange_n(&this->_value,
                                            &expected,
                                            value,
                                            false,
@@ -293,9 +289,7 @@ public:
         bool success_flag = (old == expected_val);
 
         if(!success_flag)
-        {
             expected = (old != 0);
-        }
 
         return success_flag;
 #elif defined(STDROMANO_UNIX)
