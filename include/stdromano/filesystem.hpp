@@ -77,7 +77,8 @@ STDROMANO_API Expected<void> makedir(const StringD& dir_path) noexcept;
 // On unix, read-only directories inside it are made writable to remove their content
 STDROMANO_API Expected<void> removedir(const StringD& dir_path, const bool recursive = true) noexcept;
 
-// Copies the directory from src to dst, recursively when recursive=true
+// Copies the directory from src to dst, recursively when recursive=true.
+// On unix, the symlinks inside src are copied as symlinks (like cp -R), not followed
 STDROMANO_API Expected<void> copydir(const StringD& src, const StringD& dst, const bool recursive = true) noexcept;
 
 // Removes the file at the given path. If the file does not exist, return Ok (no-op)

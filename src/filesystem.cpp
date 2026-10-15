@@ -488,6 +488,39 @@ Expected<void> set_attributes(const StringD& path, const Attributes& attributes)
 
 // copydir
 
+#if defined(STDROMANO_UNIX)
+// Like cp -R, the symlinks found inside a copied tree are copied as symlinks, not followed
+static Expected<void> copy_symlink(const StringD& src, const StringD& dst) noexcept
+{
+    struct stat link_stat;
+
+    if(lstat(src.c_str(), &link_stat) != 0)
+        return Error::from_unix_errno();
+
+    StringD target = StringD::make_zeroed(static_cast<std::size_t>(link_stat.st_size) + 1);
+
+    const ssize_t target_size = readlink(src.c_str(), target.c_str(), static_cast<std::size_t>(link_stat.st_size) + 1);
+
+    if(target_size < 0)
+        return Error::from_unix_errno();
+
+    if(static_cast<std::size_t>(target_size) > static_cast<std::size_t>(link_stat.st_size))
+        return Error("Symlink {} changed while being copied", src);
+
+    target.shrink_to_fit(static_cast<std::size_t>(target_size));
+
+    struct stat dst_stat;
+
+    if(lstat(dst.c_str(), &dst_stat) == 0 && unlink(dst.c_str()) != 0)
+        return Error::from_unix_errno();
+
+    if(symlink(target.c_str(), dst.c_str()) != 0)
+        return Error::from_unix_errno();
+
+    return Ok();
+}
+#endif // defined(STDROMANO_UNIX)
+
 Expected<void> copydir(const StringD& src, const StringD& dst, const bool recursive) noexcept
 {
     if(!path_exists(src))
@@ -548,7 +581,15 @@ Expected<void> copydir(const StringD& src, const StringD& dst, const bool recurs
                 if(any_err.load())
                     return;
 
+#if defined(STDROMANO_UNIX)
+                struct stat entry_stat;
+
+                auto res = lstat(current_path.c_str(), &entry_stat) == 0 && S_ISLNK(entry_stat.st_mode) ?
+                               copy_symlink(current_path, new_path) :
+                               copyfile(current_path, new_path);
+#else
                 auto res = copyfile(current_path, new_path);
+#endif // defined(STDROMANO_UNIX)
 
                 if(!res)
                     set_error(StringD::make_fmt("Error while copying file {}: {}",
