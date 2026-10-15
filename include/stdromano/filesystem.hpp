@@ -73,7 +73,8 @@ STDROMANO_API StringD current_dir() noexcept;
 STDROMANO_API Expected<void> makedir(const StringD& dir_path) noexcept;
 
 // Removes the directory at the given path. If recursive=true, removes its content.
-// If the directory does not exist, return Ok (no-op)
+// If the directory does not exist, return Ok (no-op).
+// On unix, read-only directories inside it are made writable to remove their content
 STDROMANO_API Expected<void> removedir(const StringD& dir_path, const bool recursive = true) noexcept;
 
 // Copies the directory from src to dst, recursively when recursive=true

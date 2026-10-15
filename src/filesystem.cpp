@@ -340,6 +340,17 @@ Expected<void> removedir(const StringD& dir_path, const bool recursive) noexcept
     auto callback = [](const char* fpath, const struct stat* sb, int typeflag, struct FTW* ftw) -> int {
         int rv = remove(fpath);
 
+        // The entries of a read-only directory can only be removed once it is writable again
+        if(rv != 0 && errno == EACCES && ftw->level > 0)
+        {
+            const StringD parent = StringD::make_fmt("{}", std::string_view(fpath, static_cast<std::size_t>(ftw->base - 1)));
+
+            struct stat parent_stat;
+
+            if(stat(parent.c_str(), &parent_stat) == 0 && chmod(parent.c_str(), (parent_stat.st_mode & 07777) | S_IRWXU) == 0)
+                rv = remove(fpath);
+        }
+
         if(rv != 0)
             last_error = StringD::make_fmt("Cannot delete file: {} ({})", fpath, errno);
 
