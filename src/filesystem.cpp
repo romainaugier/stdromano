@@ -1401,6 +1401,35 @@ StringD open_file_dialog(FileDialogMode_ mode,
 
 // WalkIterator
 
+#if defined(STDROMANO_WIN)
+static std::uint64_t filetime_ticks(const FILETIME& time) noexcept
+{
+    return (static_cast<std::uint64_t>(time.dwHighDateTime) << 32) | time.dwLowDateTime;
+}
+#elif defined(STDROMANO_UNIX)
+static std::uint64_t filetime_ticks(const struct timespec& time) noexcept
+{
+    return (static_cast<std::uint64_t>(time.tv_sec) + 11644473600ull) * 10'000'000ull +
+           static_cast<std::uint64_t>(time.tv_nsec) / 100;
+}
+
+static void fill_item_stat(WalkIterator::Item& item, const struct stat& st) noexcept
+{
+    item._size = static_cast<std::uint64_t>(st.st_size);
+    item._native_attributes = static_cast<std::uint32_t>(st.st_mode);
+
+#if defined(STDROMANO_APPLE)
+    item._creation_time = filetime_ticks(st.st_ctimespec);
+    item._write_time = filetime_ticks(st.st_mtimespec);
+    item._access_time = filetime_ticks(st.st_atimespec);
+#else
+    item._creation_time = filetime_ticks(st.st_ctim);
+    item._write_time = filetime_ticks(st.st_mtim);
+    item._access_time = filetime_ticks(st.st_atim);
+#endif // defined(STDROMANO_APPLE)
+}
+#endif // defined(STDROMANO_WIN)
+
 bool WalkIterator::process_current_directory() noexcept
 {
 #if defined(STDROMANO_WIN)
@@ -1420,7 +1449,13 @@ bool WalkIterator::process_current_directory() noexcept
         this->_pending_dirs.pop();
         StringD search_path("{}\\*", this->_current_dir);
 
-        this->_h_find = FindFirstFileA(search_path.c_str(), &find_data);
+        // No 8.3 names and larger directory queries, fewer round trips on network shares
+        this->_h_find = FindFirstFileExA(search_path.c_str(),
+                                         FindExInfoBasic,
+                                         &find_data,
+                                         FindExSearchNameMatch,
+                                         nullptr,
+                                         FIND_FIRST_EX_LARGE_FETCH);
 
         if(this->_h_find == INVALID_HANDLE_VALUE)
             return false;
@@ -1464,6 +1499,11 @@ bool WalkIterator::process_current_directory() noexcept
            (!is_dir && (this->_flags & WalkFlags_ListFiles)))
         {
             this->_current_item = { std::move(full_path), is_dir };
+            this->_current_item._size = (static_cast<std::uint64_t>(find_data.nFileSizeHigh) << 32) | find_data.nFileSizeLow;
+            this->_current_item._creation_time = filetime_ticks(find_data.ftCreationTime);
+            this->_current_item._write_time = filetime_ticks(find_data.ftLastWriteTime);
+            this->_current_item._access_time = filetime_ticks(find_data.ftLastAccessTime);
+            this->_current_item._native_attributes = static_cast<std::uint32_t>(find_data.dwFileAttributes);
             return true;
         }
 
@@ -1500,13 +1540,15 @@ bool WalkIterator::process_current_directory() noexcept
 
         StringD full_path("{}/{}", this->_current_dir, entry->d_name);
 
-        // Some filesystems (NFS, XFS, ...) don't fill d_type
-        if(entry->d_type == DT_UNKNOWN)
-        {
-            struct stat st;
+        struct stat st;
+        bool has_stat = false;
 
-            if(stat(full_path.c_str(), &st) == 0)
-                is_dir = S_ISDIR(st.st_mode);
+        // Some filesystems (NFS, XFS, ...) don't fill d_type. Relative to the directory, and symlinks
+        // are not followed, like DT_LNK entries which are never walked into
+        if(entry->d_type == DT_UNKNOWN || (this->_flags & WalkFlags_Stat))
+        {
+            has_stat = fstatat(dirfd(this->_dir), entry->d_name, &st, AT_SYMLINK_NOFOLLOW) == 0;
+            is_dir = has_stat && S_ISDIR(st.st_mode);
         }
         else
         {
@@ -1520,6 +1562,10 @@ bool WalkIterator::process_current_directory() noexcept
            (!is_dir && (this->_flags & WalkFlags_ListFiles)))
         {
             this->_current_item = { std::move(full_path), is_dir };
+
+            if(has_stat)
+                fill_item_stat(this->_current_item, st);
+
             return true;
         }
     }

@@ -271,6 +271,9 @@ enum WalkFlags : std::uint32_t
     WalkFlags_ListHidden = 0x4, // Include hidden directories
     WalkFlags_ListAll = WalkFlags_ListFiles | WalkFlags_ListDirs,
     WalkFlags_Recursive = 0x8, // Recurse into subdirectories (breadth-first)
+    // Fill the size, times and native attributes of the items. Free on Windows, where the directory
+    // listing returns them, one fstatat per entry elsewhere
+    WalkFlags_Stat = 0x10,
 };
 
 // Breadth-first directory walker. Supports optional recursion via WalkFlags_Recursive.
@@ -288,6 +291,16 @@ public:
         StringD _path;
         bool _is_directory;
 
+        // Filled on Windows, and elsewhere with WalkFlags_Stat. Times are in 100ns ticks since
+        // 1601-01-01 (FILETIME) on every platform, the creation time is the status change time on unix
+        std::uint64_t _size = 0;
+        std::uint64_t _creation_time = 0;
+        std::uint64_t _write_time = 0;
+        std::uint64_t _access_time = 0;
+
+        // dwFileAttributes on Windows, st_mode (of the entry itself, symlinks are not followed) elsewhere
+        std::uint32_t _native_attributes = 0;
+
         // Returns true if the entry is a directory
         bool is_directory() const noexcept { return this->_is_directory; }
 
@@ -296,6 +309,16 @@ public:
 
         // Returns the full path of the entry
         const StringD& get_current_path() const noexcept { return this->_path; }
+
+        std::uint64_t size() const noexcept { return this->_size; }
+
+        std::uint64_t creation_time() const noexcept { return this->_creation_time; }
+
+        std::uint64_t write_time() const noexcept { return this->_write_time; }
+
+        std::uint64_t access_time() const noexcept { return this->_access_time; }
+
+        std::uint32_t native_attributes() const noexcept { return this->_native_attributes; }
     };
 
 private:
