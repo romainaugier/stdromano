@@ -150,62 +150,35 @@ StringD filename(const StringD& path) noexcept
 
 Expected<std::size_t> filesize(const StringD& path) noexcept
 {
-    if(!path_exists(path))
-        return Error(StringD::make_fmt("File \"{}\" does not exist", path));
-
+    // A single metadata request, the file is not opened: no read access needed, and nothing for an
+    // antivirus to scan or for a network share to transfer
 #if defined(STDROMANO_WIN)
-    HANDLE file = CreateFileA(path.c_str(),
-                              GENERIC_READ,
-                              FILE_SHARE_READ,
-                              0,
-                              OPEN_EXISTING,
-                              FILE_ATTRIBUTE_NORMAL,
-                              nullptr);
+    WIN32_FILE_ATTRIBUTE_DATA data;
 
-    if(file == INVALID_HANDLE_VALUE)
+    if(!GetFileAttributesExA(path.is_ref() ? path.copy().c_str() : path.c_str(), GetFileExInfoStandard, &data))
     {
-        DWORD last_err = GetLastError();
+        const DWORD last_err = GetLastError();
 
-        char buffer[1024];
-        std::memset(buffer, 0, 1024 * sizeof(char));
-        DWORD res = FormatMessageA(FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS,
-                                   nullptr,
-                                   last_err,
-                                   MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT),
-                                   buffer,
-                                   1024,
-                                   nullptr);
+        if(last_err == ERROR_FILE_NOT_FOUND || last_err == ERROR_PATH_NOT_FOUND)
+            return Error("File \"{}\" does not exist", path);
 
-        if(res == 0)
-        {
-            DWORD fmt_error = GetLastError();
-
-            return Error(StringD::make_fmt("Cannot get file size ({})", last_err));
-        }
-
-        return Error(StringD::make_fmt("Cannot get file size: {} ({})", fmt::string_view(buffer, res), last_err));
+        return Error("Cannot get the size of \"{}\" ({})", path, last_err);
     }
 
-    LARGE_INTEGER file_size;
-    std::memset(&file_size, 0, sizeof(LARGE_INTEGER));
+    if(data.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY)
+        return Error("Cannot get the size of \"{}\", it is a directory", path);
 
-    if(!GetFileSizeEx(file, &file_size))
-    {
-        DWORD last_err = GetLastError();
-
-        CloseHandle(file);
-
-        return Error();
-    }
-
-    CloseHandle(file);
-
-    return static_cast<std::size_t>(file_size.QuadPart);
+    return (static_cast<std::size_t>(data.nFileSizeHigh) << 32) | data.nFileSizeLow;
 #elif defined(STDROMANO_UNIX)
     struct stat file_stat;
 
-    if(stat(path.c_str(), &file_stat) != 0)
-        return Error(StringD::make_fmt("Cannot get file size ({})", errno));
+    if(stat(path.is_ref() ? path.copy().c_str() : path.c_str(), &file_stat) != 0)
+    {
+        if(errno == ENOENT || errno == ENOTDIR)
+            return Error("File \"{}\" does not exist", path);
+
+        return Error("Cannot get the size of \"{}\" ({})", path, errno);
+    }
 
     return static_cast<std::size_t>(file_stat.st_size);
 #else
