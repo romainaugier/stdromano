@@ -75,6 +75,20 @@ option(ENABLE_OPENCL
 
 option(BUILD_BENCHMARKS "Builds the benchmarks in benchmarks/" OFF)
 
+# The CUDA support is header only, this builds the host/device parity test (needs the CUDA toolkit)
+option(ENABLE_CUDA "Builds the CUDA tests (host/device parity of the maths)" OFF)
+
+if(ENABLE_CUDA AND RUN_TESTS EQUAL 1)
+    if(NOT DEFINED CMAKE_CUDA_ARCHITECTURES)
+        set(CMAKE_CUDA_ARCHITECTURES 75)
+    endif()
+
+    enable_language(CUDA)
+    find_package(CUDAToolkit REQUIRED)
+
+    message(STATUS "ENABLE_CUDA enabled, building the CUDA tests for sm_${CMAKE_CUDA_ARCHITECTURES}")
+endif()
+
 option(COVERAGE "Enable code coverage instrumentation (GCC/Clang)" OFF)
 
 # Enable testing

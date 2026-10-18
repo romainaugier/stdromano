@@ -22,6 +22,7 @@ set ADDRSAN=0
 set VCPKG_PATH=%CD%\vcpkg
 set VCPKG_USER_DEFINED=0
 set ENABLE_OPENCL=0
+set ENABLE_CUDA=0
 set BUILD_BENCHMARKS=0
 
 for %%x in (%*) do (
@@ -88,7 +89,7 @@ call :LogInfo "Build type: %BUILDTYPE%"
 call :LogInfo "Build version: %VERSION%"
 call :LogInfo "Build architecture: %ARCH% (vcpkg triplet: %VCPKG_TRIPLET%)"
 
-cmake -S . -B build -A %ARCH% -DVCPKG_TARGET_TRIPLET=%VCPKG_TRIPLET% -DRUN_TESTS=%RUNTESTS% -DVERSION=%VERSION% -DADDRSAN=%ADDRSAN% -DENABLE_OPENCL=%ENABLE_OPENCL% -DBUILD_BENCHMARKS=%BUILD_BENCHMARKS%
+cmake -S . -B build -A %ARCH% -DVCPKG_TARGET_TRIPLET=%VCPKG_TRIPLET% -DRUN_TESTS=%RUNTESTS% -DVERSION=%VERSION% -DADDRSAN=%ADDRSAN% -DENABLE_OPENCL=%ENABLE_OPENCL% -DENABLE_CUDA=%ENABLE_CUDA% -DBUILD_BENCHMARKS=%BUILD_BENCHMARKS%
 
 if %errorlevel% neq 0 (
     call :LogError "Error caught during CMake configuration"
@@ -159,6 +160,11 @@ if "%~1" equ "--export-compile-commands" (
 if "%~1" equ "--opencl" (
     set ENABLE_OPENCL=1
     call :LogInfo "Building stdromano with OpenCL support"
+)
+
+if "%~1" equ "--cuda" (
+    set ENABLE_CUDA=1
+    call :LogInfo "Building the stdromano CUDA tests"
 )
 
 echo "%~1" | find /I "--arch:">nul && (

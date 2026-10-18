@@ -18,6 +18,7 @@ LEAKSAN=0
 VCPKG_PATH="$PWD/vcpkg"
 VCPKG_USER_DEFINED=0
 ENABLE_OPENCL=0
+ENABLE_CUDA=0
 BUILD_BENCHMARKS=0
 COVERAGE=0
 
@@ -43,6 +44,8 @@ parse_args()
     [[ "$1" == "--leaksan" ]] && LEAKSAN=1
 
     [[ "$1" == "--opencl" ]] && ENABLE_OPENCL=1
+
+    [[ "$1" == "--cuda" ]] && ENABLE_CUDA=1
 
     [[ "$1" == "--benchmarks" ]] && BUILD_BENCHMARKS=1
 
@@ -174,6 +177,7 @@ cmake -S . -B build -DRUN_TESTS=$RUNTESTS \
                     -DADDRSAN=$ADDRSAN \
                     -DLEAKSAN=$LEAKSAN \
                     -DENABLE_OPENCL=$ENABLE_OPENCL \
+                    -DENABLE_CUDA=$ENABLE_CUDA \
                     -DBUILD_BENCHMARKS=$BUILD_BENCHMARKS \
                     -DCOVERAGE=$COVERAGE
 

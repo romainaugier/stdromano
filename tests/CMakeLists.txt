@@ -10,6 +10,16 @@ if(NOT ENABLE_OPENCL)
     list(FILTER TEST_FILES EXCLUDE REGEX "test_opencl\\.cpp$")
 endif()
 
+if(NOT ENABLE_CUDA)
+    list(FILTER TEST_FILES EXCLUDE REGEX "test_cuda_.*\\.cpp$")
+else()
+    # Kept apart from the test targets, the host compiler options of set_target_options are not nvcc ones
+    add_library(stdromano_cuda_test_kernels STATIC ${CMAKE_CURRENT_SOURCE_DIR}/cuda/parity_kernels.cu)
+    target_include_directories(stdromano_cuda_test_kernels PRIVATE ${CMAKE_CURRENT_SOURCE_DIR} ${PROJECT_SOURCE_DIR}/include)
+    set_target_properties(stdromano_cuda_test_kernels PROPERTIES CUDA_STANDARD 17 CUDA_STANDARD_REQUIRED ON)
+    target_link_libraries(stdromano_cuda_test_kernels PUBLIC CUDA::cudart)
+endif()
+
 set(STDROMANO_TESTS_TIMEOUT 300 CACHE STRING "Timeout of a single stdromano test, in seconds")
 
 if(CMAKE_CXX_COMPILER_ID STREQUAL "MSVC")
@@ -34,6 +44,10 @@ foreach(test_file ${TEST_FILES})
     set_target_options(${TESTNAME})
     set_target_properties(${TESTNAME} PROPERTIES CXX_STANDARD 17)
     target_link_libraries(${TESTNAME} ${PROJECT_NAME})
+
+    if(TESTNAME MATCHES "^test_cuda_")
+        target_link_libraries(${TESTNAME} stdromano_cuda_test_kernels)
+    endif()
 
     add_test(NAME ${TESTNAME}
              COMMAND ${TESTNAME}
