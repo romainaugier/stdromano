@@ -42,3 +42,4 @@ This document tracks the feature set, progress, and future plans for the `stdrom
 - :clock9: Dense Matrix solvers
 - :white_check_mark: 2D/3D transforms
 - :white_check_mark: 2D/3D/4D vectors
+- :white_check_mark: CUDA host/device support (maths, vectors, transforms, hashes)

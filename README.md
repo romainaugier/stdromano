@@ -30,6 +30,7 @@ The following arguments are used:
  - `--vcpkgpath:<path>`: specifies an existing vcpkg repository
  - `--benchmarks`: build the benchmarks in the /benchmarks directory
  - `--opencl`: builds opencl support
+ - `--cuda`: builds the CUDA tests (host/device parity of the maths, needs the CUDA toolkit)
  - `--coverage`: builds the coverage using gcov (only available on Linux)
 
 Using the buildscript on Windows:
@@ -45,6 +46,71 @@ Using the buildscript on Linux:
 nasm is required on Linux to assemble the code written in assembly (on Windows, it is automatically detected). Assembly code can be found in src/asm.
 
 Sanitizers are mutually exclusive because they cannot all be used at the same time as they require different instrumentation of the code. --ubsan and --threadsan are only available with Clang and GCC.
+
+## CUDA
+
+The maths, linear algebra and hashing headers can be used from CUDA code, in host, device and
+host/device functions, with nvcc or clang. Nothing needs to be built for that, the headers detect
+CUDA by themselves:
+
+- `STDROMANO_CUDA` is defined when compiling a `.cu` file (nvcc's `__CUDACC__` or clang's `__CUDA__`)
+- `STDROMANO_CUDA_DEVICE` is defined in the device compilation pass only (`__CUDA_ARCH__`)
+- `STDROMANO_HOST`, `STDROMANO_DEVICE` and `STDROMANO_HOST_DEVICE` expand to the CUDA execution space
+  qualifiers, and to nothing outside of CUDA, so they can be used in shared code
+
+```cpp
+#include "stdromano/linalg/random.hpp"
+#include "stdromano/linalg/transform.hpp"
+
+using namespace stdromano;
+
+STDROMANO_HOST_DEVICE Vec3F primary_ray_dir(const Transform44F& camera, const float fov, const Vec2F& ndc)
+{
+    const float scale = maths::tan(maths::deg2rad(fov * 0.5f));
+    return normalize(camera.transform_dir(Vec3F(ndc * scale, -1.0f)));
+}
+
+__global__ void render(float4* pixels, const float* camera_transform, const float fov)
+{
+    const Transform44F camera = Transform44F::from_data(camera_transform);
+    const Vec2F jitter = pcg2d_hash_float(Vec2U(blockIdx.x, threadIdx.x));
+    // ...
+}
+```
+
+Host/device headers: `maths.hpp`, `bits.hpp`, `random.hpp` (except the thread-safe `ts_*`
+generators and `random_seed_*`), `linalg/vector.hpp`, `linalg/transform.hpp` (except
+`Transform33::inverse`) and `linalg/random.hpp`. `STDROMANO_ASSERT` works in device code too
+(device `printf` then `__trap`).
+
+On the device, the functions mapping to libm (`sqrt`, `exp`, `sin`, `pow`...) call the CUDA math
+library and follow the compilation flags, with `--use_fast_math` they become the approximate
+intrinsics. The other ones use dedicated instructions whatever the flags:
+
+| Function | Host | Device |
+| --- | --- | --- |
+| `rcp` | rcpss/frecpe + Newton-Raphson | `__fdividef` (MUFU.RCP) |
+| `rcp_safe` | division | `__frcp_rn`, correctly rounded even with fast math |
+| `rsqrt` | rsqrtss/frsqrte + Newton-Raphson | `rsqrtf` (MUFU.RSQ) |
+| `fma`, `fms`, `nfma`, `nfms` | fma3, `std::fma` on arm | `__fmaf_rn`, a single rounding |
+| `min`, `max` | compare and select | `fminf`/`fmaxf`, one instruction |
+| `isnan`, `isinf`, `isfinite` | compiler builtins | bit tests, they survive finite-math flags |
+| `popcount`, `clz`, `ctz`, 64 bits high product | compiler builtins | `__popc`, `__clzll`, `__ffsll`, `__umul64hi` |
+
+The vector types have the layout of the CUDA ones: `Vec2F`/`Vec4F` are 8/16 bytes aligned like
+`float2`/`float4` (so device loads and stores are vectorized), `Vec3F` is packed like `float3`, and
+the same goes for the `int` (`Vec*I`), `unsigned int` (`Vec*U`) and `double2` (`Vec2D`) versions.
+This is checked with static asserts when compiling with CUDA, so buffers can be reinterpreted
+(`reinterpret_cast<const Vec3F*>(normals)`). The CUDA types convert explicitly to the stdromano
+ones (`Vec3F(f3)`), and `to_cuda()` converts the other way.
+
+Floating-point vector division by a scalar multiplies by the reciprocal, and `normalize` uses the
+`rsqrt` approximation (`normalize_safe` is exact).
+
+The parity test (`--cuda`) evaluates every function on the host and on the device and checks the
+results match, bit for bit where they must (`rcp_safe`, `fma`, `sqrt`, `floor`, the hashes...) and
+within the CUDA math library error bounds for the others. It needs the default (non fast math)
+compilation flags. Without a CUDA device it only checks that the device code compiles.
 
 ## CMake
 
