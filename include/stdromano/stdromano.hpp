@@ -52,6 +52,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <cstdio>
+#include <cstdlib>
 
 /* Architecture detection */
 /* https://github.com/cpredef/predef/blob/master/Architectures.md */
@@ -213,15 +214,28 @@
 #define CONCAT_(prefix, suffix) prefix##suffix
 #define CONCAT(prefix, suffix) CONCAT_(prefix, suffix)
 
+/* Host and device, so assertions can be used in host, device and host/device functions alike */
+namespace stdromano {
+namespace detail {
+
+STDROMANO_HOST_DEVICE inline void assertion_failed(const char* file, const int line, const char* message) noexcept
+{
+#if defined(STDROMANO_CUDA_DEVICE)
+    printf("Assertion failed in file %s at line %d: %s\n", file, line, message);
+    __trap();
+#else
+    std::fprintf(stderr, "Assertion failed in file %s at line %d: %s\n", file, line, message);
+    std::abort();
+#endif /* defined(STDROMANO_CUDA_DEVICE) */
+}
+
+} // namespace detail
+} // namespace stdromano
+
 #define STDROMANO_ASSERT(expr, message)                                                            \
     if(!(expr))                                                                                    \
     {                                                                                              \
-        std::fprintf(stderr,                                                                       \
-                     "Assertion failed in file %s at line %d: %s\n",                               \
-                     __FILE__,                                                                     \
-                     __LINE__,                                                                     \
-                     message);                                                                     \
-        std::abort();                                                                              \
+        ::stdromano::detail::assertion_failed(__FILE__, __LINE__, message);                        \
     }
 
 #define STDROMANO_STATIC_ASSERT(expr, message) static_assert(expr, message)
