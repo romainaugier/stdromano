@@ -158,6 +158,30 @@
 #define STDROMANO_LIB_EXIT __attribute__((destructor))
 #endif /* defined(STDROMANO_MSVC) */
 
+/*
+    CUDA: nvcc defines __CUDACC__ and clang defines __CUDA__ when compiling a .cu file, both run a
+    host pass and a device pass per translation unit, and __CUDA_ARCH__ is only defined in the
+    device one. The host compiler macros (STDROMANO_X86_64, STDROMANO_GCC...) are still defined in
+    the device pass, so code using host intrinsics must test STDROMANO_CUDA_DEVICE first
+*/
+#if defined(__CUDACC__) || defined(__CUDA__)
+#define STDROMANO_CUDA
+#endif /* defined(__CUDACC__) || defined(__CUDA__) */
+
+#if defined(__CUDA_ARCH__)
+#define STDROMANO_CUDA_DEVICE
+#endif /* defined(__CUDA_ARCH__) */
+
+#if defined(STDROMANO_CUDA)
+#define STDROMANO_HOST __host__
+#define STDROMANO_DEVICE __device__
+#define STDROMANO_HOST_DEVICE __host__ __device__
+#else
+#define STDROMANO_HOST
+#define STDROMANO_DEVICE
+#define STDROMANO_HOST_DEVICE
+#endif /* defined(STDROMANO_CUDA) */
+
 #if defined(STDROMANO_BUILD_SHARED)
 #define STDROMANO_API STDROMANO_EXPORT
 #define STDROMANO_EXPIMP_TEMPLATE
