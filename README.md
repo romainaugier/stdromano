@@ -101,8 +101,18 @@ The vector types have the layout of the CUDA ones: `Vec2F`/`Vec4F` are 8/16 byte
 `float2`/`float4` (so device loads and stores are vectorized), `Vec3F` is packed like `float3`, and
 the same goes for the `int` (`Vec*I`), `unsigned int` (`Vec*U`) and `double2` (`Vec2D`) versions.
 This is checked with static asserts when compiling with CUDA, so buffers can be reinterpreted
-(`reinterpret_cast<const Vec3F*>(normals)`). The CUDA types convert explicitly to the stdromano
-ones (`Vec3F(f3)`), and `to_cuda()` converts the other way.
+(`reinterpret_cast<const Vec3F*>(normals)`).
+
+A CUDA vector type and the stdromano vector with the same component type and count convert
+implicitly both ways (`float3` and `Vec3F`, `uint4` and `Vec4U`...), so a `Vec3F` can be passed to
+OptiX functions taking a `float3`, and `pcg4d_hash(make_uint4(...))` works. Any other conversion
+stays explicit (`Vec3F(f4)` drops `w`, `Vec3F(i3)` converts the components) or does not exist
+(`Vec3D` to `float3`). `to_cuda()` makes a conversion visible where you want it to be.
+
+Template functions do not deduce through conversions: `dot(f3, v)` or `f3 + v` do not compile, but
+`v + f3` does. Convert once when reading from CUDA types (`const Vec3F n = normals[i];`) and stay in
+stdromano types afterwards. Avoid mixing with headers defining operators on the CUDA types (like the
+CUDA samples' `helper_math.h`), `v + f3` would become ambiguous.
 
 Floating-point vector division by a scalar multiplies by the reciprocal, and `normalize` uses the
 `rsqrt` approximation (`normalize_safe` is exact).

@@ -34,6 +34,29 @@ constexpr std::size_t vector2_alignment_v = 2 * sizeof(T);
 template<typename T>
 constexpr std::size_t vector4_alignment_v = 4 * sizeof(T) > 16 ? 16 : 4 * sizeof(T);
 
+/* The CUDA vector type with the same component type and count, void when there is none */
+template<typename T, std::size_t N>
+struct cuda_vector { using type = void; };
+
+#if defined(STDROMANO_CUDA)
+template<> struct cuda_vector<float, 2> { using type = float2; };
+template<> struct cuda_vector<float, 3> { using type = float3; };
+template<> struct cuda_vector<float, 4> { using type = float4; };
+template<> struct cuda_vector<double, 2> { using type = double2; };
+template<> struct cuda_vector<std::int32_t, 2> { using type = int2; };
+template<> struct cuda_vector<std::int32_t, 3> { using type = int3; };
+template<> struct cuda_vector<std::int32_t, 4> { using type = int4; };
+template<> struct cuda_vector<std::uint32_t, 2> { using type = uint2; };
+template<> struct cuda_vector<std::uint32_t, 3> { using type = uint3; };
+template<> struct cuda_vector<std::uint32_t, 4> { using type = uint4; };
+#endif /* defined(STDROMANO_CUDA) */
+
+template<typename T, std::size_t N>
+using cuda_vector_t = typename cuda_vector<T, N>::type;
+
+template<typename V, typename T, std::size_t N>
+constexpr bool is_cuda_vector_v = std::is_same_v<V, cuda_vector_t<T, N>>;
+
 /********************************/
 /* Vector2 */
 /********************************/
@@ -53,9 +76,16 @@ struct alignas(vector2_alignment_v<T>) Vector2
     template<typename S>
     STDROMANO_HOST_DEVICE constexpr Vector2(const Vector2<S>& v) noexcept : x(T(v.x)), y(T(v.y)) {}
 
-    /* Any type with x and y members (float2, int2...) */
-    template<typename V, std::enable_if_t<has_xy_v<V>, int> = 0>
+    /* Any other type with the same members, explicitly (float4 to Vec3F, Vec4F to Vec2F...) */
+    template<typename V, std::enable_if_t<has_xy_v<V> && !is_cuda_vector_v<V, T, 2>, int> = 0>
     STDROMANO_HOST_DEVICE constexpr explicit Vector2(const V& v) noexcept : x(T(v.x)), y(T(v.y)) {}
+
+    /* The CUDA vector type of the same component type and count converts implicitly, both ways */
+    template<typename V, std::enable_if_t<is_cuda_vector_v<V, T, 2>, int> = 0>
+    STDROMANO_HOST_DEVICE constexpr Vector2(const V& v) noexcept : x(v.x), y(v.y) {}
+
+    template<typename V, std::enable_if_t<is_cuda_vector_v<V, T, 2>, int> = 0>
+    STDROMANO_HOST_DEVICE constexpr operator V() const noexcept { return V{this->x, this->y}; }
 
     STDROMANO_HOST_DEVICE constexpr Vector2 operator-() const noexcept { return Vector2(-this->x, -this->y); }
     STDROMANO_HOST_DEVICE constexpr Vector2 operator~() const noexcept { return Vector2(~this->x, ~this->y); }
@@ -389,9 +419,16 @@ struct Vector3
     template<typename S>
     STDROMANO_HOST_DEVICE constexpr Vector3(const Vector3<S>& v) noexcept : x(T(v.x)), y(T(v.y)), z(T(v.z)) {}
 
-    /* Any type with x, y and z members (float3, float4, int3...) */
-    template<typename V, std::enable_if_t<has_xyz_v<V>, int> = 0>
+    /* Any other type with the same members, explicitly (float4 to Vec3F, Vec4F to Vec2F...) */
+    template<typename V, std::enable_if_t<has_xyz_v<V> && !is_cuda_vector_v<V, T, 3>, int> = 0>
     STDROMANO_HOST_DEVICE constexpr explicit Vector3(const V& v) noexcept : x(T(v.x)), y(T(v.y)), z(T(v.z)) {}
+
+    /* The CUDA vector type of the same component type and count converts implicitly, both ways */
+    template<typename V, std::enable_if_t<is_cuda_vector_v<V, T, 3>, int> = 0>
+    STDROMANO_HOST_DEVICE constexpr Vector3(const V& v) noexcept : x(v.x), y(v.y), z(v.z) {}
+
+    template<typename V, std::enable_if_t<is_cuda_vector_v<V, T, 3>, int> = 0>
+    STDROMANO_HOST_DEVICE constexpr operator V() const noexcept { return V{this->x, this->y, this->z}; }
 
     STDROMANO_HOST_DEVICE constexpr Vector2<T> xy() const noexcept { return Vector2<T>(this->x, this->y); }
 
@@ -728,9 +765,16 @@ struct alignas(vector4_alignment_v<T>) Vector4
     template<typename S>
     STDROMANO_HOST_DEVICE constexpr Vector4(const Vector4<S>& v) noexcept : x(T(v.x)), y(T(v.y)), z(T(v.z)), w(T(v.w)) {}
 
-    /* Any type with x, y, z and w members (float4, uint4...) */
-    template<typename V, std::enable_if_t<has_xyzw_v<V>, int> = 0>
+    /* Any other type with the same members, explicitly (float4 to Vec3F, Vec4F to Vec2F...) */
+    template<typename V, std::enable_if_t<has_xyzw_v<V> && !is_cuda_vector_v<V, T, 4>, int> = 0>
     STDROMANO_HOST_DEVICE constexpr explicit Vector4(const V& v) noexcept : x(T(v.x)), y(T(v.y)), z(T(v.z)), w(T(v.w)) {}
+
+    /* The CUDA vector type of the same component type and count converts implicitly, both ways */
+    template<typename V, std::enable_if_t<is_cuda_vector_v<V, T, 4>, int> = 0>
+    STDROMANO_HOST_DEVICE constexpr Vector4(const V& v) noexcept : x(v.x), y(v.y), z(v.z), w(v.w) {}
+
+    template<typename V, std::enable_if_t<is_cuda_vector_v<V, T, 4>, int> = 0>
+    STDROMANO_HOST_DEVICE constexpr operator V() const noexcept { return V{this->x, this->y, this->z, this->w}; }
 
     STDROMANO_HOST_DEVICE constexpr Vector2<T> xy() const noexcept { return Vector2<T>(this->x, this->y); }
     STDROMANO_HOST_DEVICE constexpr Vector3<T> xyz() const noexcept { return Vector3<T>(this->x, this->y, this->z); }
@@ -1042,7 +1086,7 @@ using Vec4I = Vector4<std::int32_t>;
 using Vec4U = Vector4<std::uint32_t>;
 
 /********************************/
-/* CUDA interop */
+/* CUDA interop                 */
 /********************************/
 
 #if defined(STDROMANO_CUDA)

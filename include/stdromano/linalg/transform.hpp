@@ -48,8 +48,8 @@ public:
     STDROMANO_HOST_DEVICE constexpr explicit Transform33() noexcept {}
 
     STDROMANO_HOST_DEVICE constexpr Transform33(T m00, T m01, T m02,
-                          T m10, T m11, T m12,
-                          T m20, T m21, T m22) noexcept
+                                                T m10, T m11, T m12,
+                                                T m20, T m21, T m22) noexcept
     {
         this->_data[0] = m00;
         this->_data[1] = m01;
@@ -147,10 +147,10 @@ public:
         Rotation is in radians by default
     */
     STDROMANO_HOST_DEVICE constexpr static Transform33<T> from_trs(const Vector2<T>& translation,
-                                             const T rotation,
-                                             const Vector2<T>& scale,
-                                             const std::uint32_t transform_order = TransformOrder2D_TRS,
-                                             const bool radians = true) noexcept
+                                                                   const T rotation,
+                                                                   const Vector2<T>& scale,
+                                                                   const std::uint32_t transform_order = TransformOrder2D_TRS,
+                                                                   const bool radians = true) noexcept
     {
         const Transform33<T> Tr = Transform33<T>::from_translation(translation);
         const Transform33<T> R = Transform33<T>::from_rotation(rotation, radians);
@@ -548,9 +548,9 @@ public:
         If one component is not wanted, pass nullptr
     */
     STDROMANO_HOST_DEVICE void decomp_trs(Vector2<T>* t,
-                    T* r,
-                    Vector2<T>* s,
-                    const bool radians = true) const noexcept
+                                          T* r,
+                                          Vector2<T>* s,
+                                          const bool radians = true) const noexcept
     {
         if(t != nullptr)
             this->decomp_translation(t);
@@ -563,7 +563,7 @@ public:
     }
 
     STDROMANO_HOST_DEVICE constexpr bool equal_with_abs_error(const Transform33<T>& other,
-                                        const T err = maths::constants<T>::large_epsilon) const noexcept
+                                                              const T err = maths::constants<T>::large_epsilon) const noexcept
     {
         for(std::size_t i = 0; i < 9; ++i)
             if(!maths::equal_with_abs_error(this->_data[i], other._data[i], err))
@@ -621,9 +621,9 @@ public:
 
     /* Arguments are given row by row, in the order the matrix is written on paper */
     STDROMANO_HOST_DEVICE constexpr Transform44(T m00, T m01, T m02, T m03,
-                          T m10, T m11, T m12, T m13,
-                          T m20, T m21, T m22, T m23,
-                          T m30, T m31, T m32, T m33) noexcept
+                                                T m10, T m11, T m12, T m13,
+                                                T m20, T m21, T m22, T m23,
+                                                T m30, T m31, T m32, T m33) noexcept
     {
         this->_data[0] = m00;
         this->_data[1] = m10;
@@ -756,8 +756,8 @@ public:
 
     /* The axis is expected to be normalized */
     STDROMANO_HOST_DEVICE constexpr static Transform44<T> from_axis_angle(const Vector3<T>& axis,
-                                                    const T angle,
-                                                    const bool radians = true) noexcept
+                                                                          const T angle,
+                                                                          const bool radians = true) noexcept
     {
         Transform44<T> tr = Transform44<T>::ident();
 
@@ -785,8 +785,8 @@ public:
 
     /* The rotation order is the order in which the rotations are applied, XYZ is Rz * Ry * Rx */
     STDROMANO_HOST_DEVICE constexpr static Transform44<T> from_rotation(const Vector3<T>& rotation,
-                                                  const std::uint32_t rotation_order = RotationOrder_XYZ,
-                                                  const bool radians = true) noexcept
+                                                                        const std::uint32_t rotation_order = RotationOrder_XYZ,
+                                                                        const bool radians = true) noexcept
     {
         const Transform44<T> Rx = Transform44<T>::from_rotx(rotation.x, radians);
         const Transform44<T> Ry = Transform44<T>::from_roty(rotation.y, radians);
@@ -814,11 +814,11 @@ public:
 
     /* The transform order is the product order, TRS is T * R * S (scale is applied first) */
     STDROMANO_HOST_DEVICE constexpr static Transform44<T> from_trs(const Vector3<T>& translation,
-                                             const Vector3<T>& rotation,
-                                             const Vector3<T>& scale,
-                                             const std::uint32_t transform_order = TransformOrder_TRS,
-                                             const std::uint32_t rotation_order = RotationOrder_XYZ,
-                                             const bool radians = true) noexcept
+                                                                   const Vector3<T>& rotation,
+                                                                   const Vector3<T>& scale,
+                                                                   const std::uint32_t transform_order = TransformOrder_TRS,
+                                                                   const std::uint32_t rotation_order = RotationOrder_XYZ,
+                                                                   const bool radians = true) noexcept
     {
         const Transform44<T> Tr = Transform44<T>::from_translation(translation);
         const Transform44<T> S = Transform44<T>::from_scale(scale);
@@ -846,9 +846,9 @@ public:
 
     /* The axis are the first three columns and the translation the last one */
     STDROMANO_HOST_DEVICE constexpr static Transform44<T> from_xyzt(const Vector3<T>& x,
-                                              const Vector3<T>& y,
-                                              const Vector3<T>& z,
-                                              const Vector3<T>& t) noexcept
+                                                                    const Vector3<T>& y,
+                                                                    const Vector3<T>& z,
+                                                                    const Vector3<T>& t) noexcept
     {
         return Transform44<T>(x.x, y.x, z.x, t.x,
                               x.y, y.y, z.y, t.y,
@@ -858,10 +858,10 @@ public:
 
     /* Places an object at eye with its +z axis pointing to target, invert it to get a view transform */
     STDROMANO_HOST_DEVICE constexpr static Transform44<T> from_lookat(const Vector3<T>& eye,
-                                                const Vector3<T>& target,
-                                                const Vector3<T>& up = Vector3<T>(make_zero_v<T>,
-                                                                                  make_one_v<T>,
-                                                                                  make_zero_v<T>)) noexcept
+                                                                      const Vector3<T>& target,
+                                                                      const Vector3<T>& up = Vector3<T>(make_zero_v<T>,
+                                                                                                        make_one_v<T>,
+                                                                                                        make_zero_v<T>)) noexcept
     {
         const Vector3<T> z = normalize(target - eye);
         const Vector3<T> x = normalize(cross(up, z));
@@ -986,8 +986,7 @@ public:
             if(axes[col] == nullptr)
                 continue;
 
-            const T inv_scale = scales[col] > maths::constants<T>::large_epsilon ? maths::rcp(scales[col])
-                                                                                   : make_one_v<T>;
+            const T inv_scale = scales[col] > maths::constants<T>::large_epsilon ? maths::rcp(scales[col]) : make_one_v<T>;
 
             axes[col]->x = (*this)(0, col) * inv_scale;
             axes[col]->y = (*this)(1, col) * inv_scale;
@@ -1045,8 +1044,8 @@ public:
 
     /* Inverse of from_rotation for the same rotation order, angles are in radians by default */
     STDROMANO_HOST_DEVICE void decomp_tait_bryan(Vector3<T>* angles,
-                           const bool radians = true,
-                           std::uint32_t rotation_order = RotationOrder_XYZ) const noexcept
+                                                 const bool radians = true,
+                                                 std::uint32_t rotation_order = RotationOrder_XYZ) const noexcept
     {
         STDROMANO_ASSERT(angles != nullptr, "angles is nullptr");
 
@@ -1059,8 +1058,7 @@ public:
 
         for(std::size_t col = 0; col < 3; ++col)
         {
-            const T inv_scale = scales[col] > maths::constants<T>::large_epsilon ? maths::rcp(scales[col])
-                                                                                   : make_zero_v<T>;
+            const T inv_scale = scales[col] > maths::constants<T>::large_epsilon ? maths::rcp(scales[col]) : make_zero_v<T>;
 
             for(std::size_t row = 0; row < 3; ++row)
                 r[row][col] = (*this)(row, col) * inv_scale;
@@ -1096,10 +1094,10 @@ public:
     }
 
     STDROMANO_HOST_DEVICE constexpr void decomp_trs(Vector3<T>* t,
-                              Vector3<T>* r,
-                              Vector3<T>* s,
-                              const bool radians = true,
-                              const std::uint32_t rotation_order = RotationOrder_XYZ) const noexcept
+                                                    Vector3<T>* r,
+                                                    Vector3<T>* s,
+                                                    const bool radians = true,
+                                                    const std::uint32_t rotation_order = RotationOrder_XYZ) const noexcept
     {
         if(t != nullptr)
             this->decomp_translation(t);
@@ -1112,7 +1110,7 @@ public:
     }
 
     STDROMANO_HOST_DEVICE constexpr bool equal_with_abs_error(const Transform44<T>& other,
-                                        const T err = maths::constants<T>::large_epsilon) const noexcept
+                                                              const T err = maths::constants<T>::large_epsilon) const noexcept
     {
         for(std::size_t i = 0; i < 16; ++i)
             if(!maths::equal_with_abs_error(this->_data[i], other._data[i], err))
