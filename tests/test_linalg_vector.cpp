@@ -508,4 +508,132 @@ STDROMANO_TEST_CASE(fuzz_vector3_identities)
     TESTS_REQUIRE_PROPERTY(report);
 }
 
+STDROMANO_TEST_CASE(vector_layout)
+{
+    static_assert(sizeof(Vec2F) == 8 && alignof(Vec2F) == 8, "Vec2F must match float2");
+    static_assert(sizeof(Vec3F) == 12 && alignof(Vec3F) == 4, "Vec3F must match float3");
+    static_assert(sizeof(Vec4F) == 16 && alignof(Vec4F) == 16, "Vec4F must match float4");
+    static_assert(sizeof(Vec2D) == 16 && alignof(Vec2D) == 16, "Vec2D must match double2");
+    static_assert(sizeof(Vec4D) == 32 && alignof(Vec4D) == 16, "Vec4D must keep the CUDA double4 alignment");
+    static_assert(sizeof(Vec4U) == 16 && alignof(Vec4U) == 16, "Vec4U must match uint4");
+}
+
+STDROMANO_TEST_CASE(vector4_component_division)
+{
+    const Vec4F a(8.0f, 6.0f, 4.0f, 2.0f);
+    const Vec4F b(2.0f, 3.0f, 4.0f, 2.0f);
+    STDROMANO_CHECK_EQ(a / b, Vec4F(4.0f, 2.0f, 1.0f, 1.0f));
+}
+
+STDROMANO_TEST_CASE(vector_scalar_division)
+{
+    STDROMANO_CHECK_EQ(Vec3F(3.0f, 6.0f, 9.0f) / 3.0f, Vec3F(3.0f, 6.0f, 9.0f) * (1.0f / 3.0f));
+    STDROMANO_CHECK_EQ(Vec3I(7, 8, 9) / 2, Vec3I(3, 4, 4));
+    STDROMANO_CHECK_EQ(Vec4U(9u, 18u, 27u, 36u) / 9u, Vec4U(1u, 2u, 3u, 4u));
+}
+
+STDROMANO_TEST_CASE(vector_normalize)
+{
+    const Vec3F v(3.0f, 4.0f, 12.0f);
+    STDROMANO_CHECK_NEAR(length(normalize(v)), 1.0f, 1e-6f);
+    STDROMANO_CHECK(normalize_safe(v).equal_with_abs_error(Vec3F(3.0f / 13.0f, 4.0f / 13.0f, 12.0f / 13.0f), 1e-7f));
+    STDROMANO_CHECK_NEAR(length(normalize(Vec2F(3.0f, 4.0f))), 1.0f, 1e-6f);
+    STDROMANO_CHECK_NEAR(length(normalize(Vec4F(1.0f, 2.0f, 3.0f, 4.0f))), 1.0f, 1e-6f);
+    STDROMANO_CHECK_EQ(normalize_safe(Vec2D(0.0, -2.0)), Vec2D(0.0, -1.0));
+}
+
+STDROMANO_TEST_CASE(vector_swizzle_and_conversions)
+{
+    const Vec4F v(1.0f, 2.0f, 3.0f, 4.0f);
+    STDROMANO_CHECK_EQ(v.xyz(), Vec3F(1.0f, 2.0f, 3.0f));
+    STDROMANO_CHECK_EQ(v.xy(), Vec2F(1.0f, 2.0f));
+    STDROMANO_CHECK_EQ(Vec4F(Vec3F(1.0f, 2.0f, 3.0f), 4.0f), v);
+    STDROMANO_CHECK_EQ(Vec3F(Vec2F(1.0f, 2.0f), 3.0f), v.xyz());
+
+    struct Foreign { float x, y, z, w; };
+    const Foreign f{5.0f, 6.0f, 7.0f, 8.0f};
+    STDROMANO_CHECK_EQ(Vec4F(f), Vec4F(5.0f, 6.0f, 7.0f, 8.0f));
+    STDROMANO_CHECK_EQ(Vec3F(f), Vec3F(5.0f, 6.0f, 7.0f));
+    STDROMANO_CHECK_EQ(Vec2I(f), Vec2I(5, 6));
+
+    static_assert(!std::is_convertible_v<Foreign, Vec3F>, "foreign vectors convert explicitly only");
+    static_assert(!std::is_convertible_v<Vec4F, Vec3F>, "dropping components must be explicit");
+    static_assert(std::is_convertible_v<Vec3I, Vec3F>, "same dimension conversions stay implicit");
+}
+
+STDROMANO_TEST_CASE(vector_component_wise_functions)
+{
+    const Vec3F a(-1.5f, 2.25f, 0.0f);
+    const Vec3F b(1.0f, -3.0f, 0.5f);
+
+    STDROMANO_CHECK_EQ(abs(a), Vec3F(1.5f, 2.25f, 0.0f));
+    STDROMANO_CHECK_EQ(min(a, b), Vec3F(-1.5f, -3.0f, 0.0f));
+    STDROMANO_CHECK_EQ(max(a, b), Vec3F(1.0f, 2.25f, 0.5f));
+    STDROMANO_CHECK_EQ(min_component(a), -1.5f);
+    STDROMANO_CHECK_EQ(max_component(b), 1.0f);
+    STDROMANO_CHECK_EQ(clamp(a), Vec3F(0.0f, 1.0f, 0.0f));
+    STDROMANO_CHECK_EQ(clamp(a, -1.0f, 2.0f), Vec3F(-1.0f, 2.0f, 0.0f));
+    STDROMANO_CHECK_EQ(floor(a), Vec3F(-2.0f, 2.0f, 0.0f));
+    STDROMANO_CHECK_EQ(ceil(a), Vec3F(-1.0f, 3.0f, 0.0f));
+    STDROMANO_CHECK_EQ(sign(a), Vec3F(-1.0f, 1.0f, 1.0f));
+    STDROMANO_CHECK_EQ(lerp(a, b, 0.0f), a);
+    STDROMANO_CHECK_EQ(lerp(a, b, 1.0f), b);
+    STDROMANO_CHECK_EQ(lerp(a, b, Vec3F(0.0f, 1.0f, 0.0f)), Vec3F(-1.5f, -3.0f, 0.0f));
+    STDROMANO_CHECK_EQ(pow(Vec3F(2.0f, 3.0f, 4.0f), 2.0f), Vec3F(4.0f, 9.0f, 16.0f));
+    STDROMANO_CHECK_EQ(rcp_safe(Vec4F(2.0f, 4.0f, 0.5f, 1.0f)), Vec4F(0.5f, 0.25f, 2.0f, 1.0f));
+    STDROMANO_CHECK(rcp(Vec2F(3.0f, 7.0f)).equal_with_abs_error(Vec2F(1.0f / 3.0f, 1.0f / 7.0f), 1e-6f));
+    STDROMANO_CHECK_EQ(dist2(Vec3F(1.0f, 2.0f, 3.0f), Vec3F(1.0f, 4.0f, 3.0f)), 4.0f);
+    STDROMANO_CHECK_EQ(dist(Vec2F(0.0f, 0.0f), Vec2F(3.0f, 4.0f)), 5.0f);
+}
+
+STDROMANO_TEST_CASE(vector_classification)
+{
+    const float nan = std::numeric_limits<float>::quiet_NaN();
+    const float inf = std::numeric_limits<float>::infinity();
+
+    STDROMANO_CHECK(isnan(Vec3F(0.0f, nan, 1.0f)));
+    STDROMANO_CHECK(!isnan(Vec3F(0.0f, inf, 1.0f)));
+    STDROMANO_CHECK(isinf(Vec4F(0.0f, 0.0f, 0.0f, -inf)));
+    STDROMANO_CHECK(!isinf(Vec2F(nan, 0.0f)));
+    STDROMANO_CHECK(isfinite(Vec2F(1.0f, 2.0f)));
+    STDROMANO_CHECK(!isfinite(Vec3F(1.0f, 2.0f, inf)));
+    STDROMANO_CHECK(!isfinite(Vec4F(nan)));
+}
+
+STDROMANO_TEST_CASE(vector_geometry)
+{
+    const Vec3F incident(1.0f, -1.0f, 0.0f);
+    const Vec3F up(0.0f, 1.0f, 0.0f);
+    STDROMANO_CHECK_EQ(reflect(incident, up), Vec3F(1.0f, 1.0f, 0.0f));
+    STDROMANO_CHECK_EQ(reflect(Vec2F(1.0f, -1.0f), Vec2F(0.0f, 1.0f)), Vec2F(1.0f, 1.0f));
+    STDROMANO_CHECK_EQ(perpendicular(Vec2F(1.0f, 0.0f)), Vec2F(0.0f, 1.0f));
+
+    STDROMANO_CHECK_NEAR(angle(Vec3F(1.0f, 0.0f, 0.0f), Vec3F(0.0f, 2.0f, 0.0f)), maths::constants<float>::pi_over_two, 1e-6f);
+    STDROMANO_CHECK_NEAR(angle(Vec2D(1.0, 0.0), Vec2D(-3.0, 0.0)), maths::constants<double>::pi, 1e-12);
+    STDROMANO_CHECK_EQ(angle(Vec3D(1.0, 1.0, 0.0), Vec3D(2.0, 2.0, 0.0)), 0.0);
+}
+
+STDROMANO_TEST_CASE(vector_integral_bit_operations)
+{
+    const Vec4U a(0xF0F0F0F0u, 1u, 2u, 0xFFFFFFFFu);
+    const Vec4U b(0x0F0F0F0Fu, 3u, 6u, 1u);
+
+    STDROMANO_CHECK_EQ(a ^ b, Vec4U(0xFFFFFFFFu, 2u, 4u, 0xFFFFFFFEu));
+    STDROMANO_CHECK_EQ(a & b, Vec4U(0u, 1u, 2u, 1u));
+    STDROMANO_CHECK_EQ(a | b, Vec4U(0xFFFFFFFFu, 3u, 6u, 0xFFFFFFFFu));
+    STDROMANO_CHECK_EQ(a >> 4u, Vec4U(0x0F0F0F0Fu, 0u, 0u, 0x0FFFFFFFu));
+    STDROMANO_CHECK_EQ(b << 1u, Vec4U(0x1E1E1E1Eu, 6u, 12u, 2u));
+    STDROMANO_CHECK_EQ(~Vec2U(0u, 0xFFFFFFFFu), Vec2U(0xFFFFFFFFu, 0u));
+    STDROMANO_CHECK_EQ(Vec3U(1u, 2u, 3u) ^ 1u, Vec3U(0u, 3u, 2u));
+
+    Vec3U c(1u, 2u, 3u);
+    c <<= 2u;
+    c ^= Vec3U(1u);
+    c >>= 1u;
+    STDROMANO_CHECK_EQ(c, Vec3U(2u, 4u, 6u));
+
+    /* unsigned arithmetic wraps like the PCG hashes expect */
+    STDROMANO_CHECK_EQ(Vec2U(0xFFFFFFFFu, 2u) * 2u + 1u, Vec2U(0xFFFFFFFFu, 5u));
+}
+
 STDROMANO_TEST_MAIN()
