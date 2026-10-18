@@ -45,9 +45,9 @@ private:
     T _data[9];
 
 public:
-    constexpr explicit Transform33() noexcept {}
+    STDROMANO_HOST_DEVICE constexpr explicit Transform33() noexcept {}
 
-    constexpr Transform33(T m00, T m01, T m02,
+    STDROMANO_HOST_DEVICE constexpr Transform33(T m00, T m01, T m02,
                           T m10, T m11, T m12,
                           T m20, T m21, T m22) noexcept
     {
@@ -63,13 +63,13 @@ public:
     }
 
     template<typename S>
-    constexpr Transform33(const Transform33<S>& m) noexcept
+    STDROMANO_HOST_DEVICE constexpr Transform33(const Transform33<S>& m) noexcept
     {
         for(std::size_t i = 0; i < 9; ++i)
             this->_data[i] = T(m._data[i]);
     }
 
-    constexpr static Transform33<T> zero() noexcept
+    STDROMANO_HOST_DEVICE constexpr static Transform33<T> zero() noexcept
     {
         Transform33<T> tr;
 
@@ -79,14 +79,14 @@ public:
         return tr;
     }
 
-    constexpr static Transform33<T> ident() noexcept
+    STDROMANO_HOST_DEVICE constexpr static Transform33<T> ident() noexcept
     {
         return Transform33<T>(make_one_v<T>, make_zero_v<T>, make_zero_v<T>,
                               make_zero_v<T>, make_one_v<T>, make_zero_v<T>,
                               make_zero_v<T>, make_zero_v<T>, make_one_v<T>);
     }
 
-    constexpr static Transform33<T> from_translation(const Vector2<T>& t) noexcept
+    STDROMANO_HOST_DEVICE constexpr static Transform33<T> from_translation(const Vector2<T>& t) noexcept
     {
         Transform33<T> tr = Transform33<T>::ident();
 
@@ -96,7 +96,7 @@ public:
         return tr;
     }
 
-    constexpr static Transform33<T> from_scale(const Vector2<T>& s) noexcept
+    STDROMANO_HOST_DEVICE constexpr static Transform33<T> from_scale(const Vector2<T>& s) noexcept
     {
         Transform33<T> tr = Transform33<T>::ident();
 
@@ -106,7 +106,7 @@ public:
         return tr;
     }
 
-    constexpr static Transform33<T> from_uniform_scale(const T s) noexcept
+    STDROMANO_HOST_DEVICE constexpr static Transform33<T> from_uniform_scale(const T s) noexcept
     {
         Transform33<T> tr = Transform33<T>::ident();
 
@@ -125,7 +125,7 @@ public:
 
         Rotation is clockwise
     */
-    constexpr static Transform33<T> from_rotation(const T angle, const bool radians = true) noexcept
+    STDROMANO_HOST_DEVICE constexpr static Transform33<T> from_rotation(const T angle, const bool radians = true) noexcept
     {
         Transform33<T> tr = Transform33<T>::ident();
 
@@ -146,7 +146,7 @@ public:
         Builds a transform from translation, rotation angle and scale given the transform order.
         Rotation is in radians by default
     */
-    constexpr static Transform33<T> from_trs(const Vector2<T>& translation,
+    STDROMANO_HOST_DEVICE constexpr static Transform33<T> from_trs(const Vector2<T>& translation,
                                              const T rotation,
                                              const Vector2<T>& scale,
                                              const std::uint32_t transform_order = TransformOrder2D_TRS,
@@ -179,7 +179,7 @@ public:
     /*
         Builds a transform from x and y axes and translation
     */
-    constexpr static Transform33<T> from_xyt(const Vector2<T>& x,
+    STDROMANO_HOST_DEVICE constexpr static Transform33<T> from_xyt(const Vector2<T>& x,
                                              const Vector2<T>& y,
                                              const Vector2<T>& t) noexcept
     {
@@ -192,7 +192,7 @@ public:
         Builds a 2D look-at transform. The x-axis points from eye towards target,
         the y-axis is perpendicular (rotated 90 degrees CCW)
     */
-    constexpr static Transform33<T> from_lookat(const Vector2<T>& eye,
+    STDROMANO_HOST_DEVICE constexpr static Transform33<T> from_lookat(const Vector2<T>& eye,
                                                 const Vector2<T>& target) noexcept
     {
         const Vector2<T> forward = normalize(target - eye);
@@ -203,45 +203,45 @@ public:
                               make_zero_v<T>, make_zero_v<T>, make_one_v<T>);
     }
 
-    constexpr T& operator()(const std::size_t row, const std::size_t col) noexcept
+    STDROMANO_HOST_DEVICE constexpr T& operator()(const std::size_t row, const std::size_t col) noexcept
     {
         STDROMANO_ASSERT(row < 3 && col < 3, "Out of bounds access");
 
         return this->_data[row * 3 + col];
     }
 
-    constexpr const T& operator()(const std::size_t row, const std::size_t col) const noexcept
+    STDROMANO_HOST_DEVICE constexpr const T& operator()(const std::size_t row, const std::size_t col) const noexcept
     {
         STDROMANO_ASSERT(row < 3 && col < 3, "Out of bounds access");
 
         return this->_data[row * 3 + col];
     }
 
-    constexpr T& at(const std::size_t row, const std::size_t col) noexcept
+    STDROMANO_HOST_DEVICE constexpr T& at(const std::size_t row, const std::size_t col) noexcept
     {
         STDROMANO_ASSERT(row < 3 && col < 3, "Out of bounds access");
 
         return this->_data[row * 3 + col];
     }
 
-    constexpr const T& at(const std::size_t row, const std::size_t col) const noexcept
+    STDROMANO_HOST_DEVICE constexpr const T& at(const std::size_t row, const std::size_t col) const noexcept
     {
         STDROMANO_ASSERT(row < 3 && col < 3, "Out of bounds access");
 
         return this->_data[row * 3 + col];
     }
 
-    constexpr T* data() noexcept
+    STDROMANO_HOST_DEVICE constexpr T* data() noexcept
     {
         return this->_data;
     }
 
-    constexpr const T* data() const noexcept
+    STDROMANO_HOST_DEVICE constexpr const T* data() const noexcept
     {
         return this->_data;
     }
 
-    constexpr Transform33<T> operator*(const Transform33<T>& other) const noexcept
+    STDROMANO_HOST_DEVICE constexpr Transform33<T> operator*(const Transform33<T>& other) const noexcept
     {
         Transform33<T> res = Transform33<T>::zero();
 
@@ -253,14 +253,14 @@ public:
         return res;
     }
 
-    constexpr Transform33<T> transpose() const noexcept
+    STDROMANO_HOST_DEVICE constexpr Transform33<T> transpose() const noexcept
     {
         return Transform33<T>(this->_data[0], this->_data[3], this->_data[6],
                               this->_data[1], this->_data[4], this->_data[7],
                               this->_data[2], this->_data[5], this->_data[8]);
     }
 
-    constexpr T trace() const noexcept
+    STDROMANO_HOST_DEVICE constexpr T trace() const noexcept
     {
         return this->_data[0] + this->_data[4] + this->_data[8];
     }
@@ -268,7 +268,7 @@ public:
     /*
         Computes the determinant of the 3x3 matrix
     */
-    constexpr T determinant() const noexcept
+    STDROMANO_HOST_DEVICE constexpr T determinant() const noexcept
     {
         const T a = this->_data[0];
         const T b = this->_data[1];
@@ -312,7 +312,7 @@ public:
     /*
         Transforms a 2D point (applies rotation, scale and translation)
     */
-    constexpr Vector2<T> transform_point(const Vector2<T>& point) const noexcept
+    STDROMANO_HOST_DEVICE constexpr Vector2<T> transform_point(const Vector2<T>& point) const noexcept
     {
         Vector2<T> res;
 
@@ -325,7 +325,7 @@ public:
     /*
         Transforms a 2D direction (applies rotation and scale only, no translation)
     */
-    constexpr Vector2<T> transform_dir(const Vector2<T>& dir) const noexcept
+    STDROMANO_HOST_DEVICE constexpr Vector2<T> transform_dir(const Vector2<T>& dir) const noexcept
     {
         Vector2<T> res;
 
@@ -336,7 +336,7 @@ public:
     }
 
     // Compute the svd from eigenvalues and eigenvectors of A^T * A
-    constexpr void svd(Transform33<T>* S, Transform33<T>* V, Transform33<T>* U) const noexcept
+    STDROMANO_HOST_DEVICE constexpr void svd(Transform33<T>* S, Transform33<T>* V, Transform33<T>* U) const noexcept
     {
         // A^T * A = | a  b |
         //           | b  c |
@@ -414,7 +414,7 @@ public:
     /*
         Extracts the translation from the matrix
     */
-    constexpr void decomp_translation(Vector2<T>* t) const noexcept
+    STDROMANO_HOST_DEVICE constexpr void decomp_translation(Vector2<T>* t) const noexcept
     {
         STDROMANO_ASSERT(t != nullptr, "t is nullptr");
 
@@ -425,7 +425,7 @@ public:
     /*
         Extracts the scale from the matrix (row magnitudes of the upper-left 2x2)
     */
-    void decomp_scale(Vector2<T>* s) const noexcept
+    STDROMANO_HOST_DEVICE void decomp_scale(Vector2<T>* s) const noexcept
     {
         STDROMANO_ASSERT(s != nullptr, "s is nullptr");
 
@@ -466,7 +466,7 @@ public:
         Extracts the rotation angle from the matrix. Angle will be in radians by default
         Uses polar decomposition
     */
-    void decomp_rotation(T* angle, const bool radians = true) const noexcept
+    STDROMANO_HOST_DEVICE void decomp_rotation(T* angle, const bool radians = true) const noexcept
     {
         STDROMANO_ASSERT(angle != nullptr, "angle is nullptr");
 
@@ -510,7 +510,7 @@ public:
         Extracts the axes and translation from the matrix, normalizing by scale. If one
         component is not wanted, pass nullptr
     */
-    void decomp_xyt(Vector2<T>* x, Vector2<T>* y, Vector2<T>* t) const noexcept
+    STDROMANO_HOST_DEVICE void decomp_xyt(Vector2<T>* x, Vector2<T>* y, Vector2<T>* t) const noexcept
     {
         Vector2<T> scale;
         this->decomp_scale(&scale);
@@ -547,7 +547,7 @@ public:
         Extracts translation, rotation and scale. Angle will be in radians by default.
         If one component is not wanted, pass nullptr
     */
-    void decomp_trs(Vector2<T>* t,
+    STDROMANO_HOST_DEVICE void decomp_trs(Vector2<T>* t,
                     T* r,
                     Vector2<T>* s,
                     const bool radians = true) const noexcept
@@ -562,7 +562,7 @@ public:
             this->decomp_scale(s);
     }
 
-    constexpr bool equal_with_abs_error(const Transform33<T>& other,
+    STDROMANO_HOST_DEVICE constexpr bool equal_with_abs_error(const Transform33<T>& other,
                                         const T err = maths::constants<T>::large_epsilon) const noexcept
     {
         for(std::size_t i = 0; i < 9; ++i)
@@ -611,16 +611,16 @@ private:
     /* Column-major storage, transforms column vectors: p' = M * p */
     T _data[16];
 
-    static constexpr std::size_t index(const std::size_t row, const std::size_t col) noexcept
+    STDROMANO_HOST_DEVICE static constexpr std::size_t index(const std::size_t row, const std::size_t col) noexcept
     {
         return col * 4 + row;
     }
 
 public:
-    constexpr explicit Transform44() noexcept {}
+    STDROMANO_HOST_DEVICE constexpr explicit Transform44() noexcept {}
 
     /* Arguments are given row by row, in the order the matrix is written on paper */
-    constexpr Transform44(T m00, T m01, T m02, T m03,
+    STDROMANO_HOST_DEVICE constexpr Transform44(T m00, T m01, T m02, T m03,
                           T m10, T m11, T m12, T m13,
                           T m20, T m21, T m22, T m23,
                           T m30, T m31, T m32, T m33) noexcept
@@ -644,13 +644,13 @@ public:
     }
 
     template<typename S>
-    constexpr Transform44(const Transform44<S>& m) noexcept
+    STDROMANO_HOST_DEVICE constexpr Transform44(const Transform44<S>& m) noexcept
     {
         for(std::size_t i = 0; i < 16; ++i)
             this->_data[i] = T(m._data[i]);
     }
 
-    constexpr static Transform44<T> zero() noexcept
+    STDROMANO_HOST_DEVICE constexpr static Transform44<T> zero() noexcept
     {
         Transform44<T> tr;
 
@@ -660,7 +660,18 @@ public:
         return tr;
     }
 
-    constexpr static Transform44<T> ident() noexcept
+    /* 16 values in the column-major storage order (what data() returns, and Imath::M44 too) */
+    STDROMANO_HOST_DEVICE constexpr static Transform44<T> from_data(const T* data) noexcept
+    {
+        Transform44<T> tr;
+
+        for(std::size_t i = 0; i < 16; i++)
+            tr._data[i] = data[i];
+
+        return tr;
+    }
+
+    STDROMANO_HOST_DEVICE constexpr static Transform44<T> ident() noexcept
     {
         Transform44<T> tr = Transform44<T>::zero();
 
@@ -670,7 +681,7 @@ public:
         return tr;
     }
 
-    constexpr static Transform44<T> from_translation(const Vector3<T>& t) noexcept
+    STDROMANO_HOST_DEVICE constexpr static Transform44<T> from_translation(const Vector3<T>& t) noexcept
     {
         Transform44<T> tr = Transform44<T>::ident();
 
@@ -681,7 +692,7 @@ public:
         return tr;
     }
 
-    constexpr static Transform44<T> from_scale(const Vector3<T>& s) noexcept
+    STDROMANO_HOST_DEVICE constexpr static Transform44<T> from_scale(const Vector3<T>& s) noexcept
     {
         Transform44<T> tr = Transform44<T>::ident();
 
@@ -692,7 +703,7 @@ public:
         return tr;
     }
 
-    constexpr static Transform44<T> from_rotx(const T rx, const bool radians = true) noexcept
+    STDROMANO_HOST_DEVICE constexpr static Transform44<T> from_rotx(const T rx, const bool radians = true) noexcept
     {
         Transform44<T> tr = Transform44<T>::ident();
 
@@ -709,7 +720,7 @@ public:
         return tr;
     }
 
-    constexpr static Transform44<T> from_roty(const T ry, const bool radians = true) noexcept
+    STDROMANO_HOST_DEVICE constexpr static Transform44<T> from_roty(const T ry, const bool radians = true) noexcept
     {
         Transform44<T> tr = Transform44<T>::ident();
 
@@ -726,7 +737,7 @@ public:
         return tr;
     }
 
-    constexpr static Transform44<T> from_rotz(const T rz, const bool radians = true) noexcept
+    STDROMANO_HOST_DEVICE constexpr static Transform44<T> from_rotz(const T rz, const bool radians = true) noexcept
     {
         Transform44<T> tr = Transform44<T>::ident();
 
@@ -744,7 +755,7 @@ public:
     }
 
     /* The axis is expected to be normalized */
-    constexpr static Transform44<T> from_axis_angle(const Vector3<T>& axis,
+    STDROMANO_HOST_DEVICE constexpr static Transform44<T> from_axis_angle(const Vector3<T>& axis,
                                                     const T angle,
                                                     const bool radians = true) noexcept
     {
@@ -773,7 +784,7 @@ public:
     }
 
     /* The rotation order is the order in which the rotations are applied, XYZ is Rz * Ry * Rx */
-    constexpr static Transform44<T> from_rotation(const Vector3<T>& rotation,
+    STDROMANO_HOST_DEVICE constexpr static Transform44<T> from_rotation(const Vector3<T>& rotation,
                                                   const std::uint32_t rotation_order = RotationOrder_XYZ,
                                                   const bool radians = true) noexcept
     {
@@ -802,7 +813,7 @@ public:
     }
 
     /* The transform order is the product order, TRS is T * R * S (scale is applied first) */
-    constexpr static Transform44<T> from_trs(const Vector3<T>& translation,
+    STDROMANO_HOST_DEVICE constexpr static Transform44<T> from_trs(const Vector3<T>& translation,
                                              const Vector3<T>& rotation,
                                              const Vector3<T>& scale,
                                              const std::uint32_t transform_order = TransformOrder_TRS,
@@ -834,7 +845,7 @@ public:
     }
 
     /* The axis are the first three columns and the translation the last one */
-    constexpr static Transform44<T> from_xyzt(const Vector3<T>& x,
+    STDROMANO_HOST_DEVICE constexpr static Transform44<T> from_xyzt(const Vector3<T>& x,
                                               const Vector3<T>& y,
                                               const Vector3<T>& z,
                                               const Vector3<T>& t) noexcept
@@ -846,7 +857,7 @@ public:
     }
 
     /* Places an object at eye with its +z axis pointing to target, invert it to get a view transform */
-    constexpr static Transform44<T> from_lookat(const Vector3<T>& eye,
+    STDROMANO_HOST_DEVICE constexpr static Transform44<T> from_lookat(const Vector3<T>& eye,
                                                 const Vector3<T>& target,
                                                 const Vector3<T>& up = Vector3<T>(make_zero_v<T>,
                                                                                   make_one_v<T>,
@@ -859,41 +870,41 @@ public:
         return Transform44<T>::from_xyzt(x, y, z, eye);
     }
 
-    constexpr T& operator()(const std::size_t row, const std::size_t col) noexcept
+    STDROMANO_HOST_DEVICE constexpr T& operator()(const std::size_t row, const std::size_t col) noexcept
     {
         STDROMANO_ASSERT(row < 4 && col < 4, "Out of bounds access");
 
         return this->_data[index(row, col)];
     }
 
-    constexpr const T& operator()(const std::size_t row, const std::size_t col) const noexcept
+    STDROMANO_HOST_DEVICE constexpr const T& operator()(const std::size_t row, const std::size_t col) const noexcept
     {
         STDROMANO_ASSERT(row < 4 && col < 4, "Out of bounds access");
 
         return this->_data[index(row, col)];
     }
 
-    constexpr T& at(const std::size_t row, const std::size_t col) noexcept
+    STDROMANO_HOST_DEVICE constexpr T& at(const std::size_t row, const std::size_t col) noexcept
     {
         return (*this)(row, col);
     }
 
-    constexpr const T& at(const std::size_t row, const std::size_t col) const noexcept
+    STDROMANO_HOST_DEVICE constexpr const T& at(const std::size_t row, const std::size_t col) const noexcept
     {
         return (*this)(row, col);
     }
 
-    constexpr T* data() noexcept
+    STDROMANO_HOST_DEVICE constexpr T* data() noexcept
     {
         return this->_data;
     }
 
-    constexpr const T* data() const noexcept
+    STDROMANO_HOST_DEVICE constexpr const T* data() const noexcept
     {
         return this->_data;
     }
 
-    constexpr Transform44<T> operator*(const Transform44<T>& other) const noexcept
+    STDROMANO_HOST_DEVICE constexpr Transform44<T> operator*(const Transform44<T>& other) const noexcept
     {
         Transform44<T> res = Transform44<T>::zero();
 
@@ -907,7 +918,7 @@ public:
         return res;
     }
 
-    constexpr Transform44<T> transpose() const noexcept
+    STDROMANO_HOST_DEVICE constexpr Transform44<T> transpose() const noexcept
     {
         Transform44<T> res;
 
@@ -918,12 +929,12 @@ public:
         return res;
     }
 
-    constexpr T trace() const noexcept
+    STDROMANO_HOST_DEVICE constexpr T trace() const noexcept
     {
         return this->_data[0] + this->_data[5] + this->_data[10] + this->_data[15];
     }
 
-    constexpr Vector3<T> transform_point(const Vector3<T>& point) const noexcept
+    STDROMANO_HOST_DEVICE constexpr Vector3<T> transform_point(const Vector3<T>& point) const noexcept
     {
         const Transform44<T>& m = *this;
 
@@ -932,7 +943,7 @@ public:
                           m(2, 0) * point.x + m(2, 1) * point.y + m(2, 2) * point.z + m(2, 3));
     }
 
-    constexpr Vector3<T> transform_dir(const Vector3<T>& dir) const noexcept
+    STDROMANO_HOST_DEVICE constexpr Vector3<T> transform_dir(const Vector3<T>& dir) const noexcept
     {
         const Transform44<T>& m = *this;
 
@@ -941,7 +952,7 @@ public:
                           m(2, 0) * dir.x + m(2, 1) * dir.y + m(2, 2) * dir.z);
     }
 
-    constexpr void decomp_translation(Vector3<T>* t) const noexcept
+    STDROMANO_HOST_DEVICE constexpr void decomp_translation(Vector3<T>* t) const noexcept
     {
         STDROMANO_ASSERT(t != nullptr, "t is nullptr");
 
@@ -951,7 +962,7 @@ public:
     }
 
     /* Valid for T * R * S transforms, the scale is the length of each axis column */
-    void decomp_scale(Vector3<T>* s) const noexcept
+    STDROMANO_HOST_DEVICE void decomp_scale(Vector3<T>* s) const noexcept
     {
         STDROMANO_ASSERT(s != nullptr, "s is nullptr");
 
@@ -962,7 +973,7 @@ public:
         s->z = maths::sqrt(maths::sqr(m(0, 2)) + maths::sqr(m(1, 2)) + maths::sqr(m(2, 2)));
     }
 
-    void decomp_xyzt(Vector3<T>* x, Vector3<T>* y, Vector3<T>* z, Vector3<T>* t) const noexcept
+    STDROMANO_HOST_DEVICE void decomp_xyzt(Vector3<T>* x, Vector3<T>* y, Vector3<T>* z, Vector3<T>* t) const noexcept
     {
         Vector3<T> scale;
         this->decomp_scale(&scale);
@@ -988,7 +999,7 @@ public:
     }
 
     /* Returns (x, y, z, w) of the rotation, the matrix is expected to have no scale */
-    Vector4<T> to_quaternion() const noexcept
+    STDROMANO_HOST_DEVICE Vector4<T> to_quaternion() const noexcept
     {
         const Transform44<T>& m = *this;
 
@@ -1033,7 +1044,7 @@ public:
     }
 
     /* Inverse of from_rotation for the same rotation order, angles are in radians by default */
-    void decomp_tait_bryan(Vector3<T>* angles,
+    STDROMANO_HOST_DEVICE void decomp_tait_bryan(Vector3<T>* angles,
                            const bool radians = true,
                            std::uint32_t rotation_order = RotationOrder_XYZ) const noexcept
     {
@@ -1084,7 +1095,7 @@ public:
         angles->z = radians ? result[2] : maths::rad2deg(result[2]);
     }
 
-    constexpr void decomp_trs(Vector3<T>* t,
+    STDROMANO_HOST_DEVICE constexpr void decomp_trs(Vector3<T>* t,
                               Vector3<T>* r,
                               Vector3<T>* s,
                               const bool radians = true,
@@ -1100,7 +1111,7 @@ public:
             this->decomp_scale(s);
     }
 
-    constexpr bool equal_with_abs_error(const Transform44<T>& other,
+    STDROMANO_HOST_DEVICE constexpr bool equal_with_abs_error(const Transform44<T>& other,
                                         const T err = maths::constants<T>::large_epsilon) const noexcept
     {
         for(std::size_t i = 0; i < 16; ++i)

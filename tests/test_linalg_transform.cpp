@@ -1227,4 +1227,23 @@ STDROMANO_TEST_CASE(fuzz_transform44_composition_and_decomposition)
     TESTS_REQUIRE_PROPERTY(report);
 }
 
+STDROMANO_TEST_CASE(transform44_from_data)
+{
+    const Transform44F m = Transform44F::from_trs(Vec3F(1.0f, 2.0f, 3.0f),
+                                                  Vec3F(0.1f, 0.2f, 0.3f),
+                                                  Vec3F(2.0f, 3.0f, 4.0f));
+
+    const Transform44F copy = Transform44F::from_data(m.data());
+    STDROMANO_CHECK(copy.equal_with_abs_error(m, 1e-30f));
+
+    /* column-major: the translation is the last four values */
+    const float data[16] = {1.0f, 0.0f, 0.0f, 0.0f,
+                            0.0f, 1.0f, 0.0f, 0.0f,
+                            0.0f, 0.0f, 1.0f, 0.0f,
+                            5.0f, 6.0f, 7.0f, 1.0f};
+    const Transform44F t = Transform44F::from_data(data);
+    STDROMANO_CHECK_EQ(t.transform_point(Vec3F(1.0f)), Vec3F(6.0f, 7.0f, 8.0f));
+    STDROMANO_CHECK_EQ(t(0, 3), 5.0f);
+}
+
 STDROMANO_TEST_MAIN()
