@@ -9,14 +9,17 @@
 
 #include "stdromano/stdromano.hpp"
 
+#if !defined(STDROMANO_CUDA_DEVICE)
 #if defined(STDROMANO_X86_64)
 #include <immintrin.h>
 #elif defined(STDROMANO_AARCH64)
 #include <arm_neon.h>
 #endif /* defined(STDROMANO_X86_64) */
+#endif /* !defined(STDROMANO_CUDA_DEVICE) */
 
 #include <limits>
 #include <cmath>
+#include <type_traits>
 
 #if defined(STDROMANO_GCC) || defined(STDROMANO_CLANG)
 #include <math.h>
@@ -29,6 +32,21 @@
 #if defined(STDROMANO_X86_64) && (defined(__FMA__) || defined(__AVX2__))
 #define STDROMANO_HAS_FMA_INTRINSICS
 #endif /* defined(STDROMANO_X86_64) && (defined(__FMA__) || defined(__AVX2__)) */
+
+/* msvc has no __has_builtin, and "defined(__has_builtin) && __has_builtin(x)" does not preprocess */
+#if defined(__has_builtin)
+#if __has_builtin(__builtin_sincosf) && __has_builtin(__builtin_sincos)
+#define STDROMANO_HAS_BUILTIN_SINCOS
+#endif /* __has_builtin(__builtin_sincosf) && __has_builtin(__builtin_sincos) */
+#endif /* defined(__has_builtin) */
+
+/*
+    Every function is usable from host and device code. On the device, functions mapping to libm
+    (sqrt, exp, sin...) call the CUDA math library and follow the compilation flags (with
+    --use_fast_math, sin becomes __sinf, sqrt becomes sqrt.approx...), while the functions that
+    are approximations by definition (rcp, rsqrt) and the fused ones (fma...) always use the
+    hardware instructions. rcp_safe is correctly rounded on both sides, whatever the flags
+*/
 
 #define MATHS_NAMESPACE_BEGIN namespace maths {
 #define MATHS_NAMESPACE_END }
@@ -51,6 +69,9 @@ struct constants<float>
     static constexpr float inv_pi = one_over_pi;
     static constexpr float inv_two_pi = 0.15915494309189533577f;
     static constexpr float inv_four_pi = 0.07957747154594766788f;
+
+    static constexpr float deg_to_rad = 0.0174532925199432957692f;
+    static constexpr float rad_to_deg = 57.2957795130823208768f;
 
     static constexpr float inf = std::numeric_limits<float>::infinity();
     static constexpr float neginf = -std::numeric_limits<float>::infinity();
@@ -88,6 +109,9 @@ struct constants<double>
     static constexpr double inv_two_pi = 0.15915494309189533577;
     static constexpr double inv_four_pi = 0.07957747154594766788;
 
+    static constexpr double deg_to_rad = 0.0174532925199432957692;
+    static constexpr double rad_to_deg = 57.2957795130823208768;
+
     static constexpr double inf = std::numeric_limits<double>::infinity();
     static constexpr double neginf = -std::numeric_limits<double>::infinity();
 
@@ -111,80 +135,107 @@ struct constants<double>
     static constexpr double epsilon = std::numeric_limits<double>::epsilon();
 };
 
-#if defined(STDROMANO_WIN)
 /******************************************/
 template<typename T>
-STDROMANO_FORCE_INLINE bool isinf(const T x) noexcept;
+STDROMANO_HOST_DEVICE STDROMANO_FORCE_INLINE bool isinf(const T x) noexcept;
 
 template<>
-STDROMANO_FORCE_INLINE bool isinf(const float x) noexcept { return _finite(x) == 0 && _isnan(x) == 0; }
-
-template<>
-STDROMANO_FORCE_INLINE bool isinf(const double x) noexcept { return _finite(x) == 0 && _isnan(x) == 0; }
-
-/******************************************/
-template<typename T>
-STDROMANO_FORCE_INLINE bool isnan(const T x) noexcept;
-
-template<>
-STDROMANO_FORCE_INLINE bool isnan(const float x) noexcept { return _isnan(x) != 0; }
-
-template<>
-STDROMANO_FORCE_INLINE bool isnan(const double x) noexcept { return _isnan(x) != 0; }
-
-/******************************************/
-template<typename T>
-STDROMANO_FORCE_INLINE bool isfinite(const T x) noexcept;
-
-template<>
-STDROMANO_FORCE_INLINE bool isfinite(const float x) noexcept { return _finite(x) != 0; }
-
-template<>
-STDROMANO_FORCE_INLINE bool isfinite(const double x) noexcept { return _finite(x) != 0; }
-#else
-/******************************************/
-template<typename T>
-STDROMANO_FORCE_INLINE bool isinf(const T x) noexcept;
-
-template<>
-STDROMANO_FORCE_INLINE bool isinf(const float x) noexcept { return __builtin_isinf(x) != 0; }
-
-template<>
-STDROMANO_FORCE_INLINE bool isinf(const double x) noexcept { return __builtin_isinf(x) != 0; }
-
-/******************************************/
-template<typename T>
-STDROMANO_FORCE_INLINE bool isnan(const T x) noexcept;
-
-template<>
-STDROMANO_FORCE_INLINE bool isnan(const float x) noexcept { return __builtin_isnan(x) != 0; }
-
-template<>
-STDROMANO_FORCE_INLINE bool isnan(const double x) noexcept { return __builtin_isnan(x) != 0; }
-
-/******************************************/
-template<typename T>
-STDROMANO_FORCE_INLINE bool isfinite(const T x) noexcept;
-
-template<>
-STDROMANO_FORCE_INLINE bool isfinite(const float x) noexcept { return __builtin_isfinite(x) != 0; }
-
-template<>
-STDROMANO_FORCE_INLINE bool isfinite(const double x) noexcept { return __builtin_isfinite(x) != 0; }
-#endif /* defined(STDROMANO_WIN) */
-
-/******************************************/
-template<typename T>
-constexpr STDROMANO_FORCE_INLINE T sqr(const T x) noexcept { return x * x; }
-
-/******************************************/
-template<typename T>
-STDROMANO_FORCE_INLINE T rcp(const T x) noexcept;
-
-template<>
-STDROMANO_FORCE_INLINE float rcp(const float x) noexcept
+STDROMANO_HOST_DEVICE STDROMANO_FORCE_INLINE bool isinf(const float x) noexcept
 {
-#if defined(STDROMANO_X86_64)
+#if defined(STDROMANO_CUDA_DEVICE)
+    return (__float_as_uint(x) & 0x7FFFFFFFU) == 0x7F800000U;
+#elif defined(STDROMANO_WIN)
+    return _finite(x) == 0 && _isnan(x) == 0;
+#else
+    return __builtin_isinf(x) != 0;
+#endif /* defined(STDROMANO_CUDA_DEVICE) */
+}
+
+template<>
+STDROMANO_HOST_DEVICE STDROMANO_FORCE_INLINE bool isinf(const double x) noexcept
+{
+#if defined(STDROMANO_CUDA_DEVICE)
+    return (static_cast<unsigned long long>(__double_as_longlong(x)) & 0x7FFFFFFFFFFFFFFFULL) ==
+           0x7FF0000000000000ULL;
+#elif defined(STDROMANO_WIN)
+    return _finite(x) == 0 && _isnan(x) == 0;
+#else
+    return __builtin_isinf(x) != 0;
+#endif /* defined(STDROMANO_CUDA_DEVICE) */
+}
+
+/******************************************/
+template<typename T>
+STDROMANO_HOST_DEVICE STDROMANO_FORCE_INLINE bool isnan(const T x) noexcept;
+
+template<>
+STDROMANO_HOST_DEVICE STDROMANO_FORCE_INLINE bool isnan(const float x) noexcept
+{
+#if defined(STDROMANO_CUDA_DEVICE)
+    return (__float_as_uint(x) & 0x7FFFFFFFU) > 0x7F800000U;
+#elif defined(STDROMANO_WIN)
+    return _isnan(x) != 0;
+#else
+    return __builtin_isnan(x) != 0;
+#endif /* defined(STDROMANO_CUDA_DEVICE) */
+}
+
+template<>
+STDROMANO_HOST_DEVICE STDROMANO_FORCE_INLINE bool isnan(const double x) noexcept
+{
+#if defined(STDROMANO_CUDA_DEVICE)
+    return (static_cast<unsigned long long>(__double_as_longlong(x)) & 0x7FFFFFFFFFFFFFFFULL) >
+           0x7FF0000000000000ULL;
+#elif defined(STDROMANO_WIN)
+    return _isnan(x) != 0;
+#else
+    return __builtin_isnan(x) != 0;
+#endif /* defined(STDROMANO_CUDA_DEVICE) */
+}
+
+/******************************************/
+template<typename T>
+STDROMANO_HOST_DEVICE STDROMANO_FORCE_INLINE bool isfinite(const T x) noexcept;
+
+template<>
+STDROMANO_HOST_DEVICE STDROMANO_FORCE_INLINE bool isfinite(const float x) noexcept
+{
+#if defined(STDROMANO_CUDA_DEVICE)
+    return (__float_as_uint(x) & 0x7F800000U) != 0x7F800000U;
+#elif defined(STDROMANO_WIN)
+    return _finite(x) != 0;
+#else
+    return __builtin_isfinite(x) != 0;
+#endif /* defined(STDROMANO_CUDA_DEVICE) */
+}
+
+template<>
+STDROMANO_HOST_DEVICE STDROMANO_FORCE_INLINE bool isfinite(const double x) noexcept
+{
+#if defined(STDROMANO_CUDA_DEVICE)
+    return (static_cast<unsigned long long>(__double_as_longlong(x)) & 0x7FF0000000000000ULL) !=
+           0x7FF0000000000000ULL;
+#elif defined(STDROMANO_WIN)
+    return _finite(x) != 0;
+#else
+    return __builtin_isfinite(x) != 0;
+#endif /* defined(STDROMANO_CUDA_DEVICE) */
+}
+
+/******************************************/
+template<typename T>
+STDROMANO_HOST_DEVICE constexpr STDROMANO_FORCE_INLINE T sqr(const T x) noexcept { return x * x; }
+
+/******************************************/
+template<typename T>
+STDROMANO_HOST_DEVICE STDROMANO_FORCE_INLINE T rcp(const T x) noexcept;
+
+template<>
+STDROMANO_HOST_DEVICE STDROMANO_FORCE_INLINE float rcp(const float x) noexcept
+{
+#if defined(STDROMANO_CUDA_DEVICE)
+    return __fdividef(1.0f, x);
+#elif defined(STDROMANO_X86_64)
     const __m128 a = _mm_set_ss(x);
     const __m128 r = _mm_rcp_ss(a);
 
@@ -201,117 +252,189 @@ STDROMANO_FORCE_INLINE float rcp(const float x) noexcept
     return r;
 #else
     return 1.0f / x;
-#endif /* defined(STDROMANO_X86_64) */
+#endif /* defined(STDROMANO_CUDA_DEVICE) */
 }
 
 template<>
-STDROMANO_FORCE_INLINE double rcp(const double x) noexcept
+STDROMANO_HOST_DEVICE STDROMANO_FORCE_INLINE double rcp(const double x) noexcept
 {
+#if defined(STDROMANO_CUDA_DEVICE)
+    return __drcp_rn(x);
+#else
     return 1.0 / x;
+#endif /* defined(STDROMANO_CUDA_DEVICE) */
 }
 
 /******************************************/
 template<typename T>
-constexpr STDROMANO_FORCE_INLINE T rcp_safe(T a) noexcept { return constants<T>::one / a; }
+STDROMANO_HOST_DEVICE constexpr STDROMANO_FORCE_INLINE T rcp_safe(const T a) noexcept
+{
+#if defined(STDROMANO_CUDA_DEVICE)
+    /* --use_fast_math turns 1.0f / a into an approximation, __frcp_rn keeps it exact */
+    if constexpr(std::is_same_v<T, float>)
+        return __frcp_rn(a);
+    else if constexpr(std::is_same_v<T, double>)
+        return __drcp_rn(a);
+    else
+        return constants<T>::one / a;
+#else
+    return constants<T>::one / a;
+#endif /* defined(STDROMANO_CUDA_DEVICE) */
+}
 
 /******************************************/
 template<typename T>
-constexpr STDROMANO_FORCE_INLINE T min(T a, T b) noexcept { return a < b ? a : b; }
+STDROMANO_HOST_DEVICE constexpr STDROMANO_FORCE_INLINE T min(const T a, const T b) noexcept
+{
+#if defined(STDROMANO_CUDA_DEVICE)
+    /* a < b ? a : b is a setp and a selp, fminf is a single min instruction */
+    if constexpr(std::is_same_v<T, float>)
+        return ::fminf(a, b);
+    else if constexpr(std::is_same_v<T, double>)
+        return ::fmin(a, b);
+    else
+        return a < b ? a : b;
+#else
+    return a < b ? a : b;
+#endif /* defined(STDROMANO_CUDA_DEVICE) */
+}
 
 /******************************************/
 template<typename T>
-constexpr STDROMANO_FORCE_INLINE T max(T a, T b) noexcept { return a > b ? a : b; }
+STDROMANO_HOST_DEVICE constexpr STDROMANO_FORCE_INLINE T max(const T a, const T b) noexcept
+{
+#if defined(STDROMANO_CUDA_DEVICE)
+    if constexpr(std::is_same_v<T, float>)
+        return ::fmaxf(a, b);
+    else if constexpr(std::is_same_v<T, double>)
+        return ::fmax(a, b);
+    else
+        return a > b ? a : b;
+#else
+    return a > b ? a : b;
+#endif /* defined(STDROMANO_CUDA_DEVICE) */
+}
 
 /******************************************/
 template<typename T>
-constexpr STDROMANO_FORCE_INLINE T fit(T s, T a1, T a2, T b1, T b2) noexcept
+STDROMANO_HOST_DEVICE constexpr STDROMANO_FORCE_INLINE T fit(const T s,
+                                                             const T a1,
+                                                             const T a2,
+                                                             const T b1,
+                                                             const T b2) noexcept
 {
     return b1 + ((s - a1) * (b2 - b1)) / (a2 - a1);
 }
 
 /******************************************/
 template<typename T>
-constexpr STDROMANO_FORCE_INLINE T fit01(T x, T a, T b) noexcept
+STDROMANO_HOST_DEVICE constexpr STDROMANO_FORCE_INLINE T fit01(const T x, const T a, const T b) noexcept
 {
     return x * (b - a) + a;
 }
 
 /******************************************/
 template<typename T>
-constexpr STDROMANO_FORCE_INLINE T lerp(T a, T b, T t) noexcept
+STDROMANO_HOST_DEVICE constexpr STDROMANO_FORCE_INLINE T lerp(const T a, const T b, const T t) noexcept
 {
     return (constants<T>::one - t) * a + t * b;
 }
 
 /******************************************/
 template<typename T>
-constexpr STDROMANO_FORCE_INLINE T clamp(T x,
-                                         T lower = constants<T>::zero,
-                                         T upper = constants<T>::one) noexcept
+STDROMANO_HOST_DEVICE constexpr STDROMANO_FORCE_INLINE T clamp(const T x,
+                                                               const T lower = constants<T>::zero,
+                                                               const T upper = constants<T>::one) noexcept
 {
     return max(lower, min(x, upper));
 }
 
 /******************************************/
 template<typename T>
-constexpr STDROMANO_FORCE_INLINE T clampz(T x,
-                                          T upper = constants<T>::one) noexcept
+STDROMANO_HOST_DEVICE constexpr STDROMANO_FORCE_INLINE T clampz(const T x,
+                                                                const T upper = constants<T>::one) noexcept
 {
     return max(constants<T>::zero, min(x, upper));
 }
 
 /******************************************/
 template<typename T>
-constexpr STDROMANO_FORCE_INLINE T deg2rad(T deg) noexcept
+STDROMANO_HOST_DEVICE constexpr STDROMANO_FORCE_INLINE T deg2rad(const T deg) noexcept
 {
-    return deg * constants<T>::pi / static_cast<T>(180);
+    return deg * constants<T>::deg_to_rad;
 }
 
 /******************************************/
 template<typename T>
-constexpr STDROMANO_FORCE_INLINE T rad2deg(T rad) noexcept
+STDROMANO_HOST_DEVICE constexpr STDROMANO_FORCE_INLINE T rad2deg(const T rad) noexcept
 {
-    return rad * static_cast<T>(180) / constants<T>::pi;
+    return rad * constants<T>::rad_to_deg;
 }
 
 /******************************************/
 template<typename T>
-STDROMANO_FORCE_INLINE T abs(T x) noexcept;
+STDROMANO_HOST_DEVICE STDROMANO_FORCE_INLINE T abs(const T x) noexcept;
 
 template<>
-STDROMANO_FORCE_INLINE float abs(float x) noexcept { return ::fabsf(x); }
+STDROMANO_HOST_DEVICE STDROMANO_FORCE_INLINE float abs(const float x) noexcept { return ::fabsf(x); }
 
 template<>
-STDROMANO_FORCE_INLINE double abs(double x) noexcept { return ::fabs(x); }
+STDROMANO_HOST_DEVICE STDROMANO_FORCE_INLINE double abs(const double x) noexcept { return ::fabs(x); }
 
 /******************************************/
 template<typename T>
-STDROMANO_FORCE_INLINE T exp(T x) noexcept;
+STDROMANO_HOST_DEVICE STDROMANO_FORCE_INLINE T copysign(const T mag, const T sgn) noexcept;
 
 template<>
-STDROMANO_FORCE_INLINE float exp(float x) noexcept { return ::expf(x); }
-
-template<>
-STDROMANO_FORCE_INLINE double exp(double x) noexcept { return ::exp(x); }
-
-/******************************************/
-template<typename T>
-STDROMANO_FORCE_INLINE T sqrt(T x) noexcept;
-
-template<>
-STDROMANO_FORCE_INLINE float sqrt(float x) noexcept { return ::sqrtf(x); }
-
-template<>
-STDROMANO_FORCE_INLINE double sqrt(double x) noexcept { return ::sqrt(x); }
-
-/******************************************/
-template<typename T>
-STDROMANO_FORCE_INLINE T rsqrt(T x) noexcept;
-
-template<>
-STDROMANO_FORCE_INLINE float rsqrt(float x) noexcept
+STDROMANO_HOST_DEVICE STDROMANO_FORCE_INLINE float copysign(const float mag, const float sgn) noexcept
 {
-#if defined(STDROMANO_X86_64)
+    return ::copysignf(mag, sgn);
+}
+
+template<>
+STDROMANO_HOST_DEVICE STDROMANO_FORCE_INLINE double copysign(const double mag, const double sgn) noexcept
+{
+    return ::copysign(mag, sgn);
+}
+
+/******************************************/
+/* 1 or -1 following the sign bit (so -0 gives -1), branchless on both sides */
+template<typename T>
+STDROMANO_HOST_DEVICE STDROMANO_FORCE_INLINE T sign(const T x) noexcept
+{
+    return copysign(constants<T>::one, x);
+}
+
+/******************************************/
+template<typename T>
+STDROMANO_HOST_DEVICE STDROMANO_FORCE_INLINE T exp(const T x) noexcept;
+
+template<>
+STDROMANO_HOST_DEVICE STDROMANO_FORCE_INLINE float exp(const float x) noexcept { return ::expf(x); }
+
+template<>
+STDROMANO_HOST_DEVICE STDROMANO_FORCE_INLINE double exp(const double x) noexcept { return ::exp(x); }
+
+/******************************************/
+template<typename T>
+STDROMANO_HOST_DEVICE STDROMANO_FORCE_INLINE T sqrt(const T x) noexcept;
+
+template<>
+STDROMANO_HOST_DEVICE STDROMANO_FORCE_INLINE float sqrt(const float x) noexcept { return ::sqrtf(x); }
+
+template<>
+STDROMANO_HOST_DEVICE STDROMANO_FORCE_INLINE double sqrt(const double x) noexcept { return ::sqrt(x); }
+
+/******************************************/
+template<typename T>
+STDROMANO_HOST_DEVICE STDROMANO_FORCE_INLINE T rsqrt(const T x) noexcept;
+
+template<>
+STDROMANO_HOST_DEVICE STDROMANO_FORCE_INLINE float rsqrt(const float x) noexcept
+{
+#if defined(STDROMANO_CUDA_DEVICE)
+    return ::rsqrtf(x);
+#elif defined(STDROMANO_X86_64)
     const __m128 a = _mm_set_ss(x);
     __m128 r = _mm_rsqrt_ss(a);
     r = _mm_add_ss(_mm_mul_ss(_mm_set_ss(1.5f), r),
@@ -324,340 +447,368 @@ STDROMANO_FORCE_INLINE float rsqrt(float x) noexcept
     return r;
 #else
     return 1.0f / ::sqrtf(x);
-#endif /* defined(STDROMANO_X86_64) */
+#endif /* defined(STDROMANO_CUDA_DEVICE) */
 }
 
 template<>
-STDROMANO_FORCE_INLINE double rsqrt(double x) noexcept
+STDROMANO_HOST_DEVICE STDROMANO_FORCE_INLINE double rsqrt(const double x) noexcept
 {
-    return 1.0 / sqrt(x);
+#if defined(STDROMANO_CUDA_DEVICE)
+    return ::rsqrt(x);
+#else
+    return 1.0 / ::sqrt(x);
+#endif /* defined(STDROMANO_CUDA_DEVICE) */
 }
 
 /******************************************/
 template<typename T>
-STDROMANO_FORCE_INLINE T fmod(T x, T y) noexcept;
+STDROMANO_HOST_DEVICE STDROMANO_FORCE_INLINE T fmod(const T x, const T y) noexcept;
 
 template<>
-STDROMANO_FORCE_INLINE float fmod(float x, float y) noexcept { return ::fmodf(x, y); }
+STDROMANO_HOST_DEVICE STDROMANO_FORCE_INLINE float fmod(const float x, const float y) noexcept { return ::fmodf(x, y); }
 
 template<>
-STDROMANO_FORCE_INLINE double fmod(double x, double y) noexcept { return ::fmod(x, y); }
+STDROMANO_HOST_DEVICE STDROMANO_FORCE_INLINE double fmod(const double x, const double y) noexcept { return ::fmod(x, y); }
 
 /******************************************/
 template<typename T>
-STDROMANO_FORCE_INLINE T log(T x) noexcept;
+STDROMANO_HOST_DEVICE STDROMANO_FORCE_INLINE T log(const T x) noexcept;
 
 template<>
-STDROMANO_FORCE_INLINE float log(float x) noexcept { return ::logf(x); }
+STDROMANO_HOST_DEVICE STDROMANO_FORCE_INLINE float log(const float x) noexcept { return ::logf(x); }
 
 template<>
-STDROMANO_FORCE_INLINE double log(double x) noexcept { return ::log(x); }
+STDROMANO_HOST_DEVICE STDROMANO_FORCE_INLINE double log(const double x) noexcept { return ::log(x); }
 
 /******************************************/
 template<typename T>
-STDROMANO_FORCE_INLINE T log2(T x) noexcept;
+STDROMANO_HOST_DEVICE STDROMANO_FORCE_INLINE T log2(const T x) noexcept;
 
 template<>
-STDROMANO_FORCE_INLINE float log2(float x) noexcept { return ::log2f(x); }
+STDROMANO_HOST_DEVICE STDROMANO_FORCE_INLINE float log2(const float x) noexcept { return ::log2f(x); }
 
 template<>
-STDROMANO_FORCE_INLINE double log2(double x) noexcept { return ::log2(x); }
+STDROMANO_HOST_DEVICE STDROMANO_FORCE_INLINE double log2(const double x) noexcept { return ::log2(x); }
 
 /******************************************/
 template<typename T>
-STDROMANO_FORCE_INLINE T log10(T x) noexcept;
+STDROMANO_HOST_DEVICE STDROMANO_FORCE_INLINE T log10(const T x) noexcept;
 
 template<>
-STDROMANO_FORCE_INLINE float log10(float x) noexcept { return ::log10f(x); }
+STDROMANO_HOST_DEVICE STDROMANO_FORCE_INLINE float log10(const float x) noexcept { return ::log10f(x); }
 
 template<>
-STDROMANO_FORCE_INLINE double log10(double x) noexcept { return ::log10(x); }
+STDROMANO_HOST_DEVICE STDROMANO_FORCE_INLINE double log10(const double x) noexcept { return ::log10(x); }
 
 /******************************************/
 template<typename T>
-STDROMANO_FORCE_INLINE T pow(T x, T y) noexcept;
+STDROMANO_HOST_DEVICE STDROMANO_FORCE_INLINE T pow(const T x, const T y) noexcept;
 
 template<>
-STDROMANO_FORCE_INLINE float pow(float x, float y) noexcept { return ::powf(x, y); }
+STDROMANO_HOST_DEVICE STDROMANO_FORCE_INLINE float pow(const float x, const float y) noexcept { return ::powf(x, y); }
 
 template<>
-STDROMANO_FORCE_INLINE double pow(double x, double y) noexcept { return ::pow(x, y); }
+STDROMANO_HOST_DEVICE STDROMANO_FORCE_INLINE double pow(const double x, const double y) noexcept { return ::pow(x, y); }
 
 /******************************************/
 template<typename T>
-STDROMANO_FORCE_INLINE T floor(T x) noexcept;
+STDROMANO_HOST_DEVICE STDROMANO_FORCE_INLINE T floor(const T x) noexcept;
 
 template<>
-STDROMANO_FORCE_INLINE float floor(float x) noexcept { return ::floorf(x); }
+STDROMANO_HOST_DEVICE STDROMANO_FORCE_INLINE float floor(const float x) noexcept { return ::floorf(x); }
 
 template<>
-STDROMANO_FORCE_INLINE double floor(double x) noexcept { return ::floor(x); }
+STDROMANO_HOST_DEVICE STDROMANO_FORCE_INLINE double floor(const double x) noexcept { return ::floor(x); }
 
 /******************************************/
 template<typename T>
-STDROMANO_FORCE_INLINE T ceil(T x) noexcept;
+STDROMANO_HOST_DEVICE STDROMANO_FORCE_INLINE T ceil(const T x) noexcept;
 
 template<>
-STDROMANO_FORCE_INLINE float ceil(float x) noexcept { return ::ceilf(x); }
+STDROMANO_HOST_DEVICE STDROMANO_FORCE_INLINE float ceil(const float x) noexcept { return ::ceilf(x); }
 
 template<>
-STDROMANO_FORCE_INLINE double ceil(double x) noexcept { return ::ceil(x); }
+STDROMANO_HOST_DEVICE STDROMANO_FORCE_INLINE double ceil(const double x) noexcept { return ::ceil(x); }
 
 /******************************************/
 template<typename T>
-STDROMANO_FORCE_INLINE T frac(T x) noexcept { return x - floor(x); }
+STDROMANO_HOST_DEVICE STDROMANO_FORCE_INLINE T frac(const T x) noexcept { return x - floor(x); }
 
 /******************************************/
 template<typename T>
-STDROMANO_FORCE_INLINE T rint(T x) noexcept;
+STDROMANO_HOST_DEVICE STDROMANO_FORCE_INLINE T rint(const T x) noexcept;
 
 template<>
-STDROMANO_FORCE_INLINE float rint(float x) noexcept { return ::rintf(x); }
+STDROMANO_HOST_DEVICE STDROMANO_FORCE_INLINE float rint(const float x) noexcept { return ::rintf(x); }
 
 template<>
-STDROMANO_FORCE_INLINE double rint(double x) noexcept { return ::rint(x); }
+STDROMANO_HOST_DEVICE STDROMANO_FORCE_INLINE double rint(const double x) noexcept { return ::rint(x); }
 
 /******************************************/
 template<typename T>
-STDROMANO_FORCE_INLINE T acos(T x) noexcept;
+STDROMANO_HOST_DEVICE STDROMANO_FORCE_INLINE T acos(const T x) noexcept;
 
 template<>
-STDROMANO_FORCE_INLINE float acos(float x) noexcept { return ::acosf(x); }
+STDROMANO_HOST_DEVICE STDROMANO_FORCE_INLINE float acos(const float x) noexcept { return ::acosf(x); }
 
 template<>
-STDROMANO_FORCE_INLINE double acos(double x) noexcept { return ::acos(x); }
+STDROMANO_HOST_DEVICE STDROMANO_FORCE_INLINE double acos(const double x) noexcept { return ::acos(x); }
 
 /******************************************/
 template<typename T>
-STDROMANO_FORCE_INLINE T asin(T x) noexcept;
+STDROMANO_HOST_DEVICE STDROMANO_FORCE_INLINE T asin(const T x) noexcept;
 
 template<>
-STDROMANO_FORCE_INLINE float asin(float x) noexcept { return ::asinf(x); }
+STDROMANO_HOST_DEVICE STDROMANO_FORCE_INLINE float asin(const float x) noexcept { return ::asinf(x); }
 
 template<>
-STDROMANO_FORCE_INLINE double asin(double x) noexcept { return ::asin(x); }
+STDROMANO_HOST_DEVICE STDROMANO_FORCE_INLINE double asin(const double x) noexcept { return ::asin(x); }
 
 /******************************************/
 template<typename T>
-STDROMANO_FORCE_INLINE T atan(T x) noexcept;
+STDROMANO_HOST_DEVICE STDROMANO_FORCE_INLINE T atan(const T x) noexcept;
 
 template<>
-STDROMANO_FORCE_INLINE float atan(float x) noexcept { return ::atanf(x); }
+STDROMANO_HOST_DEVICE STDROMANO_FORCE_INLINE float atan(const float x) noexcept { return ::atanf(x); }
 
 template<>
-STDROMANO_FORCE_INLINE double atan(double x) noexcept { return ::atan(x); }
+STDROMANO_HOST_DEVICE STDROMANO_FORCE_INLINE double atan(const double x) noexcept { return ::atan(x); }
 
 /******************************************/
 template<typename T>
-STDROMANO_FORCE_INLINE T atan2(T y, T x) noexcept;
+STDROMANO_HOST_DEVICE STDROMANO_FORCE_INLINE T atan2(const T y, const T x) noexcept;
 
 template<>
-STDROMANO_FORCE_INLINE float atan2(float y, float x) noexcept { return ::atan2f(y, x); }
+STDROMANO_HOST_DEVICE STDROMANO_FORCE_INLINE float atan2(const float y, const float x) noexcept { return ::atan2f(y, x); }
 
 template<>
-STDROMANO_FORCE_INLINE double atan2(double y, double x) noexcept { return ::atan2(y, x); }
+STDROMANO_HOST_DEVICE STDROMANO_FORCE_INLINE double atan2(const double y, const double x) noexcept { return ::atan2(y, x); }
 
 /******************************************/
 template<typename T>
-STDROMANO_FORCE_INLINE T cos(T x) noexcept;
+STDROMANO_HOST_DEVICE STDROMANO_FORCE_INLINE T cos(const T x) noexcept;
 
 template<>
-STDROMANO_FORCE_INLINE float cos(float x) noexcept { return ::cosf(x); }
+STDROMANO_HOST_DEVICE STDROMANO_FORCE_INLINE float cos(const float x) noexcept { return ::cosf(x); }
 
 template<>
-STDROMANO_FORCE_INLINE double cos(double x) noexcept { return ::cos(x); }
+STDROMANO_HOST_DEVICE STDROMANO_FORCE_INLINE double cos(const double x) noexcept { return ::cos(x); }
 
 /******************************************/
 template<typename T>
-STDROMANO_FORCE_INLINE T sin(T x) noexcept;
+STDROMANO_HOST_DEVICE STDROMANO_FORCE_INLINE T sin(const T x) noexcept;
 
 template<>
-STDROMANO_FORCE_INLINE float sin(float x) noexcept { return ::sinf(x); }
+STDROMANO_HOST_DEVICE STDROMANO_FORCE_INLINE float sin(const float x) noexcept { return ::sinf(x); }
 
 template<>
-STDROMANO_FORCE_INLINE double sin(double x) noexcept { return ::sin(x); }
+STDROMANO_HOST_DEVICE STDROMANO_FORCE_INLINE double sin(const double x) noexcept { return ::sin(x); }
 
 /******************************************/
 template<typename T>
-STDROMANO_FORCE_INLINE T tan(T x) noexcept;
+STDROMANO_HOST_DEVICE STDROMANO_FORCE_INLINE T tan(const T x) noexcept;
 
 template<>
-STDROMANO_FORCE_INLINE float tan(float x) noexcept { return ::tanf(x); }
+STDROMANO_HOST_DEVICE STDROMANO_FORCE_INLINE float tan(const float x) noexcept { return ::tanf(x); }
 
 template<>
-STDROMANO_FORCE_INLINE double tan(double x) noexcept { return ::tan(x); }
+STDROMANO_HOST_DEVICE STDROMANO_FORCE_INLINE double tan(const double x) noexcept { return ::tan(x); }
 
 /******************************************/
 template<typename T>
-STDROMANO_FORCE_INLINE T cosh(T x) noexcept;
+STDROMANO_HOST_DEVICE STDROMANO_FORCE_INLINE T cosh(const T x) noexcept;
 
 template<>
-STDROMANO_FORCE_INLINE float cosh(float x) noexcept { return ::coshf(x); }
+STDROMANO_HOST_DEVICE STDROMANO_FORCE_INLINE float cosh(const float x) noexcept { return ::coshf(x); }
 
 template<>
-STDROMANO_FORCE_INLINE double cosh(double x) noexcept { return ::cosh(x); }
+STDROMANO_HOST_DEVICE STDROMANO_FORCE_INLINE double cosh(const double x) noexcept { return ::cosh(x); }
 
 /******************************************/
 template<typename T>
-STDROMANO_FORCE_INLINE T sinh(T x) noexcept;
+STDROMANO_HOST_DEVICE STDROMANO_FORCE_INLINE T sinh(const T x) noexcept;
 
 template<>
-STDROMANO_FORCE_INLINE float sinh(float x) noexcept { return ::sinhf(x); }
+STDROMANO_HOST_DEVICE STDROMANO_FORCE_INLINE float sinh(const float x) noexcept { return ::sinhf(x); }
 
 template<>
-STDROMANO_FORCE_INLINE double sinh(double x) noexcept { return ::sinh(x); }
+STDROMANO_HOST_DEVICE STDROMANO_FORCE_INLINE double sinh(const double x) noexcept { return ::sinh(x); }
 
 /******************************************/
 template<typename T>
-STDROMANO_FORCE_INLINE T tanh(T x) noexcept;
+STDROMANO_HOST_DEVICE STDROMANO_FORCE_INLINE T tanh(const T x) noexcept;
 
 template<>
-STDROMANO_FORCE_INLINE float tanh(float x) noexcept { return ::tanhf(x); }
+STDROMANO_HOST_DEVICE STDROMANO_FORCE_INLINE float tanh(const float x) noexcept { return ::tanhf(x); }
 
 template<>
-STDROMANO_FORCE_INLINE double tanh(double x) noexcept { return ::tanh(x); }
+STDROMANO_HOST_DEVICE STDROMANO_FORCE_INLINE double tanh(const double x) noexcept { return ::tanh(x); }
 
 /******************************************/
 template<typename T>
-STDROMANO_FORCE_INLINE void sincos(T theta, T* s, T* c) noexcept;
+STDROMANO_HOST_DEVICE STDROMANO_FORCE_INLINE void sincos(const T theta, T* s, T* c) noexcept;
 
 template<>
-STDROMANO_FORCE_INLINE void sincos(float theta, float* s, float* c) noexcept
+STDROMANO_HOST_DEVICE STDROMANO_FORCE_INLINE void sincos(const float theta, float* s, float* c) noexcept
 {
-#if defined(__has_builtin) && __has_builtin(__builtin_sincosf)
+#if defined(STDROMANO_CUDA_DEVICE)
+    ::sincosf(theta, s, c);
+#elif defined(STDROMANO_HAS_BUILTIN_SINCOS)
     __builtin_sincosf(theta, s, c);
 #else
-    *s = sin(theta);
-    *c = cos(theta);
-#endif /* defined(STDROMANO_GCC) || defined(STDROMANO_CLANG) */
+    *s = ::sinf(theta);
+    *c = ::cosf(theta);
+#endif /* defined(STDROMANO_CUDA_DEVICE) */
 }
 
 template<>
-STDROMANO_FORCE_INLINE void sincos(double theta, double* s, double* c) noexcept
+STDROMANO_HOST_DEVICE STDROMANO_FORCE_INLINE void sincos(const double theta, double* s, double* c) noexcept
 {
-#if defined(__has_builtin) && __has_builtin(__builtin_sincos)
+#if defined(STDROMANO_CUDA_DEVICE)
+    ::sincos(theta, s, c);
+#elif defined(STDROMANO_HAS_BUILTIN_SINCOS)
     __builtin_sincos(theta, s, c);
 #else
-    *s = sin(theta);
-    *c = cos(theta);
-#endif /* defined(STDROMANO_GCC) */
+    *s = ::sin(theta);
+    *c = ::cos(theta);
+#endif /* defined(STDROMANO_CUDA_DEVICE) */
 }
 
 /******************************************/
+/* a * b + c */
 template<typename T>
-STDROMANO_FORCE_INLINE T fma(T a, T b, T c) noexcept;
+STDROMANO_HOST_DEVICE STDROMANO_FORCE_INLINE T fma(const T a, const T b, const T c) noexcept;
 
 template<>
-STDROMANO_FORCE_INLINE float fma(float a, float b, float c) noexcept
+STDROMANO_HOST_DEVICE STDROMANO_FORCE_INLINE float fma(const float a, const float b, const float c) noexcept
 {
-#if defined(STDROMANO_HAS_FMA_INTRINSICS)
+#if defined(STDROMANO_CUDA_DEVICE)
+    return __fmaf_rn(a, b, c);
+#elif defined(STDROMANO_HAS_FMA_INTRINSICS)
     return _mm_cvtss_f32(_mm_fmadd_ss(_mm_set_ss(a), _mm_set_ss(b), _mm_set_ss(c)));
 #elif defined(STDROMANO_AARCH64)
     return std::fma(a, b, c);
 #else
     return a * b + c;
-#endif /* defined(STDROMANO_HAS_FMA_INTRINSICS) */
+#endif /* defined(STDROMANO_CUDA_DEVICE) */
 }
 
 template<>
-STDROMANO_FORCE_INLINE double fma(double a, double b, double c) noexcept
+STDROMANO_HOST_DEVICE STDROMANO_FORCE_INLINE double fma(const double a, const double b, const double c) noexcept
 {
-#if defined(STDROMANO_HAS_FMA_INTRINSICS)
+#if defined(STDROMANO_CUDA_DEVICE)
+    return __fma_rn(a, b, c);
+#elif defined(STDROMANO_HAS_FMA_INTRINSICS)
     return _mm_cvtsd_f64(_mm_fmadd_sd(_mm_set_sd(a), _mm_set_sd(b), _mm_set_sd(c)));
 #elif defined(STDROMANO_AARCH64)
     return std::fma(a, b, c);
 #else
     return a * b + c;
-#endif /* defined(STDROMANO_HAS_FMA_INTRINSICS) */
+#endif /* defined(STDROMANO_CUDA_DEVICE) */
 }
 
 /******************************************/
+/* a * b - c */
 template<typename T>
-STDROMANO_FORCE_INLINE T fms(T a, T b, T c) noexcept;
+STDROMANO_HOST_DEVICE STDROMANO_FORCE_INLINE T fms(const T a, const T b, const T c) noexcept;
 
 template<>
-STDROMANO_FORCE_INLINE float fms(float a, float b, float c) noexcept
+STDROMANO_HOST_DEVICE STDROMANO_FORCE_INLINE float fms(const float a, const float b, const float c) noexcept
 {
-#if defined(STDROMANO_HAS_FMA_INTRINSICS)
+#if defined(STDROMANO_CUDA_DEVICE)
+    return __fmaf_rn(a, b, -c);
+#elif defined(STDROMANO_HAS_FMA_INTRINSICS)
     return _mm_cvtss_f32(_mm_fmsub_ss(_mm_set_ss(a), _mm_set_ss(b), _mm_set_ss(c)));
 #elif defined(STDROMANO_AARCH64)
     return std::fma(a, b, -c);
 #else
     return a * b - c;
-#endif /* defined(STDROMANO_HAS_FMA_INTRINSICS) */
+#endif /* defined(STDROMANO_CUDA_DEVICE) */
 }
 
 template<>
-STDROMANO_FORCE_INLINE double fms(double a, double b, double c) noexcept
+STDROMANO_HOST_DEVICE STDROMANO_FORCE_INLINE double fms(const double a, const double b, const double c) noexcept
 {
-#if defined(STDROMANO_HAS_FMA_INTRINSICS)
+#if defined(STDROMANO_CUDA_DEVICE)
+    return __fma_rn(a, b, -c);
+#elif defined(STDROMANO_HAS_FMA_INTRINSICS)
     return _mm_cvtsd_f64(_mm_fmsub_sd(_mm_set_sd(a), _mm_set_sd(b), _mm_set_sd(c)));
 #elif defined(STDROMANO_AARCH64)
     return std::fma(a, b, -c);
 #else
     return a * b - c;
-#endif /* defined(STDROMANO_HAS_FMA_INTRINSICS) */
+#endif /* defined(STDROMANO_CUDA_DEVICE) */
 }
 
 /******************************************/
+/* -a * b + c */
 template<typename T>
-STDROMANO_FORCE_INLINE T nfma(T a, T b, T c) noexcept;
+STDROMANO_HOST_DEVICE STDROMANO_FORCE_INLINE T nfma(const T a, const T b, const T c) noexcept;
 
 template<>
-STDROMANO_FORCE_INLINE float nfma(float a, float b, float c) noexcept
+STDROMANO_HOST_DEVICE STDROMANO_FORCE_INLINE float nfma(const float a, const float b, const float c) noexcept
 {
-#if defined(STDROMANO_HAS_FMA_INTRINSICS)
+#if defined(STDROMANO_CUDA_DEVICE)
+    return __fmaf_rn(-a, b, c);
+#elif defined(STDROMANO_HAS_FMA_INTRINSICS)
     return _mm_cvtss_f32(_mm_fnmadd_ss(_mm_set_ss(a), _mm_set_ss(b), _mm_set_ss(c)));
 #elif defined(STDROMANO_AARCH64)
     return std::fma(-a, b, c);
 #else
     return -a * b + c;
-#endif /* defined(STDROMANO_HAS_FMA_INTRINSICS) */
+#endif /* defined(STDROMANO_CUDA_DEVICE) */
 }
 
 template<>
-STDROMANO_FORCE_INLINE double nfma(double a, double b, double c) noexcept
+STDROMANO_HOST_DEVICE STDROMANO_FORCE_INLINE double nfma(const double a, const double b, const double c) noexcept
 {
-#if defined(STDROMANO_HAS_FMA_INTRINSICS)
+#if defined(STDROMANO_CUDA_DEVICE)
+    return __fma_rn(-a, b, c);
+#elif defined(STDROMANO_HAS_FMA_INTRINSICS)
     return _mm_cvtsd_f64(_mm_fnmadd_sd(_mm_set_sd(a), _mm_set_sd(b), _mm_set_sd(c)));
 #elif defined(STDROMANO_AARCH64)
     return std::fma(-a, b, c);
 #else
     return -a * b + c;
-#endif /* defined(STDROMANO_HAS_FMA_INTRINSICS) */
+#endif /* defined(STDROMANO_CUDA_DEVICE) */
 }
 
 /******************************************/
+/* -a * b - c */
 template<typename T>
-STDROMANO_FORCE_INLINE T nfms(T a, T b, T c) noexcept;
+STDROMANO_HOST_DEVICE STDROMANO_FORCE_INLINE T nfms(const T a, const T b, const T c) noexcept;
 
 template<>
-STDROMANO_FORCE_INLINE float nfms(float a, float b, float c) noexcept
+STDROMANO_HOST_DEVICE STDROMANO_FORCE_INLINE float nfms(const float a, const float b, const float c) noexcept
 {
-#if defined(STDROMANO_HAS_FMA_INTRINSICS)
+#if defined(STDROMANO_CUDA_DEVICE)
+    return __fmaf_rn(-a, b, -c);
+#elif defined(STDROMANO_HAS_FMA_INTRINSICS)
     return _mm_cvtss_f32(_mm_fnmsub_ss(_mm_set_ss(a), _mm_set_ss(b), _mm_set_ss(c)));
 #elif defined(STDROMANO_AARCH64)
     return -std::fma(a, b, c);
 #else
     return -a * b - c;
-#endif /* defined(STDROMANO_HAS_FMA_INTRINSICS) */
+#endif /* defined(STDROMANO_CUDA_DEVICE) */
 }
 
 template<>
-STDROMANO_FORCE_INLINE double nfms(double a, double b, double c) noexcept
+STDROMANO_HOST_DEVICE STDROMANO_FORCE_INLINE double nfms(const double a, const double b, const double c) noexcept
 {
-#if defined(STDROMANO_HAS_FMA_INTRINSICS)
+#if defined(STDROMANO_CUDA_DEVICE)
+    return __fma_rn(-a, b, -c);
+#elif defined(STDROMANO_HAS_FMA_INTRINSICS)
     return _mm_cvtsd_f64(_mm_fnmsub_sd(_mm_set_sd(a), _mm_set_sd(b), _mm_set_sd(c)));
 #elif defined(STDROMANO_AARCH64)
     return -std::fma(a, b, c);
 #else
     return -a * b - c;
-#endif /* defined(STDROMANO_HAS_FMA_INTRINSICS) */
+#endif /* defined(STDROMANO_CUDA_DEVICE) */
 }
 
 /******************************************/
 template<typename T>
-STDROMANO_FORCE_INLINE bool equal_with_abs_error(const T lhs, const T rhs, const T err) noexcept
+STDROMANO_HOST_DEVICE STDROMANO_FORCE_INLINE bool equal_with_abs_error(const T lhs, const T rhs, const T err) noexcept
 {
     return abs(lhs - rhs) < err;
 }
