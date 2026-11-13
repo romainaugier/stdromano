@@ -15,9 +15,30 @@
 #include <cstdlib>
 #include <type_traits>
 
+#if defined(STDROMANO_MSVC)
+#include <intrin.h>
+#endif /* defined(STDROMANO_MSVC) */
+
 STDROMANO_NAMESPACE_BEGIN
 
 DETAIL_NAMESPACE_BEGIN
+
+STDROMANO_FORCE_INLINE void cpu_relax() noexcept
+{
+#if defined(STDROMANO_MSVC)
+#if defined(STDROMANO_X86_64) || defined(STDROMANO_X86)
+    _mm_pause();
+#elif defined(STDROMANO_ARM)
+    __yield();
+#endif /* defined(STDROMANO_X86_64) || defined(STDROMANO_X86) */
+#else
+#if defined(STDROMANO_X86_64) || defined(STDROMANO_X86)
+    __builtin_ia32_pause();
+#elif defined(STDROMANO_ARM)
+    __asm__ __volatile__("yield" ::: "memory");
+#endif /* defined(STDROMANO_X86_64) || defined(STDROMANO_X86) */
+#endif /* defined(STDROMANO_MSVC) */
+}
 
 // Blocks while *address == expected, can return spuriously
 STDROMANO_API void futex_wait(volatile std::uint32_t* address, std::uint32_t expected) noexcept;

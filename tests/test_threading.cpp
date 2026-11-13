@@ -11,7 +11,66 @@
 #include <stdexcept>
 #include <vector>
 
+#if defined(STDROMANO_WIN)
+#include <Windows.h>
+#else
+#include <ctime>
+#endif /* defined(STDROMANO_WIN) */
+
 using namespace stdromano;
+
+static std::uint64_t process_cpu_time_ms() noexcept
+{
+#if defined(STDROMANO_WIN)
+    FILETIME creation, exit, kernel, user;
+    GetProcessTimes(GetCurrentProcess(), &creation, &exit, &kernel, &user);
+
+    const std::uint64_t kernel_100ns = (static_cast<std::uint64_t>(kernel.dwHighDateTime) << 32) |
+                                       kernel.dwLowDateTime;
+    const std::uint64_t user_100ns = (static_cast<std::uint64_t>(user.dwHighDateTime) << 32) |
+                                     user.dwLowDateTime;
+
+    return (kernel_100ns + user_100ns) / 10000ull;
+#else
+    struct timespec now;
+    clock_gettime(CLOCK_PROCESS_CPUTIME_ID, &now);
+
+    return static_cast<std::uint64_t>(now.tv_sec) * 1000ull +
+           static_cast<std::uint64_t>(now.tv_nsec) / 1000000ull;
+#endif /* defined(STDROMANO_WIN) */
+}
+
+// Every work blocks until all of them run at the same time, or gives up after a while
+template <typename Pool>
+static bool burst_runs_on_every_worker(Pool& pool, const std::size_t num_workers)
+{
+    Atomic<std::size_t> running{0};
+    Atomic<std::size_t> all_running{0};
+    ThreadPoolWaiter waiter;
+
+    for(std::size_t i = 0; i < num_workers; ++i)
+    {
+        pool.add_work([&]() {
+            running.fetch_add(1);
+
+            for(std::size_t tries = 0; tries < 1000 && all_running.load() == 0; ++tries)
+            {
+                if(running.load() == num_workers)
+                    all_running.store(1);
+                else
+                    thread_sleep(1);
+            }
+        }, &waiter);
+    }
+
+    waiter.wait();
+
+    return all_running.load() == 1;
+}
+
+// Spinning workers burn at least IDLE_WINDOW_MS of cpu time during the window, parked ones none
+static constexpr std::size_t IDLE_WINDOW_MS = 300;
+static constexpr std::uint64_t IDLE_CPU_BUDGET_MS = 100;
 
 class CountingWork : public ThreadPoolWork
 {
@@ -156,6 +215,90 @@ STDROMANO_TEST_CASE(threadpool_destruction_drops_pending_work)
     STDROMANO_CHECK_EQ(counter.load(), 0u);
 }
 
+STDROMANO_TEST_CASE(threadpool_idle_workers_do_not_spin)
+{
+    ThreadPool pool(4);
+
+    Atomic<std::size_t> counter{0};
+
+    for(std::size_t i = 0; i < 100; ++i)
+        pool.add_work([&]() { counter.fetch_add(1); });
+
+    pool.wait();
+
+    thread_sleep(50);
+
+    const std::uint64_t start = process_cpu_time_ms();
+    thread_sleep(IDLE_WINDOW_MS);
+    const std::uint64_t idle_cpu_time = process_cpu_time_ms() - start;
+
+    STDROMANO_CHECK_EQ(counter.load(), 100u);
+    STDROMANO_CHECK_LT(idle_cpu_time, IDLE_CPU_BUDGET_MS);
+}
+
+STDROMANO_TEST_CASE(threadpool_wakes_parked_workers)
+{
+    ThreadPool pool(4);
+
+    Atomic<std::size_t> counter{0};
+
+    for(std::size_t round = 0; round < 50; ++round)
+    {
+        thread_sleep(round % 4);
+
+        ThreadPoolWaiter waiter;
+
+        for(std::size_t i = 0; i <= round % 7; ++i)
+            pool.add_work([&]() { counter.fetch_add(1); }, &waiter);
+
+        waiter.wait();
+    }
+
+    std::size_t expected = 0;
+
+    for(std::size_t round = 0; round < 50; ++round)
+        expected += round % 7 + 1;
+
+    STDROMANO_CHECK_EQ(counter.load(), expected);
+}
+
+STDROMANO_TEST_CASE(threadpool_burst_wakes_every_parked_worker)
+{
+    ThreadPool pool(4);
+
+    for(std::size_t round = 0; round < 5; ++round)
+    {
+        thread_sleep(20);
+
+        STDROMANO_CHECK(burst_runs_on_every_worker(pool, 4));
+    }
+}
+
+STDROMANO_TEST_CASE(threadpool_raising_max_active_workers_wakes_parked_workers)
+{
+    ThreadPool pool(2);
+    pool.set_max_active_workers(0);
+
+    Atomic<std::size_t> counter{0};
+
+    for(std::size_t i = 0; i < 100; ++i)
+        pool.add_work([&]() { counter.fetch_add(1); });
+
+    thread_sleep(50);
+
+    const std::uint64_t start = process_cpu_time_ms();
+    thread_sleep(IDLE_WINDOW_MS);
+    const std::uint64_t idle_cpu_time = process_cpu_time_ms() - start;
+
+    STDROMANO_CHECK_EQ(counter.load(), 0u);
+    STDROMANO_CHECK_LT(idle_cpu_time, IDLE_CPU_BUDGET_MS);
+
+    pool.set_max_active_workers(2);
+    pool.wait();
+
+    STDROMANO_CHECK_EQ(counter.load(), 100u);
+}
+
 STDROMANO_TEST_CASE(stealing_threadpool_runs_every_work)
 {
     StealingThreadPool pool(4);
@@ -175,6 +318,115 @@ STDROMANO_TEST_CASE(stealing_threadpool_runs_every_work)
 
     STDROMANO_CHECK_EQ(counter.load(), 3000u);
     STDROMANO_CHECK(!pool.add_work(static_cast<ThreadPoolWork*>(nullptr)));
+}
+
+STDROMANO_TEST_CASE(stealing_threadpool_idle_workers_do_not_spin)
+{
+    StealingThreadPool pool(4);
+
+    Atomic<std::size_t> counter{0};
+
+    for(std::size_t i = 0; i < 100; ++i)
+        pool.add_work([&]() { counter.fetch_add(1); });
+
+    pool.wait();
+
+    thread_sleep(50);
+
+    const std::uint64_t start = process_cpu_time_ms();
+    thread_sleep(IDLE_WINDOW_MS);
+    const std::uint64_t idle_cpu_time = process_cpu_time_ms() - start;
+
+    STDROMANO_CHECK_EQ(counter.load(), 100u);
+    STDROMANO_CHECK_LT(idle_cpu_time, IDLE_CPU_BUDGET_MS);
+}
+
+STDROMANO_TEST_CASE(stealing_threadpool_wakes_parked_workers)
+{
+    StealingThreadPool pool(4);
+
+    Atomic<std::size_t> counter{0};
+
+    for(std::size_t round = 0; round < 50; ++round)
+    {
+        thread_sleep(round % 4);
+
+        ThreadPoolWaiter waiter;
+
+        for(std::size_t i = 0; i <= round % 7; ++i)
+            pool.add_work([&]() { counter.fetch_add(1); }, &waiter);
+
+        waiter.wait();
+    }
+
+    std::size_t expected = 0;
+
+    for(std::size_t round = 0; round < 50; ++round)
+        expected += round % 7 + 1;
+
+    STDROMANO_CHECK_EQ(counter.load(), expected);
+}
+
+STDROMANO_TEST_CASE(stealing_threadpool_burst_wakes_every_parked_worker)
+{
+    StealingThreadPool pool(4);
+
+    for(std::size_t round = 0; round < 5; ++round)
+    {
+        thread_sleep(20);
+
+        STDROMANO_CHECK(burst_runs_on_every_worker(pool, 4));
+    }
+}
+
+STDROMANO_TEST_CASE(stealing_threadpool_wakes_for_concurrent_producers)
+{
+    StealingThreadPool pool(4);
+
+    Atomic<std::size_t> counter{0};
+    ThreadPoolWaiter waiter;
+
+    auto produce = [&]() {
+        for(std::size_t i = 0; i < 2000; ++i)
+        {
+            pool.add_work([&]() { counter.fetch_add(1); }, &waiter);
+
+            if(i % 100 == 0)
+                thread_sleep(1);
+        }
+    };
+
+    Thread first(produce);
+    Thread second(produce);
+    Thread third(produce);
+
+    first.start();
+    second.start();
+    third.start();
+
+    first.join();
+    second.join();
+    third.join();
+
+    waiter.wait();
+
+    STDROMANO_CHECK_EQ(counter.load(), 6000u);
+}
+
+STDROMANO_TEST_CASE(stealing_threadpool_destruction_wakes_parked_workers)
+{
+    Atomic<std::size_t> counter{0};
+
+    {
+        StealingThreadPool pool(4);
+
+        pool.add_work([&]() { counter.fetch_add(1); });
+        pool.wait();
+
+        thread_sleep(20);
+    }
+
+    STDROMANO_CHECK_EQ(counter.load(), 1u);
 }
 
 STDROMANO_TEST_CASE(global_threadpool_with_waiter)

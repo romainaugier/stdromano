@@ -37,10 +37,6 @@ extern "C" int __ulock_wake(std::uint32_t operation, void* address, std::uint64_
 #include <unistd.h>
 #endif /* defined(STDROMANO_WIN) */
 
-#if defined(STDROMANO_MSVC) && (defined(STDROMANO_X86_64) || defined(STDROMANO_X86))
-#include <immintrin.h>
-#endif /* defined(STDROMANO_MSVC) && (defined(STDROMANO_X86_64) || defined(STDROMANO_X86)) */
-
 STDROMANO_NAMESPACE_BEGIN
 
 DETAIL_NAMESPACE_BEGIN
@@ -50,23 +46,6 @@ static constexpr std::uint32_t UL_COMPARE_AND_WAIT = 1;
 static constexpr std::uint32_t ULF_WAKE_ALL = 0x00000100;
 static constexpr std::uint32_t ULF_NO_ERRNO = 0x01000000;
 #endif /* defined(STDROMANO_APPLE) */
-
-STDROMANO_FORCE_INLINE static void cpu_relax() noexcept
-{
-#if defined(STDROMANO_MSVC)
-#if defined(STDROMANO_X86_64) || defined(STDROMANO_X86)
-    _mm_pause();
-#elif defined(STDROMANO_ARM)
-    __yield();
-#endif /* defined(STDROMANO_X86_64) || defined(STDROMANO_X86) */
-#else
-#if defined(STDROMANO_X86_64) || defined(STDROMANO_X86)
-    __builtin_ia32_pause();
-#elif defined(STDROMANO_ARM)
-    __asm__ __volatile__("yield" ::: "memory");
-#endif /* defined(STDROMANO_X86_64) || defined(STDROMANO_X86) */
-#endif /* defined(STDROMANO_MSVC) */
-}
 
 STDROMANO_FORCE_INLINE static std::uint32_t* as_word(volatile std::uint32_t* address) noexcept
 {

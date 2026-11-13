@@ -122,6 +122,33 @@ results match, bit for bit where they must (`rcp_safe`, `fma`, `sqrt`, `floor`, 
 within the CUDA math library error bounds for the others. It needs the default (non fast math)
 compilation flags. Without a CUDA device it only checks that the device code compiles.
 
+## Thread pools
+
+`threading.hpp` provides `ThreadPool` (one shared queue) and `StealingThreadPool` (one queue per
+worker, with work stealing). `global_threadpool()` is a `StealingThreadPool` with one worker per
+logical core, created on first use and alive until the program exits.
+
+```cpp
+#include "stdromano/threading.hpp"
+
+using namespace stdromano;
+
+ThreadPoolWaiter waiter;
+
+for(std::size_t i = 0; i < num_tiles; ++i)
+    global_threadpool().add_work([i]() { render_tile(i); }, &waiter);
+
+waiter.wait();
+```
+
+Idle workers do not burn CPU: a worker without work spins for a few microseconds, so bursts of
+works are picked up without any syscall, then sleeps on a futex until `add_work()` wakes it up.
+The first work submitted to a sleeping pool pays for the wake up (tens of microseconds), the
+spinning budget is `SPIN_COUNT`/`YIELD_COUNT` in `detail::ThreadParker`.
+
+`wait()` and `ThreadPoolWaiter::wait()` still yield in a loop, the waiting thread keeps its core
+busy until the works are done.
+
 ## CMake
 
 To use as a CMake package, you can use the following lines in your CMake configuration:

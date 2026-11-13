@@ -8,6 +8,7 @@
 #include "stdromano/stdromano.hpp"
 #include "stdromano/atomic.hpp"
 #include "stdromano/memory.hpp"
+#include "stdromano/mutex.hpp"
 
 #include "concurrentqueue.h"
 
@@ -187,6 +188,101 @@ STDROMANO_FORCE_INLINE void thread_yield() noexcept
     std::this_thread::yield();
 }
 
+DETAIL_NAMESPACE_BEGIN
+
+// Idle workers spin (they are "searching"), then sleep on a futex. Producers publish their work
+// with a SeqCst write then call notify_one(), which only wakes a sleeper when nobody is
+// searching. A searching worker that gets some work must call stop_searching(), and wake_one()
+// if it was the last one and work remains, so that a burst wakes workers one after the other
+class ThreadParker
+{
+    static constexpr std::uint32_t SPIN_COUNT = 128;
+    static constexpr std::uint32_t YIELD_COUNT = 32;
+
+    Atomic<std::uint32_t> _epoch{0};
+    Atomic<std::uint32_t> _sleepers{0};
+    Atomic<std::uint32_t> _searching{0};
+
+    STDROMANO_FORCE_INLINE volatile std::uint32_t* epoch_address() noexcept
+    {
+        return reinterpret_cast<volatile std::uint32_t*>(&this->_epoch);
+    }
+
+public:
+    // stay_awake is checked with SeqCst loads right before sleeping
+    template <typename F>
+    STDROMANO_FORCE_INLINE void idle(std::uint32_t& spins, F&& stay_awake) noexcept
+    {
+        if(spins == 0)
+            this->_searching.fetch_add(1);
+
+        if(spins < SPIN_COUNT + YIELD_COUNT)
+        {
+            if(spins++ < SPIN_COUNT)
+                cpu_relax();
+            else
+                thread_yield();
+
+            return;
+        }
+
+        this->_searching.fetch_sub(1);
+
+        const std::uint32_t epoch = this->_epoch.load();
+
+        this->_sleepers.fetch_add(1);
+
+        if(stay_awake())
+            thread_yield();
+        else
+            futex_wait(this->epoch_address(), epoch);
+
+        this->_sleepers.fetch_sub(1);
+        this->_searching.fetch_add(1);
+
+        spins = 1;
+    }
+
+    // Returns true if the worker was the last one searching
+    STDROMANO_NO_DISCARD STDROMANO_FORCE_INLINE bool stop_searching(std::uint32_t& spins) noexcept
+    {
+        if(spins == 0)
+            return false;
+
+        spins = 0;
+
+        return this->_searching.fetch_sub(1) == 1;
+    }
+
+    STDROMANO_FORCE_INLINE void wake_one() noexcept
+    {
+        if(this->_sleepers.load() == 0)
+            return;
+
+        this->_epoch.fetch_add(1);
+
+        futex_wake_one(this->epoch_address());
+    }
+
+    STDROMANO_FORCE_INLINE void wake_all() noexcept
+    {
+        if(this->_sleepers.load() == 0)
+            return;
+
+        this->_epoch.fetch_add(1);
+
+        futex_wake_all(this->epoch_address());
+    }
+
+    STDROMANO_FORCE_INLINE void notify_one() noexcept
+    {
+        if(this->_searching.load() == 0)
+            this->wake_one();
+    }
+};
+
+DETAIL_NAMESPACE_END
+
 /********************************/
 /* ThreadPool */
 /********************************/
@@ -269,6 +365,7 @@ public:
             const size_t num_workers = this->_num_workers.load();
 
             this->_stop.store(true);
+            this->_parker.wake_all();
 
             for(size_t i = 0; i < num_workers; i++)
             {
@@ -291,8 +388,11 @@ public:
     {
         work->_waiter = waiter;
 
+        this->_pending.fetch_add(1);
+
         if(!this->_work_queue.enqueue(work))
         {
+            this->_pending.fetch_sub(1);
             return false;
         }
 
@@ -300,6 +400,8 @@ public:
         {
             ++waiter->_expected;
         }
+
+        this->_parker.notify_one();
 
         return true;
     }
@@ -313,7 +415,7 @@ public:
 
     STDROMANO_FORCE_INLINE void wait() noexcept
     {
-        while(this->_work_queue.size_approx() > 0 || this->_num_active_workers.load() > 0)
+        while(this->_pending.load() > 0 || this->_num_active_workers.load() > 0)
         {
             thread_yield();
         }
@@ -342,6 +444,7 @@ public:
     STDROMANO_FORCE_INLINE void set_max_active_workers(std::size_t max_workers) noexcept
     {
         this->_max_active_workers.store(max_workers);
+        this->_parker.wake_all();
     }
 
     STDROMANO_API static ThreadPool& get_global_threadpool() noexcept;
@@ -355,10 +458,22 @@ private:
     Atomic<std::size_t> _num_active_workers{0};
 
     Atomic<std::size_t> _max_active_workers{0};
+    Atomic<std::size_t> _pending{0};
 
     Atomic<bool> _stop{false};
 
     Atomic<bool> _started{false};
+
+    detail::ThreadParker _parker;
+
+    STDROMANO_FORCE_INLINE void idle(std::uint32_t& spins) noexcept
+    {
+        this->_parker.idle(spins, [this]() {
+            const bool runnable = this->_pending.load() > 0 && this->_max_active_workers.load() > 0;
+
+            return runnable || this->_stop.load();
+        });
+    }
 
     void init(const int64_t workers_count) noexcept
     {
@@ -374,12 +489,14 @@ private:
                 {
                     ThreadPool* tp = this;
 
+                    std::uint32_t idle_spins = 0;
+
                     while(!tp->_stop.load())
                     {
                         if(tp->_num_active_workers.load() >= tp->_max_active_workers.load() ||
-                           tp->_work_queue.size_approx() == 0)
+                           tp->_pending.load() == 0)
                         {
-                            thread_yield();
+                            tp->idle(idle_spins);
                             continue;
                         }
 
@@ -389,6 +506,11 @@ private:
 
                         if(tp->_work_queue.try_dequeue(work) && work != nullptr)
                         {
+                            tp->_pending.fetch_sub(1);
+
+                            if(tp->_parker.stop_searching(idle_spins) && tp->_pending.load() > 0)
+                                tp->_parker.wake_one();
+
                             try
                             {
                                 work->execute();
@@ -458,12 +580,23 @@ private:
     std::size_t _num_workers;
     Atomic<std::size_t> _next_worker{0};
 
+    detail::ThreadParker _parker;
+
+    STDROMANO_FORCE_INLINE void idle(std::uint32_t& spins) noexcept
+    {
+        this->_parker.idle(spins, [this]() {
+            return this->_total_pending_work.load() > 0 || this->_shutdown.load();
+        });
+    }
+
     void worker_loop(std::size_t worker_id) noexcept
     {
         WorkerContext* ctx = this->_workers[worker_id].get();
         ThreadPoolWork* work = nullptr;
 
         const std::size_t num_steal_attempts = this->_num_workers * 2;
+
+        std::uint32_t idle_spins = 0;
 
         while(!this->_shutdown.load(MemoryOrder::Acquire))
         {
@@ -505,6 +638,9 @@ private:
 
             if(found_work && work != nullptr)
             {
+                if(this->_parker.stop_searching(idle_spins) && this->_total_pending_work.load() > 0)
+                    this->_parker.wake_one();
+
                 std::size_t max_workers = this->_max_active_workers.load(MemoryOrder::Acquire);
 
                 if(max_workers > 0)
@@ -536,7 +672,7 @@ private:
             }
             else
             {
-                thread_yield();
+                this->idle(idle_spins);
             }
         }
     }
@@ -570,7 +706,8 @@ public:
 
     ~StealingThreadPool()
     {
-        this->_shutdown.store(true, MemoryOrder::Release);
+        this->_shutdown.store(true);
+        this->_parker.wake_all();
 
         for(auto& worker : this->_workers)
             if(worker->thread)
@@ -602,7 +739,9 @@ public:
 
         this->_workers[target_worker]->local_queue.enqueue(work);
         this->_workers[target_worker]->queue_size.fetch_add(1, MemoryOrder::Release);
-        this->_total_pending_work.fetch_add(1, MemoryOrder::Release);
+        this->_total_pending_work.fetch_add(1);
+
+        this->_parker.notify_one();
 
         return true;
     }
