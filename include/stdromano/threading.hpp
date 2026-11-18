@@ -26,14 +26,14 @@
 
 STDROMANO_NAMESPACE_BEGIN
 
-STDROMANO_FORCE_INLINE size_t get_num_procs() noexcept
+STDROMANO_FORCE_INLINE std::size_t get_num_procs() noexcept
 {
 #if defined(STDROMANO_WIN)
     SYSTEM_INFO sys_info;
     GetSystemInfo(&sys_info);
-    return static_cast<size_t>(sys_info.dwNumberOfProcessors);
+    return static_cast<std::size_t>(sys_info.dwNumberOfProcessors);
 #elif defined(STDROMANO_UNIX)
-    return static_cast<size_t>(sysconf(_SC_NPROCESSORS_ONLN));
+    return static_cast<std::size_t>(sysconf(_SC_NPROCESSORS_ONLN));
 #endif /* defined(STDROMANO_WIN) */
 }
 
@@ -112,13 +112,13 @@ public:
     void detach() noexcept
     {
     #if defined(STDROMANO_WIN)
-        if(_handle)
+        if(this->_handle != nullptr)
         {
             CloseHandle(this->_handle);
             this->_handle = nullptr;
         }
     #elif defined(STDROMANO_UNIX)
-        if(this->_handle)
+        if(this->_handle != 0)
         {
             pthread_detach(this->_handle);
             this->_handle = 0;
@@ -153,20 +153,20 @@ public:
     }
 };
 
-STDROMANO_FORCE_INLINE size_t thread_get_id() noexcept
+STDROMANO_FORCE_INLINE std::size_t thread_get_id() noexcept
 {
 #if defined(STDROMANO_WIN)
-    return static_cast<size_t>(GetCurrentThreadId());
+    return static_cast<std::size_t>(GetCurrentThreadId());
 #elif defined(STDROMANO_LINUX)
-    return static_cast<size_t>(syscall(SYS_gettid));
+    return static_cast<std::size_t>(syscall(SYS_gettid));
 #elif defined(STDROMANO_APPLE)
     std::uint64_t tid = 0;
     pthread_threadid_np(nullptr, &tid);
-    return static_cast<size_t>(tid);
+    return static_cast<std::size_t>(tid);
 #elif defined(STDROMANO_FREEBSD)
-    return static_cast<size_t>(pthread_getthreadid_np());
+    return static_cast<std::size_t>(pthread_getthreadid_np());
 #elif defined(STDROMANO_UNIX)
-    return static_cast<size_t>(reinterpret_cast<std::uintptr_t>(pthread_self()));
+    return static_cast<std::size_t>(reinterpret_cast<std::uintptr_t>(pthread_self()));
 #endif /* defined(STDROMANO_WIN) */
 }
 
@@ -322,9 +322,7 @@ public:
     virtual ~ThreadPoolWork() noexcept
     {
         if(this->_waiter != nullptr)
-        {
             ++this->_waiter->_done;
-        }
     }
 
     virtual void execute() = 0;
@@ -344,9 +342,7 @@ class ThreadPool
         void execute() override
         {
             if(this->_func != nullptr)
-            {
                 this->_func();
-            }
         }
     };
 
@@ -397,9 +393,7 @@ public:
         }
 
         if(waiter != nullptr)
-        {
             ++waiter->_expected;
-        }
 
         this->_parker.notify_one();
 
@@ -416,9 +410,7 @@ public:
     STDROMANO_FORCE_INLINE void wait() noexcept
     {
         while(this->_pending.load() > 0 || this->_num_active_workers.load() > 0)
-        {
             thread_yield();
-        }
     }
 
     STDROMANO_FORCE_INLINE bool is_started() const noexcept
@@ -475,14 +467,14 @@ private:
         });
     }
 
-    void init(const int64_t workers_count) noexcept
+    void init(const std::int64_t workers_count) noexcept
     {
-        const size_t num_workers = workers_count < 1 ? get_num_procs() :
-                                                       static_cast<size_t>(workers_count);
+        const std::size_t num_workers = workers_count < 1 ? get_num_procs() :
+                                                            static_cast<std::size_t>(workers_count);
 
         this->_workers = mem_alloc<Thread>(num_workers * sizeof(Thread));
 
-        for(size_t i = 0; i < num_workers; i++)
+        for(std::size_t i = 0; i < num_workers; i++)
         {
             ::new(std::addressof(this->_workers[i])) Thread(
                 [&]()
@@ -523,7 +515,8 @@ private:
                             }
                             catch(...)
                             {
-                                std::fprintf(stderr, "Unknown error caught while executing threadpool work\n");
+                                std::fprintf(stderr,
+                                             "Unknown error caught while executing threadpool work\n");
                             }
 
                             delete work;
@@ -735,7 +728,7 @@ public:
         if(waiter != nullptr)
             waiter->_expected.fetch_add(1, MemoryOrder::Release);
 
-        std::size_t target_worker = _next_worker.fetch_add(1, MemoryOrder::Relaxed) % this->_num_workers;
+        std::size_t target_worker = this->_next_worker.fetch_add(1, MemoryOrder::Relaxed) % this->_num_workers;
 
         this->_workers[target_worker]->local_queue.enqueue(work);
         this->_workers[target_worker]->queue_size.fetch_add(1, MemoryOrder::Release);
@@ -757,7 +750,7 @@ public:
         if(work == nullptr)
             return false;
 
-        return add_work(work, waiter);
+        return this->add_work(work, waiter);
     }
 
     STDROMANO_FORCE_INLINE void wait() noexcept
